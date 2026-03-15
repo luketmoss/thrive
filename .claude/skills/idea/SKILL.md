@@ -35,7 +35,8 @@ gh api graphql -f query='mutation { updateProjectV2ItemFieldValue(input: { proje
 1. **Classify:** Type (`bug`/`feature`/`enhancement`), Area (`auth`/`workouts`/`templates`/`exercises`/`history`/`settings`/`infrastructure`), Priority (`priority:high`/`priority:medium`/`priority:low`)
 2. **Deduplicate:** `gh issue list --repo luketmoss/groundwork --state all --limit 50 --search "<keywords>"` — if duplicate exists, comment on it and stop
 3. **For bugs:** read relevant source files to verify and understand root cause
-4. **Create issue:**
+4. **Ensure labels exist:** Before creating the issue, check that all labels exist: `gh label list --repo luketmoss/groundwork --json name --limit 50`. If any label is missing, create it first: `gh label create "<name>" --repo luketmoss/groundwork --color "0e8a16"`
+5. **Create issue:**
 
 ```bash
 gh issue create --repo luketmoss/groundwork --title "<type>: <title>" --label "<type>,<area>,<priority>" --body "$(cat <<'EOF'
@@ -53,7 +54,7 @@ EOF
 )"
 ```
 
-5. **Add to board:** `gh project item-add 4 --owner luketmoss --url <issue-url>` → move to To Do
+6. **Add to board:** `gh project item-add 4 --owner luketmoss --url <issue-url>` → move to To Do
 
 ## Handoff
 
