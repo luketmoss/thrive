@@ -1,4 +1,5 @@
 import { exercises, labels, templates, workouts, sets, loading, activeWorkoutId, activeWorkoutSets, activeWarmupExercises, showToast } from './store';
+import { isDemo } from '../api/demo-data';
 import { fetchExercises, createExercise, updateExercise as updateExerciseApi, deleteExercise as deleteExerciseApi } from '../api/exercises-api';
 import { fetchLabels, createLabel as createLabelApi, updateLabel as updateLabelApi, deleteLabel as deleteLabelApi, appendLabels } from '../api/labels-api';
 import { fetchTemplateRows, groupTemplateRows, createTemplate as createTemplateApi, updateTemplate as updateTemplateApi, deleteTemplate as deleteTemplateApi, updateExerciseNameInTemplates } from '../api/templates-api';
@@ -323,6 +324,20 @@ async function prepopulateSetsFromTemplate(
   }
 
   activeWarmupExercises.value = warmups;
+
+  if (isDemo()) {
+    // In demo mode, appendSets is a no-op and fetchSets returns static data
+    // that won't contain our new workout ID. Populate signals directly.
+    const baseRow = sets.value.length + 2;
+    const setsWithRows: SetWithRow[] = newSets.map((s, i) => ({
+      ...s,
+      effort: s.effort as SetWithRow['effort'],
+      sheetRow: baseRow + i,
+    }));
+    sets.value = [...sets.value, ...setsWithRows];
+    activeWorkoutSets.value = setsWithRows;
+    return;
+  }
 
   // Batch append to Sheets
   await appendSetsApi(newSets, token);

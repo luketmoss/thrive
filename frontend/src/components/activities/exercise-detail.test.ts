@@ -111,9 +111,9 @@ describe('groupSetsIntoExercises', () => {
     // Simulate a subset of DEMO_SETS for w_demo001
     const sets: SetWithRow[] = [
       { workout_id: 'w_demo001', exercise_id: 'ex_demo_pushup', exercise_name: 'Push Ups', section: 'warmup', exercise_order: 1, set_number: 1, planned_reps: '', weight: '', reps: '15', effort: '', notes: '', sheetRow: 2 },
-      { workout_id: 'w_demo001', exercise_id: 'ex_demo001', exercise_name: 'Barbell Bench Press', section: 'warmup', exercise_order: 2, set_number: 1, planned_reps: '', weight: '95', reps: '10', effort: 'Easy', notes: '', sheetRow: 3 },
-      { workout_id: 'w_demo001', exercise_id: 'ex_demo001', exercise_name: 'Barbell Bench Press', section: 'primary', exercise_order: 3, set_number: 1, planned_reps: '4-6', weight: '185', reps: '6', effort: 'Medium', notes: '', sheetRow: 4 },
-      { workout_id: 'w_demo001', exercise_id: 'ex_demo001', exercise_name: 'Barbell Bench Press', section: 'primary', exercise_order: 3, set_number: 2, planned_reps: '4-6', weight: '185', reps: '5', effort: 'Medium', notes: '', sheetRow: 5 },
+      { workout_id: 'w_demo001', exercise_id: 'ex_demo001', exercise_name: 'Bench Press BB', section: 'warmup', exercise_order: 2, set_number: 1, planned_reps: '', weight: '95', reps: '10', effort: 'Easy', notes: '', sheetRow: 3 },
+      { workout_id: 'w_demo001', exercise_id: 'ex_demo001', exercise_name: 'Bench Press BB', section: 'primary', exercise_order: 3, set_number: 1, planned_reps: '4-6', weight: '185', reps: '6', effort: 'Medium', notes: '', sheetRow: 4 },
+      { workout_id: 'w_demo001', exercise_id: 'ex_demo001', exercise_name: 'Bench Press BB', section: 'primary', exercise_order: 3, set_number: 2, planned_reps: '4-6', weight: '185', reps: '5', effort: 'Medium', notes: '', sheetRow: 5 },
     ];
 
     const groups = groupSetsIntoExercises(sets);
@@ -125,12 +125,12 @@ describe('groupSetsIntoExercises', () => {
     expect(groups[0].sets).toHaveLength(1);
 
     // Warmup bench (different exercise_order from primary bench)
-    expect(groups[1].exercise_name).toBe('Barbell Bench Press');
+    expect(groups[1].exercise_name).toBe('Bench Press BB');
     expect(groups[1].section).toBe('warmup');
     expect(groups[1].sets).toHaveLength(1);
 
     // Primary bench
-    expect(groups[2].exercise_name).toBe('Barbell Bench Press');
+    expect(groups[2].exercise_name).toBe('Bench Press BB');
     expect(groups[2].section).toBe('primary');
     expect(groups[2].sets).toHaveLength(2);
   });

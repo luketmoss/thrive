@@ -15,22 +15,22 @@ export function isDemo(): boolean {
 }
 
 export const DEMO_EXERCISES: ExerciseWithRow[] = [
-  { id: 'ex_demo001', name: 'Barbell Bench Press', tags: 'Push, Chest, Compound', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 2 },
-  { id: 'ex_demo002', name: 'Incline DB Press', tags: 'Push, Chest, Isolation', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 3 },
-  { id: 'ex_demo003', name: 'Cable Fly', tags: 'Push, Chest, Isolation', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 4 },
-  { id: 'ex_demo004', name: 'Barbell Squat', tags: 'Legs, Compound', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 5 },
-  { id: 'ex_demo005', name: 'Bulgarian Split Squat', tags: 'Legs, Isolation', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 6 },
-  { id: 'ex_demo006', name: 'Barbell Deadlift', tags: 'Pull, Back, Compound', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 7 },
-  { id: 'ex_demo007', name: 'Pull-ups', tags: 'Pull, Back, Compound', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 8 },
-  { id: 'ex_demo008', name: 'Barbell Row', tags: 'Pull, Back, Compound', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 9 },
-  { id: 'ex_demo009', name: 'DB Lateral Raise', tags: 'Push, Shoulders, Isolation', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 10 },
-  { id: 'ex_demo010', name: 'Rope Tricep Extension', tags: 'Push, Arms, Isolation', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 11 },
-  { id: 'ex_demo011', name: 'DB Hammer Curl', tags: 'Pull, Arms, Isolation', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 12 },
+  { id: 'ex_demo001', name: 'Bench Press BB', tags: 'Push, Chest, BB', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 2 },
+  { id: 'ex_demo002', name: 'Incline Press DB', tags: 'Push, Chest, DB', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 3 },
+  { id: 'ex_demo003', name: 'Cable Fly FT', tags: 'Push, Chest, FT', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 4 },
+  { id: 'ex_demo004', name: 'Squat BB', tags: 'Legs, BB', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 5 },
+  { id: 'ex_demo005', name: 'Bulgarian Split Squats DB', tags: 'Legs, DB', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 6 },
+  { id: 'ex_demo006', name: 'RDL BB', tags: 'Legs, BB', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 7 },
+  { id: 'ex_demo007', name: 'Pullups', tags: 'Pull, Back', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 8 },
+  { id: 'ex_demo008', name: 'Row BB', tags: 'Pull, Back, BB', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 9 },
+  { id: 'ex_demo009', name: 'Lateral Raise DB', tags: 'Push, Shoulders, DB', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 10 },
+  { id: 'ex_demo010', name: 'Rope Tricep Pushdown FT', tags: 'Push, Arms, FT', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 11 },
+  { id: 'ex_demo011', name: 'Hammer Curls DB', tags: 'Pull, Arms, DB', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 12 },
   { id: 'ex_demo012', name: 'Ab Wheel', tags: 'Core', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 13 },
-  { id: 'ex_demo013', name: 'Cable Crunch', tags: 'Core', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 14 },
-  { id: 'ex_demo014', name: 'Face Pulls', tags: 'Pull, Shoulders, Isolation', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 15 },
-  { id: 'ex_demo015', name: 'BB Overhead Press', tags: 'Push, Shoulders, Compound', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 16 },
-  { id: 'ex_demo_pushup', name: 'Push Ups', tags: 'Push, Chest, Compound', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 17 },
+  { id: 'ex_demo013', name: 'Crunch FT', tags: 'Core, FT', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 14 },
+  { id: 'ex_demo014', name: 'Face Pulls FT', tags: 'Pull, Shoulders, FT', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 15 },
+  { id: 'ex_demo015', name: 'OH Press BB', tags: 'Push, Shoulders, BB', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 16 },
+  { id: 'ex_demo_pushup', name: 'Push Ups', tags: 'Warmup, Push, Chest', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 17 },
 ];
 
 // Build demo labels from the unique tags in demo exercises
@@ -58,21 +58,21 @@ const now = '2025-01-15T00:00:00.000Z';
 export const DEMO_TEMPLATE_ROWS: TemplateRowWithRow[] = [
   // Upper Push A
   { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 1, exercise_id: 'ex_demo_pushup', exercise_name: 'Push Ups', section: 'warmup', sets: '', reps: '', rest_seconds: '', group_rest_seconds: '', created: now, updated: now, sheetRow: 2 },
-  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 2, exercise_id: 'ex_demo001', exercise_name: 'Barbell Bench Press', section: 'warmup', sets: '', reps: '', rest_seconds: '', group_rest_seconds: '', created: now, updated: now, sheetRow: 3 },
-  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 3, exercise_id: 'ex_demo001', exercise_name: 'Barbell Bench Press', section: 'primary', sets: '4-5', reps: '4-6', rest_seconds: '90', group_rest_seconds: '120', created: now, updated: now, sheetRow: 4 },
-  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 4, exercise_id: 'ex_demo002', exercise_name: 'Incline DB Press', section: 'SS1', sets: '3', reps: '10-12', rest_seconds: '15', group_rest_seconds: '', created: now, updated: now, sheetRow: 5 },
-  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 5, exercise_id: 'ex_demo003', exercise_name: 'Cable Fly', section: 'SS1', sets: '3', reps: '12-15', rest_seconds: '15', group_rest_seconds: '60', created: now, updated: now, sheetRow: 6 },
-  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 6, exercise_id: 'ex_demo009', exercise_name: 'DB Lateral Raise', section: 'SS2', sets: '3', reps: '12-15', rest_seconds: '15', group_rest_seconds: '', created: now, updated: now, sheetRow: 7 },
-  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 7, exercise_id: 'ex_demo010', exercise_name: 'Rope Tricep Extension', section: 'SS2', sets: '3', reps: '12-15', rest_seconds: '15', group_rest_seconds: '60', created: now, updated: now, sheetRow: 8 },
+  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 2, exercise_id: 'ex_demo001', exercise_name: 'Bench Press BB', section: 'warmup', sets: '', reps: '', rest_seconds: '', group_rest_seconds: '', created: now, updated: now, sheetRow: 3 },
+  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 3, exercise_id: 'ex_demo001', exercise_name: 'Bench Press BB', section: 'primary', sets: '4-5', reps: '4-6', rest_seconds: '90-120', group_rest_seconds: '', created: now, updated: now, sheetRow: 4 },
+  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 4, exercise_id: 'ex_demo002', exercise_name: 'Incline Press DB', section: 'SS1', sets: '3', reps: '10-12', rest_seconds: '', group_rest_seconds: '60', created: now, updated: now, sheetRow: 5 },
+  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 5, exercise_id: 'ex_demo003', exercise_name: 'Cable Fly FT', section: 'SS1', sets: '3', reps: '12-15', rest_seconds: '', group_rest_seconds: '60', created: now, updated: now, sheetRow: 6 },
+  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 6, exercise_id: 'ex_demo009', exercise_name: 'Lateral Raise DB', section: 'SS2', sets: '3', reps: '12-15', rest_seconds: '', group_rest_seconds: '60', created: now, updated: now, sheetRow: 7 },
+  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 7, exercise_id: 'ex_demo010', exercise_name: 'Rope Tricep Pushdown FT', section: 'SS2', sets: '3', reps: '12-15', rest_seconds: '', group_rest_seconds: '60', created: now, updated: now, sheetRow: 8 },
   { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 8, exercise_id: 'ex_demo012', exercise_name: 'Ab Wheel', section: 'burnout', sets: '2-3', reps: '6-10', rest_seconds: '', group_rest_seconds: '', created: now, updated: now, sheetRow: 9 },
 
   // Upper Pull A
-  { template_id: 'tpl_demo002', template_name: 'Upper Pull A', order: 1, exercise_id: 'ex_demo008', exercise_name: 'Barbell Row', section: 'warmup', sets: '', reps: '', rest_seconds: '', group_rest_seconds: '', created: now, updated: now, sheetRow: 10 },
-  { template_id: 'tpl_demo002', template_name: 'Upper Pull A', order: 2, exercise_id: 'ex_demo008', exercise_name: 'Barbell Row', section: 'primary', sets: '4-5', reps: '4-6', rest_seconds: '90', group_rest_seconds: '120', created: now, updated: now, sheetRow: 11 },
-  { template_id: 'tpl_demo002', template_name: 'Upper Pull A', order: 3, exercise_id: 'ex_demo007', exercise_name: 'Pull-ups', section: 'SS1', sets: '3', reps: '8-10', rest_seconds: '15', group_rest_seconds: '', created: now, updated: now, sheetRow: 12 },
-  { template_id: 'tpl_demo002', template_name: 'Upper Pull A', order: 4, exercise_id: 'ex_demo014', exercise_name: 'Face Pulls', section: 'SS1', sets: '3', reps: '12-15', rest_seconds: '15', group_rest_seconds: '60', created: now, updated: now, sheetRow: 13 },
-  { template_id: 'tpl_demo002', template_name: 'Upper Pull A', order: 5, exercise_id: 'ex_demo011', exercise_name: 'DB Hammer Curl', section: 'SS2', sets: '3', reps: '10-12', rest_seconds: '15', group_rest_seconds: '', created: now, updated: now, sheetRow: 14 },
-  { template_id: 'tpl_demo002', template_name: 'Upper Pull A', order: 6, exercise_id: 'ex_demo013', exercise_name: 'Cable Crunch', section: 'burnout', sets: '2-3', reps: '10-15', rest_seconds: '', group_rest_seconds: '', created: now, updated: now, sheetRow: 15 },
+  { template_id: 'tpl_demo002', template_name: 'Upper Pull A', order: 1, exercise_id: 'ex_demo008', exercise_name: 'Row BB', section: 'warmup', sets: '', reps: '', rest_seconds: '', group_rest_seconds: '', created: now, updated: now, sheetRow: 10 },
+  { template_id: 'tpl_demo002', template_name: 'Upper Pull A', order: 2, exercise_id: 'ex_demo008', exercise_name: 'Row BB', section: 'primary', sets: '4-5', reps: '4-6', rest_seconds: '90-120', group_rest_seconds: '', created: now, updated: now, sheetRow: 11 },
+  { template_id: 'tpl_demo002', template_name: 'Upper Pull A', order: 3, exercise_id: 'ex_demo007', exercise_name: 'Pullups', section: 'SS1', sets: '3', reps: '8-10', rest_seconds: '', group_rest_seconds: '60', created: now, updated: now, sheetRow: 12 },
+  { template_id: 'tpl_demo002', template_name: 'Upper Pull A', order: 4, exercise_id: 'ex_demo014', exercise_name: 'Face Pulls FT', section: 'SS1', sets: '3', reps: '12-15', rest_seconds: '', group_rest_seconds: '60', created: now, updated: now, sheetRow: 13 },
+  { template_id: 'tpl_demo002', template_name: 'Upper Pull A', order: 5, exercise_id: 'ex_demo011', exercise_name: 'Hammer Curls DB', section: 'SS2', sets: '3', reps: '10-12', rest_seconds: '', group_rest_seconds: '60', created: now, updated: now, sheetRow: 14 },
+  { template_id: 'tpl_demo002', template_name: 'Upper Pull A', order: 6, exercise_id: 'ex_demo013', exercise_name: 'Crunch FT', section: 'burnout', sets: '2-3', reps: '10-15', rest_seconds: '', group_rest_seconds: '', created: now, updated: now, sheetRow: 15 },
 ];
 
 /** Group flat template rows into Template objects. */
@@ -110,37 +110,37 @@ export const DEMO_SETS: SetWithRow[] = [
   // Warmup — Push Ups (no weight/reps tracked for warmup)
   { workout_id: 'w_demo001', exercise_id: 'ex_demo_pushup', exercise_name: 'Push Ups', section: 'warmup', exercise_order: 1, set_number: 1, planned_reps: '', weight: '', reps: '15', effort: '', notes: '', sheetRow: 2 },
   // Warmup — Bench Press light
-  { workout_id: 'w_demo001', exercise_id: 'ex_demo001', exercise_name: 'Barbell Bench Press', section: 'warmup', exercise_order: 2, set_number: 1, planned_reps: '', weight: '95', reps: '10', effort: 'Easy', notes: '', sheetRow: 3 },
+  { workout_id: 'w_demo001', exercise_id: 'ex_demo001', exercise_name: 'Bench Press BB', section: 'warmup', exercise_order: 2, set_number: 1, planned_reps: '', weight: '95', reps: '10', effort: 'Easy', notes: '', sheetRow: 3 },
   // Primary — Bench Press working sets
-  { workout_id: 'w_demo001', exercise_id: 'ex_demo001', exercise_name: 'Barbell Bench Press', section: 'primary', exercise_order: 3, set_number: 1, planned_reps: '4-6', weight: '185', reps: '6', effort: 'Medium', notes: '', sheetRow: 4 },
-  { workout_id: 'w_demo001', exercise_id: 'ex_demo001', exercise_name: 'Barbell Bench Press', section: 'primary', exercise_order: 3, set_number: 2, planned_reps: '4-6', weight: '185', reps: '5', effort: 'Medium', notes: '', sheetRow: 5 },
-  { workout_id: 'w_demo001', exercise_id: 'ex_demo001', exercise_name: 'Barbell Bench Press', section: 'primary', exercise_order: 3, set_number: 3, planned_reps: '4-6', weight: '185', reps: '5', effort: 'Hard', notes: '', sheetRow: 6 },
-  { workout_id: 'w_demo001', exercise_id: 'ex_demo001', exercise_name: 'Barbell Bench Press', section: 'primary', exercise_order: 3, set_number: 4, planned_reps: '4-6', weight: '185', reps: '4', effort: 'Hard', notes: 'Last rep was a grinder', sheetRow: 7 },
-  // SS1 — Incline DB Press
-  { workout_id: 'w_demo001', exercise_id: 'ex_demo002', exercise_name: 'Incline DB Press', section: 'SS1', exercise_order: 4, set_number: 1, planned_reps: '10-12', weight: '55', reps: '12', effort: 'Medium', notes: '', sheetRow: 8 },
-  { workout_id: 'w_demo001', exercise_id: 'ex_demo002', exercise_name: 'Incline DB Press', section: 'SS1', exercise_order: 4, set_number: 2, planned_reps: '10-12', weight: '55', reps: '11', effort: 'Medium', notes: '', sheetRow: 9 },
-  { workout_id: 'w_demo001', exercise_id: 'ex_demo002', exercise_name: 'Incline DB Press', section: 'SS1', exercise_order: 4, set_number: 3, planned_reps: '10-12', weight: '55', reps: '10', effort: 'Hard', notes: '', sheetRow: 10 },
-  // SS1 — Cable Fly
-  { workout_id: 'w_demo001', exercise_id: 'ex_demo003', exercise_name: 'Cable Fly', section: 'SS1', exercise_order: 5, set_number: 1, planned_reps: '12-15', weight: '25', reps: '15', effort: 'Easy', notes: '', sheetRow: 11 },
-  { workout_id: 'w_demo001', exercise_id: 'ex_demo003', exercise_name: 'Cable Fly', section: 'SS1', exercise_order: 5, set_number: 2, planned_reps: '12-15', weight: '25', reps: '14', effort: 'Medium', notes: '', sheetRow: 12 },
-  { workout_id: 'w_demo001', exercise_id: 'ex_demo003', exercise_name: 'Cable Fly', section: 'SS1', exercise_order: 5, set_number: 3, planned_reps: '12-15', weight: '25', reps: '12', effort: 'Medium', notes: '', sheetRow: 13 },
-  // SS2 — Lateral Raise
-  { workout_id: 'w_demo001', exercise_id: 'ex_demo009', exercise_name: 'DB Lateral Raise', section: 'SS2', exercise_order: 6, set_number: 1, planned_reps: '12-15', weight: '15', reps: '15', effort: 'Medium', notes: '', sheetRow: 14 },
-  { workout_id: 'w_demo001', exercise_id: 'ex_demo009', exercise_name: 'DB Lateral Raise', section: 'SS2', exercise_order: 6, set_number: 2, planned_reps: '12-15', weight: '15', reps: '13', effort: 'Medium', notes: '', sheetRow: 15 },
-  { workout_id: 'w_demo001', exercise_id: 'ex_demo009', exercise_name: 'DB Lateral Raise', section: 'SS2', exercise_order: 6, set_number: 3, planned_reps: '12-15', weight: '15', reps: '12', effort: 'Hard', notes: '', sheetRow: 16 },
-  // SS2 — Tricep Extension
-  { workout_id: 'w_demo001', exercise_id: 'ex_demo010', exercise_name: 'Rope Tricep Extension', section: 'SS2', exercise_order: 7, set_number: 1, planned_reps: '12-15', weight: '40', reps: '15', effort: 'Medium', notes: '', sheetRow: 17 },
-  { workout_id: 'w_demo001', exercise_id: 'ex_demo010', exercise_name: 'Rope Tricep Extension', section: 'SS2', exercise_order: 7, set_number: 2, planned_reps: '12-15', weight: '40', reps: '13', effort: 'Medium', notes: '', sheetRow: 18 },
-  { workout_id: 'w_demo001', exercise_id: 'ex_demo010', exercise_name: 'Rope Tricep Extension', section: 'SS2', exercise_order: 7, set_number: 3, planned_reps: '12-15', weight: '40', reps: '12', effort: 'Hard', notes: '', sheetRow: 19 },
+  { workout_id: 'w_demo001', exercise_id: 'ex_demo001', exercise_name: 'Bench Press BB', section: 'primary', exercise_order: 3, set_number: 1, planned_reps: '4-6', weight: '185', reps: '6', effort: 'Medium', notes: '', sheetRow: 4 },
+  { workout_id: 'w_demo001', exercise_id: 'ex_demo001', exercise_name: 'Bench Press BB', section: 'primary', exercise_order: 3, set_number: 2, planned_reps: '4-6', weight: '185', reps: '5', effort: 'Medium', notes: '', sheetRow: 5 },
+  { workout_id: 'w_demo001', exercise_id: 'ex_demo001', exercise_name: 'Bench Press BB', section: 'primary', exercise_order: 3, set_number: 3, planned_reps: '4-6', weight: '185', reps: '5', effort: 'Hard', notes: '', sheetRow: 6 },
+  { workout_id: 'w_demo001', exercise_id: 'ex_demo001', exercise_name: 'Bench Press BB', section: 'primary', exercise_order: 3, set_number: 4, planned_reps: '4-6', weight: '185', reps: '4', effort: 'Hard', notes: 'Last rep was a grinder', sheetRow: 7 },
+  // SS1 — Incline Press DB
+  { workout_id: 'w_demo001', exercise_id: 'ex_demo002', exercise_name: 'Incline Press DB', section: 'SS1', exercise_order: 4, set_number: 1, planned_reps: '10-12', weight: '55', reps: '12', effort: 'Medium', notes: '', sheetRow: 8 },
+  { workout_id: 'w_demo001', exercise_id: 'ex_demo002', exercise_name: 'Incline Press DB', section: 'SS1', exercise_order: 4, set_number: 2, planned_reps: '10-12', weight: '55', reps: '11', effort: 'Medium', notes: '', sheetRow: 9 },
+  { workout_id: 'w_demo001', exercise_id: 'ex_demo002', exercise_name: 'Incline Press DB', section: 'SS1', exercise_order: 4, set_number: 3, planned_reps: '10-12', weight: '55', reps: '10', effort: 'Hard', notes: '', sheetRow: 10 },
+  // SS1 — Cable Fly FT
+  { workout_id: 'w_demo001', exercise_id: 'ex_demo003', exercise_name: 'Cable Fly FT', section: 'SS1', exercise_order: 5, set_number: 1, planned_reps: '12-15', weight: '25', reps: '15', effort: 'Easy', notes: '', sheetRow: 11 },
+  { workout_id: 'w_demo001', exercise_id: 'ex_demo003', exercise_name: 'Cable Fly FT', section: 'SS1', exercise_order: 5, set_number: 2, planned_reps: '12-15', weight: '25', reps: '14', effort: 'Medium', notes: '', sheetRow: 12 },
+  { workout_id: 'w_demo001', exercise_id: 'ex_demo003', exercise_name: 'Cable Fly FT', section: 'SS1', exercise_order: 5, set_number: 3, planned_reps: '12-15', weight: '25', reps: '12', effort: 'Medium', notes: '', sheetRow: 13 },
+  // SS2 — Lateral Raise DB
+  { workout_id: 'w_demo001', exercise_id: 'ex_demo009', exercise_name: 'Lateral Raise DB', section: 'SS2', exercise_order: 6, set_number: 1, planned_reps: '12-15', weight: '15', reps: '15', effort: 'Medium', notes: '', sheetRow: 14 },
+  { workout_id: 'w_demo001', exercise_id: 'ex_demo009', exercise_name: 'Lateral Raise DB', section: 'SS2', exercise_order: 6, set_number: 2, planned_reps: '12-15', weight: '15', reps: '13', effort: 'Medium', notes: '', sheetRow: 15 },
+  { workout_id: 'w_demo001', exercise_id: 'ex_demo009', exercise_name: 'Lateral Raise DB', section: 'SS2', exercise_order: 6, set_number: 3, planned_reps: '12-15', weight: '15', reps: '12', effort: 'Hard', notes: '', sheetRow: 16 },
+  // SS2 — Rope Tricep Pushdown FT
+  { workout_id: 'w_demo001', exercise_id: 'ex_demo010', exercise_name: 'Rope Tricep Pushdown FT', section: 'SS2', exercise_order: 7, set_number: 1, planned_reps: '12-15', weight: '40', reps: '15', effort: 'Medium', notes: '', sheetRow: 17 },
+  { workout_id: 'w_demo001', exercise_id: 'ex_demo010', exercise_name: 'Rope Tricep Pushdown FT', section: 'SS2', exercise_order: 7, set_number: 2, planned_reps: '12-15', weight: '40', reps: '13', effort: 'Medium', notes: '', sheetRow: 18 },
+  { workout_id: 'w_demo001', exercise_id: 'ex_demo010', exercise_name: 'Rope Tricep Pushdown FT', section: 'SS2', exercise_order: 7, set_number: 3, planned_reps: '12-15', weight: '40', reps: '12', effort: 'Hard', notes: '', sheetRow: 19 },
   // Burnout — Ab Wheel
   { workout_id: 'w_demo001', exercise_id: 'ex_demo012', exercise_name: 'Ab Wheel', section: 'burnout', exercise_order: 8, set_number: 1, planned_reps: '6-10', weight: '', reps: '10', effort: 'Medium', notes: '', sheetRow: 20 },
   { workout_id: 'w_demo001', exercise_id: 'ex_demo012', exercise_name: 'Ab Wheel', section: 'burnout', exercise_order: 8, set_number: 2, planned_reps: '6-10', weight: '', reps: '8', effort: 'Hard', notes: '', sheetRow: 21 },
 
   // ── Previous workout (w_demo004 — Jan 7) for last-time panel testing ──
-  { workout_id: 'w_demo004', exercise_id: 'ex_demo001', exercise_name: 'Barbell Bench Press', section: 'primary', exercise_order: 3, set_number: 1, planned_reps: '4-6', weight: '175', reps: '6', effort: 'Medium', notes: '', sheetRow: 22 },
-  { workout_id: 'w_demo004', exercise_id: 'ex_demo001', exercise_name: 'Barbell Bench Press', section: 'primary', exercise_order: 3, set_number: 2, planned_reps: '4-6', weight: '175', reps: '6', effort: 'Medium', notes: '', sheetRow: 23 },
-  { workout_id: 'w_demo004', exercise_id: 'ex_demo001', exercise_name: 'Barbell Bench Press', section: 'primary', exercise_order: 3, set_number: 3, planned_reps: '4-6', weight: '175', reps: '5', effort: 'Hard', notes: '', sheetRow: 24 },
-  { workout_id: 'w_demo004', exercise_id: 'ex_demo002', exercise_name: 'Incline DB Press', section: 'SS1', exercise_order: 4, set_number: 1, planned_reps: '10-12', weight: '50', reps: '12', effort: 'Easy', notes: '', sheetRow: 25 },
-  { workout_id: 'w_demo004', exercise_id: 'ex_demo002', exercise_name: 'Incline DB Press', section: 'SS1', exercise_order: 4, set_number: 2, planned_reps: '10-12', weight: '50', reps: '11', effort: 'Medium', notes: '', sheetRow: 26 },
-  { workout_id: 'w_demo004', exercise_id: 'ex_demo002', exercise_name: 'Incline DB Press', section: 'SS1', exercise_order: 4, set_number: 3, planned_reps: '10-12', weight: '50', reps: '10', effort: 'Medium', notes: '', sheetRow: 27 },
+  { workout_id: 'w_demo004', exercise_id: 'ex_demo001', exercise_name: 'Bench Press BB', section: 'primary', exercise_order: 3, set_number: 1, planned_reps: '4-6', weight: '175', reps: '6', effort: 'Medium', notes: '', sheetRow: 22 },
+  { workout_id: 'w_demo004', exercise_id: 'ex_demo001', exercise_name: 'Bench Press BB', section: 'primary', exercise_order: 3, set_number: 2, planned_reps: '4-6', weight: '175', reps: '6', effort: 'Medium', notes: '', sheetRow: 23 },
+  { workout_id: 'w_demo004', exercise_id: 'ex_demo001', exercise_name: 'Bench Press BB', section: 'primary', exercise_order: 3, set_number: 3, planned_reps: '4-6', weight: '175', reps: '5', effort: 'Hard', notes: '', sheetRow: 24 },
+  { workout_id: 'w_demo004', exercise_id: 'ex_demo002', exercise_name: 'Incline Press DB', section: 'SS1', exercise_order: 4, set_number: 1, planned_reps: '10-12', weight: '50', reps: '12', effort: 'Easy', notes: '', sheetRow: 25 },
+  { workout_id: 'w_demo004', exercise_id: 'ex_demo002', exercise_name: 'Incline Press DB', section: 'SS1', exercise_order: 4, set_number: 2, planned_reps: '10-12', weight: '50', reps: '11', effort: 'Medium', notes: '', sheetRow: 26 },
+  { workout_id: 'w_demo004', exercise_id: 'ex_demo002', exercise_name: 'Incline Press DB', section: 'SS1', exercise_order: 4, set_number: 3, planned_reps: '10-12', weight: '50', reps: '10', effort: 'Medium', notes: '', sheetRow: 27 },
 ];

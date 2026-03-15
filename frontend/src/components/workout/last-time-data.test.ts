@@ -132,10 +132,10 @@ describe('getLastTimeDataFrom', () => {
   // AC2 + AC5: works with demo data shape
   it('works with demo data shape', () => {
     const allSets: SetWithRow[] = [
-      { workout_id: 'w_demo001', exercise_id: 'ex_demo001', exercise_name: 'Barbell Bench Press', section: 'primary', exercise_order: 3, set_number: 1, planned_reps: '4-6', weight: '185', reps: '6', effort: 'Medium', notes: '', sheetRow: 4 },
-      { workout_id: 'w_demo001', exercise_id: 'ex_demo001', exercise_name: 'Barbell Bench Press', section: 'primary', exercise_order: 3, set_number: 2, planned_reps: '4-6', weight: '185', reps: '5', effort: 'Medium', notes: '', sheetRow: 5 },
-      { workout_id: 'w_demo001', exercise_id: 'ex_demo001', exercise_name: 'Barbell Bench Press', section: 'primary', exercise_order: 3, set_number: 3, planned_reps: '4-6', weight: '185', reps: '5', effort: 'Hard', notes: '', sheetRow: 6 },
-      { workout_id: 'w_demo001', exercise_id: 'ex_demo001', exercise_name: 'Barbell Bench Press', section: 'primary', exercise_order: 3, set_number: 4, planned_reps: '4-6', weight: '185', reps: '4', effort: 'Hard', notes: 'Last rep was a grinder', sheetRow: 7 },
+      { workout_id: 'w_demo001', exercise_id: 'ex_demo001', exercise_name: 'Bench Press BB', section: 'primary', exercise_order: 3, set_number: 1, planned_reps: '4-6', weight: '185', reps: '6', effort: 'Medium', notes: '', sheetRow: 4 },
+      { workout_id: 'w_demo001', exercise_id: 'ex_demo001', exercise_name: 'Bench Press BB', section: 'primary', exercise_order: 3, set_number: 2, planned_reps: '4-6', weight: '185', reps: '5', effort: 'Medium', notes: '', sheetRow: 5 },
+      { workout_id: 'w_demo001', exercise_id: 'ex_demo001', exercise_name: 'Bench Press BB', section: 'primary', exercise_order: 3, set_number: 3, planned_reps: '4-6', weight: '185', reps: '5', effort: 'Hard', notes: '', sheetRow: 6 },
+      { workout_id: 'w_demo001', exercise_id: 'ex_demo001', exercise_name: 'Bench Press BB', section: 'primary', exercise_order: 3, set_number: 4, planned_reps: '4-6', weight: '185', reps: '4', effort: 'Hard', notes: 'Last rep was a grinder', sheetRow: 7 },
     ];
     const allWorkouts: WorkoutWithRow[] = [
       { id: 'w_demo001', date: '2025-01-14', time: '06:30', type: 'weight', name: 'Upper Push A', template_id: 'tpl_demo001', notes: '', duration_min: '62', created: '2025-01-14T06:30:00.000Z', copied_from: '', sheetRow: 2 },
