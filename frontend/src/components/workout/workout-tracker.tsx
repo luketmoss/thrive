@@ -7,11 +7,10 @@ import { AddExerciseModal } from '../exercises/add-exercise-modal';
 import { ExerciseRow } from './exercise-row';
 import type { TrackerExercise } from './exercise-row';
 import type { TrackerSet } from './set-row';
-import type { ExerciseWithRow, Effort } from '../../api/types';
+import type { ExerciseWithRow, Effort, SetWithRow } from '../../api/types';
 import { applyQuickFillWeight, applyQuickFillReps } from './quick-fill';
 import { applyCopyDown } from './copy-down';
 import { isWarmupExercise } from './warmup';
-import type { SetWithRow } from '../../api/types';
 
 interface Props {
   workoutId: string;
