@@ -188,6 +188,28 @@ export async function updateSet(
   );
 }
 
+export async function updateExerciseNameInSets(
+  exerciseId: string,
+  newName: string,
+  allSets: SetWithRow[],
+  token: string,
+): Promise<void> {
+  const affected = allSets.filter(s => s.exercise_id === exerciseId);
+  if (affected.length === 0) return;
+
+  if (isDemo()) return;
+
+  await withReauth(token, async (t) => {
+    for (const s of affected) {
+      await sheetsUpdate(
+        `Sets!C${s.sheetRow}`,
+        [[newName]],
+        t,
+      );
+    }
+  });
+}
+
 export async function deleteSetRow(sheetRow: number, token: string): Promise<void> {
   if (isDemo()) return;
 

@@ -1,7 +1,7 @@
 // Templates domain API — wraps Sheets REST calls with demo-mode fallback.
 
 import type { TemplateRowWithRow, Template, Section } from './types';
-import { sheetsGet, sheetsAppend, sheetsDeleteRow, getSheetId, withReauth } from './sheets';
+import { sheetsGet, sheetsAppend, sheetsUpdate, sheetsDeleteRow, getSheetId, withReauth } from './sheets';
 import { isDemo, DEMO_TEMPLATE_ROWS } from './demo-data';
 
 export interface TemplateExerciseInput {
@@ -136,6 +136,28 @@ export async function updateTemplate(
     ]);
     if (sheetValues.length > 0) {
       await sheetsAppend('Templates!A:L', sheetValues, t);
+    }
+  });
+}
+
+export async function updateExerciseNameInTemplates(
+  exerciseId: string,
+  newName: string,
+  templateRows: TemplateRowWithRow[],
+  token: string,
+): Promise<void> {
+  const affected = templateRows.filter(r => r.exercise_id === exerciseId);
+  if (affected.length === 0) return;
+
+  if (isDemo()) return;
+
+  await withReauth(token, async (t) => {
+    for (const row of affected) {
+      await sheetsUpdate(
+        `Templates!E${row.sheetRow}`,
+        [[newName]],
+        t,
+      );
     }
   });
 }

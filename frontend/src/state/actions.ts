@@ -1,8 +1,8 @@
 import { exercises, labels, templates, workouts, sets, loading, activeWorkoutId, activeWorkoutSets, activeWarmupExercises, showToast } from './store';
 import { fetchExercises, createExercise, updateExercise as updateExerciseApi, deleteExercise as deleteExerciseApi } from '../api/exercises-api';
 import { fetchLabels, createLabel as createLabelApi, updateLabel as updateLabelApi, deleteLabel as deleteLabelApi, appendLabels } from '../api/labels-api';
-import { fetchTemplateRows, groupTemplateRows, createTemplate as createTemplateApi, updateTemplate as updateTemplateApi, deleteTemplate as deleteTemplateApi } from '../api/templates-api';
-import { fetchWorkouts, fetchSets, createWorkout as createWorkoutApi, updateWorkout as updateWorkoutApi, deleteWorkoutRows, appendSet as appendSetApi, appendSets as appendSetsApi, updateSet as updateSetApi, deleteSetRow } from '../api/workouts-api';
+import { fetchTemplateRows, groupTemplateRows, createTemplate as createTemplateApi, updateTemplate as updateTemplateApi, deleteTemplate as deleteTemplateApi, updateExerciseNameInTemplates } from '../api/templates-api';
+import { fetchWorkouts, fetchSets, createWorkout as createWorkoutApi, updateWorkout as updateWorkoutApi, deleteWorkoutRows, appendSet as appendSetApi, appendSets as appendSetsApi, updateSet as updateSetApi, deleteSetRow, updateExerciseNameInSets } from '../api/workouts-api';
 import { colorKeyFromName } from '../api/label-colors';
 import type { TemplateExerciseInput } from '../api/templates-api';
 import type { ExerciseWithRow, LabelWithRow, TemplateRowWithRow, WorkoutType, WorkoutSet, SetWithRow } from '../api/types';
@@ -173,8 +173,53 @@ export async function editExercise(
   token: string,
 ): Promise<void> {
   try {
+    const oldExercise = exercises.value.find((e) => e.id === exercise.id);
+    const nameChanged = oldExercise && oldExercise.name !== exercise.name;
+
+    // Update the exercise row itself
     await updateExerciseApi(exercise.sheetRow, exercise, token);
     exercises.value = exercises.value.map((e) => (e.id === exercise.id ? exercise : e));
+
+    // Cascade name change to Templates and Sets
+    if (nameChanged) {
+      let cascadeError = false;
+
+      // Cascade to Templates
+      try {
+        const allTemplateRows = templates.value.flatMap((t) => t.exercises);
+        await updateExerciseNameInTemplates(exercise.id, exercise.name, allTemplateRows, token);
+        // Update local templates signal
+        templates.value = templates.value.map((t) => ({
+          ...t,
+          exercises: t.exercises.map((ex) =>
+            ex.exercise_id === exercise.id ? { ...ex, exercise_name: exercise.name } : ex,
+          ),
+        }));
+      } catch {
+        cascadeError = true;
+      }
+
+      // Cascade to Sets
+      try {
+        await updateExerciseNameInSets(exercise.id, exercise.name, sets.value, token);
+        // Update local sets signal
+        sets.value = sets.value.map((s) =>
+          s.exercise_id === exercise.id ? { ...s, exercise_name: exercise.name } : s,
+        );
+        // Update activeWorkoutSets if any match
+        activeWorkoutSets.value = activeWorkoutSets.value.map((s) =>
+          s.exercise_id === exercise.id ? { ...s, exercise_name: exercise.name } : s,
+        );
+      } catch {
+        cascadeError = true;
+      }
+
+      if (cascadeError) {
+        showToast('Exercise renamed, but some references couldn\'t update. Try editing the name again.', 'error');
+        return;
+      }
+    }
+
     showToast('Exercise updated', 'success');
   } catch (err) {
     if (isReauthFailure(err)) throw err;
