@@ -44,8 +44,8 @@ function parseHash(hash: string): ParsedRoute {
   // /settings
   if (path === '/settings') return { name: 'settings', params: {}, hash: path };
 
-  // Default: history
-  return { name: 'history', params: {}, hash: '/' };
+  // Default: activities
+  return { name: 'activities', params: {}, hash: '/' };
 }
 
 export const currentRoute = signal<ParsedRoute>(parseHash(window.location.hash));

@@ -4,7 +4,7 @@ export function BottomNav() {
   const route = currentRoute.value;
 
   const tabs = [
-    { name: 'history', label: 'History', icon: '\u{1F4CB}', path: '/' },
+    { name: 'activities', label: 'Activities', icon: '\u{1F4CB}', path: '/' },
     { name: 'templates', label: 'Templates', icon: '\u{1F4DD}', path: '/templates' },
     { name: 'exercises', label: 'Exercises', icon: '\u{1F4AA}', path: '/exercises' },
     { name: 'settings', label: 'Settings', icon: '\u2699\uFE0F', path: '/settings' },
@@ -14,7 +14,7 @@ export function BottomNav() {
     <nav class="bottom-nav">
       {tabs.map(tab => {
         const isActive = route.name === tab.name ||
-          (tab.name === 'history' && ['workout-detail', 'workout-edit', 'workout-new', 'workout-active'].includes(route.name)) ||
+          (tab.name === 'activities' && ['workout-detail', 'workout-edit', 'workout-new', 'workout-active'].includes(route.name)) ||
           (tab.name === 'templates' && ['template-new', 'template-edit'].includes(route.name)) ||
           (tab.name === 'settings' && route.name === 'manage-labels');
         return (

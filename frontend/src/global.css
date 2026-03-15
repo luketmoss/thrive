@@ -1406,8 +1406,8 @@ input, select, textarea {
   color: var(--color-text-muted);
 }
 
-/* ===== History Screen ===== */
-.history-header-row {
+/* ===== Activities Screen ===== */
+.activities-header-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1417,8 +1417,8 @@ input, select, textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  min-width: 44px;
+  min-height: 44px;
   border-radius: var(--radius-full);
   font-size: var(--text-lg);
   color: var(--color-text-muted);
@@ -1430,8 +1430,8 @@ input, select, textarea {
   color: var(--color-text);
 }
 
-/* ===== History Filters ===== */
-.history-filters {
+/* ===== Activities Filters ===== */
+.activities-filters {
   margin-bottom: var(--space-md);
 }
 

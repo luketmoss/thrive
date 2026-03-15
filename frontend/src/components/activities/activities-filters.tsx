@@ -9,7 +9,7 @@ const TYPES: { value: WorkoutType; label: string }[] = [
   { value: 'yoga', label: 'Yoga' },
 ];
 
-export function HistoryFilters() {
+export function ActivitiesFilters() {
   const activeType = filterType.value;
   const activeTags = filterTags.value;
   const tags = allTags.value;
@@ -31,7 +31,7 @@ export function HistoryFilters() {
   };
 
   return (
-    <div class="history-filters">
+    <div class="activities-filters">
       <div class="filter-row">
         {TYPES.map(({ value, label }) => (
           <button

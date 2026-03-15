@@ -1,27 +1,32 @@
 import { useState } from 'preact/hooks';
 import { navigate } from '../../router/router';
 import { filteredWorkouts, sets } from '../../state/store';
-import { HistoryFilters } from './history-filters';
+import { ActivitiesFilters } from './activities-filters';
 
-export function HistoryScreen() {
+export function ActivitiesScreen() {
   const [showFilters, setShowFilters] = useState(false);
 
   return (
-    <div class="screen history-screen">
+    <div class="screen activities-screen">
       <header class="screen-header">
-        <div class="history-header-row">
+        <div class="activities-header-row">
           <h1>Workouts</h1>
           <button
             class="btn-icon"
             onClick={() => setShowFilters(!showFilters)}
             aria-label="Toggle filters"
+            aria-expanded={showFilters}
           >
-            {showFilters ? '✕' : '⚙'}
+            {showFilters ? '✕' : (
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                <path d="M1 2h16l-6 7.5V15l-4 2v-7.5L1 2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+              </svg>
+            )}
           </button>
         </div>
       </header>
 
-      {showFilters && <HistoryFilters />}
+      {showFilters && <ActivitiesFilters />}
 
       <div class="screen-body">
         {filteredWorkouts.value.length === 0 ? (

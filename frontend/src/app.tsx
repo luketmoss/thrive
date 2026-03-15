@@ -7,20 +7,20 @@ import { Toast } from './components/shared/toast';
 import { loadInitialData } from './state/actions';
 import { loading } from './state/store';
 import { currentRoute } from './router/router';
-import { HistoryScreen } from './components/history/history-screen';
+import { ActivitiesScreen } from './components/activities/activities-screen';
 import { TemplatesScreen } from './components/templates/templates-screen';
 import { SettingsScreen } from './components/settings/settings-screen';
 import { ExercisesScreen } from './components/exercises/exercises-screen';
 import { WorkoutFlow } from './components/workout/workout-flow';
-import { WorkoutDetail } from './components/history/workout-detail';
+import { WorkoutDetail } from './components/activities/workout-detail';
 import { ManageLabelsScreen } from './components/settings/manage-labels-screen';
 
 function Router() {
   const route = currentRoute.value;
 
   switch (route.name) {
-    case 'history':
-      return <HistoryScreen />;
+    case 'activities':
+      return <ActivitiesScreen />;
     case 'workout-new':
       return <WorkoutFlow />;
     case 'workout-active':
@@ -40,7 +40,7 @@ function Router() {
     case 'settings':
       return <SettingsScreen />;
     default:
-      return <HistoryScreen />;
+      return <ActivitiesScreen />;
   }
 }
 

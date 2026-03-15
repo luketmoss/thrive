@@ -44,7 +44,7 @@ export function WorkoutDetail({ workoutId }: Props) {
       <div class="screen">
         <div class="empty-state">
           <p>Workout not found</p>
-          <button class="btn btn-primary" onClick={() => navigate('/')}>Back to History</button>
+          <button class="btn btn-primary" onClick={() => navigate('/')}>Back to Activities</button>
         </div>
       </div>
     );

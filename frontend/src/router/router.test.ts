@@ -14,7 +14,7 @@ describe('router', () => {
     window.location.hash = '';
   });
 
-  it('parses empty hash as history route', async () => {
+  it('parses empty hash as activities route', async () => {
     // Re-import to re-evaluate
     window.location.hash = '';
     const { currentRoute } = await import('./router');
@@ -22,7 +22,7 @@ describe('router', () => {
     window.location.hash = '';
     window.dispatchEvent(new Event('hashchange'));
 
-    expect(currentRoute.value.name).toBe('history');
+    expect(currentRoute.value.name).toBe('activities');
     expect(currentRoute.value.params).toEqual({});
   });
 
@@ -96,12 +96,12 @@ describe('router', () => {
     expect(currentRoute.value.params).toEqual({ id: 'tpl_demo001' });
   });
 
-  it('falls back to history for unknown routes', async () => {
+  it('falls back to activities for unknown routes', async () => {
     const { currentRoute } = await import('./router');
     window.location.hash = '/nonexistent/path';
     window.dispatchEvent(new Event('hashchange'));
 
-    expect(currentRoute.value.name).toBe('history');
+    expect(currentRoute.value.name).toBe('activities');
   });
 
   it('navigate() sets the window hash', async () => {
