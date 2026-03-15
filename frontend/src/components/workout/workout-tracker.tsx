@@ -11,6 +11,7 @@ import type { ExerciseWithRow, Effort, SetWithRow } from '../../api/types';
 import { applyQuickFillWeight, applyQuickFillReps } from './quick-fill';
 import { applyCopyDown } from './copy-down';
 import { isWarmupExercise } from './warmup';
+import { applyChangeSection, applyMoveUp, applyMoveDown } from './section-management';
 
 interface Props {
   workoutId: string;
@@ -64,6 +65,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
   const [finishing, setFinishing] = useState(false);
   const [notes, setNotes] = useState('');
   const [showFinishForm, setShowFinishForm] = useState(false);
+  const [reorderAnnouncement, setReorderAnnouncement] = useState('');
   const saveTimers = useRef<Map<string, number>>(new Map());
 
   // Initialize from signal, merging warmup exercises (list-only, no sets)
@@ -320,6 +322,118 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
     );
   };
 
+  const handleChangeSection = async (exerciseId: string, exerciseOrder: number, newSection: string) => {
+    if (!token) return;
+    const { exercises: updated, removedSets } = applyChangeSection(exerciseList, exerciseId, exerciseOrder, newSection);
+
+    // Delete saved sets bottom-to-top when converting to warmup
+    const savedRemoved = removedSets
+      .filter((s) => s.sheetRow > 0)
+      .sort((a, b) => b.sheetRow - a.sheetRow);
+    for (const s of savedRemoved) {
+      const ex = exerciseList.find(
+        (e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder,
+      );
+      try {
+        await removeSet({
+          workout_id: workoutId,
+          exercise_id: exerciseId,
+          exercise_name: ex?.exercise_name ?? '',
+          section: ex?.section ?? '',
+          exercise_order: exerciseOrder,
+          set_number: s.set_number,
+          planned_reps: s.planned_reps,
+          weight: s.weight,
+          reps: s.reps,
+          effort: s.effort,
+          notes: s.notes,
+          sheetRow: s.sheetRow,
+        }, token);
+      } catch {
+        return; // Error toast shown by action
+      }
+    }
+
+    setExerciseList(updated);
+  };
+
+  const handleMoveUp = (exerciseId: string, exerciseOrder: number) => {
+    setExerciseList((prev) => {
+      const next = applyMoveUp(prev, exerciseId, exerciseOrder);
+      const sorted = [...next].sort((a, b) => a.exercise_order - b.exercise_order);
+      const movedEx = next.find(
+        (e) => e.exercise_id === exerciseId,
+      );
+      if (movedEx) {
+        const newPos = sorted.findIndex(
+          (e) => e.exercise_id === movedEx.exercise_id && e.exercise_order === movedEx.exercise_order,
+        ) + 1;
+        setReorderAnnouncement(
+          `${movedEx.exercise_name} moved to position ${newPos} of ${sorted.length}`,
+        );
+      }
+      return next;
+    });
+  };
+
+  const handleMoveDown = (exerciseId: string, exerciseOrder: number) => {
+    setExerciseList((prev) => {
+      const next = applyMoveDown(prev, exerciseId, exerciseOrder);
+      const sorted = [...next].sort((a, b) => a.exercise_order - b.exercise_order);
+      const movedEx = next.find(
+        (e) => e.exercise_id === exerciseId,
+      );
+      if (movedEx) {
+        const newPos = sorted.findIndex(
+          (e) => e.exercise_id === movedEx.exercise_id && e.exercise_order === movedEx.exercise_order,
+        ) + 1;
+        setReorderAnnouncement(
+          `${movedEx.exercise_name} moved to position ${newPos} of ${sorted.length}`,
+        );
+      }
+      return next;
+    });
+  };
+
+  const handleRemoveExercise = async (exerciseId: string, exerciseOrder: number) => {
+    if (!token) return;
+    const ex = exerciseList.find(
+      (e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder,
+    );
+    if (!ex) return;
+
+    if (!confirm(`Remove ${ex.exercise_name}? Logged sets will be deleted.`)) return;
+
+    // Delete saved sets bottom-to-top
+    const savedSets = ex.sets
+      .filter((s) => s.sheetRow > 0)
+      .sort((a, b) => b.sheetRow - a.sheetRow);
+    for (const s of savedSets) {
+      try {
+        await removeSet({
+          workout_id: workoutId,
+          exercise_id: exerciseId,
+          exercise_name: ex.exercise_name,
+          section: ex.section,
+          exercise_order: exerciseOrder,
+          set_number: s.set_number,
+          planned_reps: s.planned_reps,
+          weight: s.weight,
+          reps: s.reps,
+          effort: s.effort,
+          notes: s.notes,
+          sheetRow: s.sheetRow,
+        }, token);
+      } catch {
+        return; // Error toast shown by action
+      }
+    }
+
+    setExerciseList((prev) =>
+      prev.filter((e) => !(e.exercise_id === exerciseId && e.exercise_order === exerciseOrder)),
+    );
+  };
+
   const handleAddExercise = (ex: ExerciseWithRow) => {
     const maxOrder = exerciseList.reduce((max, e) => Math.max(max, e.exercise_order), 0);
     const newExercise: TrackerExercise = {
@@ -452,6 +566,15 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
         </div>
       )}
 
+      {/* aria-live region for reorder announcements */}
+      <div
+        role="status"
+        aria-live="polite"
+        class="sr-only"
+      >
+        {reorderAnnouncement}
+      </div>
+
       <div class="tracker-exercise-list">
         {exerciseList.length === 0 && (
           <div class="empty-state">
@@ -460,29 +583,41 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
           </div>
         )}
 
-        {exerciseList.map((ex) => (
-          <ExerciseRow
-            key={`${ex.exercise_id}-${ex.exercise_order}`}
-            exercise={ex}
-            currentWorkoutId={workoutId}
-            onUpdateSet={(setNum, updates) =>
-              handleUpdateSet(ex.exercise_id, ex.exercise_order, setNum, updates)
-            }
-            onAddSet={() => handleAddSet(ex.exercise_id, ex.exercise_order)}
-            onRemoveSet={(setNum) =>
-              handleRemoveSet(ex.exercise_id, ex.exercise_order, setNum)
-            }
-            onQuickFillWeight={(weight) =>
-              handleQuickFillWeight(ex.exercise_id, ex.exercise_order, weight)
-            }
-            onQuickFillReps={(reps) =>
-              handleQuickFillReps(ex.exercise_id, ex.exercise_order, reps)
-            }
-            onCopyDown={(lastTimeSets) =>
-              handleCopyDown(ex.exercise_id, ex.exercise_order, lastTimeSets)
-            }
-          />
-        ))}
+        {(() => {
+          const sorted = [...exerciseList].sort((a, b) => a.exercise_order - b.exercise_order);
+          return sorted.map((ex, idx) => (
+            <ExerciseRow
+              key={`${ex.exercise_id}-${ex.exercise_order}`}
+              exercise={ex}
+              currentWorkoutId={workoutId}
+              onUpdateSet={(setNum, updates) =>
+                handleUpdateSet(ex.exercise_id, ex.exercise_order, setNum, updates)
+              }
+              onAddSet={() => handleAddSet(ex.exercise_id, ex.exercise_order)}
+              onRemoveSet={(setNum) =>
+                handleRemoveSet(ex.exercise_id, ex.exercise_order, setNum)
+              }
+              onQuickFillWeight={(weight) =>
+                handleQuickFillWeight(ex.exercise_id, ex.exercise_order, weight)
+              }
+              onQuickFillReps={(reps) =>
+                handleQuickFillReps(ex.exercise_id, ex.exercise_order, reps)
+              }
+              onCopyDown={(lastTimeSets) =>
+                handleCopyDown(ex.exercise_id, ex.exercise_order, lastTimeSets)
+              }
+              onChangeSection={(newSection) =>
+                handleChangeSection(ex.exercise_id, ex.exercise_order, newSection)
+              }
+              onMoveUp={() => handleMoveUp(ex.exercise_id, ex.exercise_order)}
+              onMoveDown={() => handleMoveDown(ex.exercise_id, ex.exercise_order)}
+              onRemoveExercise={() => handleRemoveExercise(ex.exercise_id, ex.exercise_order)}
+              isFirst={idx === 0}
+              isLast={idx === sorted.length - 1}
+              totalExercises={sorted.length}
+            />
+          ));
+        })()}
       </div>
 
       <button

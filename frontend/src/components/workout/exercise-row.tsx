@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'preact/hooks';
 import { SetRow } from './set-row';
 import { LastTimePanel } from './last-time-panel';
+import { ALL_SECTIONS } from './section-management';
 import type { TrackerSet } from './set-row';
 import type { SetWithRow } from '../../api/types';
 
@@ -23,6 +24,13 @@ interface Props {
   onQuickFillWeight: (weight: string) => void;
   onQuickFillReps: (reps: string) => void;
   onCopyDown: (lastTimeSets: SetWithRow[]) => void;
+  onChangeSection: (newSection: string) => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onRemoveExercise: () => void;
+  isFirst: boolean;
+  isLast: boolean;
+  totalExercises: number;
 }
 
 function sectionBadgeClass(section: string): string {
@@ -30,12 +38,50 @@ function sectionBadgeClass(section: string): string {
   return `section-badge section-${section}`;
 }
 
-export function ExerciseRow({ exercise, currentWorkoutId, onUpdateSet, onAddSet, onRemoveSet, onQuickFillWeight, onQuickFillReps, onCopyDown }: Props) {
+function sectionPillClass(section: string, active: boolean): string {
+  const base = 'section-picker-pill';
+  if (!active) return base;
+  if (section.startsWith('SS')) return `${base} section-picker-pill-active section-ss`;
+  return `${base} section-picker-pill-active section-${section}`;
+}
+
+export function ExerciseRow({
+  exercise,
+  currentWorkoutId,
+  onUpdateSet,
+  onAddSet,
+  onRemoveSet,
+  onQuickFillWeight,
+  onQuickFillReps,
+  onCopyDown,
+  onChangeSection,
+  onMoveUp,
+  onMoveDown,
+  onRemoveExercise,
+  isFirst,
+  isLast,
+  totalExercises,
+}: Props) {
   const isWarmup = exercise.section === 'warmup';
   const [showLastTime, setShowLastTime] = useState(false);
   const [flashSets, setFlashSets] = useState(false);
+  const [showSectionPicker, setShowSectionPicker] = useState(false);
+  const [showWarmupConfirm, setShowWarmupConfirm] = useState(false);
 
-  // AC4: Escape key closes the panel
+  // Escape closes section picker / warmup confirm
+  useEffect(() => {
+    if (!showSectionPicker && !showWarmupConfirm) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowSectionPicker(false);
+        setShowWarmupConfirm(false);
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [showSectionPicker, showWarmupConfirm]);
+
+  // Escape key closes the last-time panel
   useEffect(() => {
     if (!showLastTime) return;
     const handler = (e: KeyboardEvent) => {
@@ -45,6 +91,111 @@ export function ExerciseRow({ exercise, currentWorkoutId, onUpdateSet, onAddSet,
     return () => document.removeEventListener('keydown', handler);
   }, [showLastTime]);
 
+  const handleSectionBadgeClick = () => {
+    if (showSectionPicker) {
+      setShowSectionPicker(false);
+      setShowWarmupConfirm(false);
+    } else {
+      setShowSectionPicker(true);
+      setShowWarmupConfirm(false);
+    }
+  };
+
+  const handlePillClick = (section: string) => {
+    if (section === exercise.section) {
+      // Already selected — collapse picker
+      setShowSectionPicker(false);
+      return;
+    }
+    if (section === 'warmup' && !isWarmup) {
+      // Show warmup confirmation
+      setShowWarmupConfirm(true);
+      setShowSectionPicker(false);
+      return;
+    }
+    onChangeSection(section);
+    setShowSectionPicker(false);
+    setShowWarmupConfirm(false);
+  };
+
+  const handleConfirmWarmup = () => {
+    onChangeSection('warmup');
+    setShowWarmupConfirm(false);
+  };
+
+  const showToolbar = totalExercises > 1;
+
+  const sectionPickerRow = showSectionPicker && (
+    <div class="section-picker-row" role="group" aria-label="Select section">
+      {ALL_SECTIONS.map((s) => (
+        <button
+          key={s}
+          type="button"
+          class={sectionPillClass(s, s === exercise.section)}
+          onClick={() => handlePillClick(s)}
+          aria-pressed={s === exercise.section ? 'true' : 'false'}
+        >
+          {s}
+        </button>
+      ))}
+    </div>
+  );
+
+  const warmupConfirmRow = showWarmupConfirm && (
+    <div class="warmup-confirm-row">
+      <p class="warmup-confirm-text">
+        Warmup exercises are list-only — set data will be removed.
+      </p>
+      <div class="warmup-confirm-actions">
+        <button
+          type="button"
+          class="btn btn-danger"
+          onClick={handleConfirmWarmup}
+        >
+          Switch to Warmup
+        </button>
+        <button
+          type="button"
+          class="btn btn-secondary"
+          onClick={() => setShowWarmupConfirm(false)}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+
+  const toolbarRow = showToolbar && (
+    <div class="exercise-toolbar-row">
+      <button
+        type="button"
+        class="exercise-toolbar-btn"
+        onClick={onMoveUp}
+        disabled={isFirst}
+        aria-label={`Move ${exercise.exercise_name} up`}
+      >
+        ▲
+      </button>
+      <button
+        type="button"
+        class="exercise-toolbar-btn"
+        onClick={onMoveDown}
+        disabled={isLast}
+        aria-label={`Move ${exercise.exercise_name} down`}
+      >
+        ▼
+      </button>
+      <button
+        type="button"
+        class="exercise-toolbar-btn exercise-toolbar-remove"
+        onClick={onRemoveExercise}
+        aria-label={`Remove ${exercise.exercise_name}`}
+      >
+        ✕
+      </button>
+    </div>
+  );
+
   // Warmup exercises render as simplified name-only cards
   if (isWarmup) {
     return (
@@ -53,11 +204,20 @@ export function ExerciseRow({ exercise, currentWorkoutId, onUpdateSet, onAddSet,
         aria-label={`Warmup: ${exercise.exercise_name} (list only)`}
       >
         <div class="tracker-exercise-header">
-          <span class={sectionBadgeClass(exercise.section)}>
+          <button
+            type="button"
+            class={`${sectionBadgeClass(exercise.section)} section-badge-btn`}
+            onClick={handleSectionBadgeClick}
+            aria-label={`Change section (current: ${exercise.section})`}
+            aria-expanded={showSectionPicker ? 'true' : 'false'}
+          >
             {exercise.section}
-          </span>
+          </button>
           <span class="tracker-exercise-name">{exercise.exercise_name}</span>
         </div>
+        {sectionPickerRow}
+        {warmupConfirmRow}
+        {toolbarRow}
       </div>
     );
   }
@@ -68,9 +228,15 @@ export function ExerciseRow({ exercise, currentWorkoutId, onUpdateSet, onAddSet,
   return (
     <div class={cardClass}>
       <div class="tracker-exercise-header">
-        <span class={sectionBadgeClass(exercise.section)}>
+        <button
+          type="button"
+          class={`${sectionBadgeClass(exercise.section)} section-badge-btn`}
+          onClick={handleSectionBadgeClick}
+          aria-label={`Change section (current: ${exercise.section})`}
+          aria-expanded={showSectionPicker ? 'true' : 'false'}
+        >
           {exercise.section}
-        </span>
+        </button>
         <span class="tracker-exercise-name">{exercise.exercise_name}</span>
         <button
           class="last-time-toggle"
@@ -84,6 +250,10 @@ export function ExerciseRow({ exercise, currentWorkoutId, onUpdateSet, onAddSet,
           </svg>
         </button>
       </div>
+
+      {sectionPickerRow}
+      {warmupConfirmRow}
+      {toolbarRow}
 
       {showLastTime && (
         <LastTimePanel
