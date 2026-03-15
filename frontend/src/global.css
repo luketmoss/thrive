@@ -873,6 +873,19 @@ input, select, textarea {
   transition: background var(--transition-fast);
 }
 
+.exercise-list > .exercise-list-item {
+  padding: var(--space-md) var(--space-lg);
+  cursor: pointer;
+}
+
+.exercise-list > .exercise-list-item:hover {
+  background: var(--color-border-light);
+}
+
+.exercise-list > .exercise-list-item:active {
+  background: var(--color-primary-light);
+}
+
 .exercise-list-item-header {
   display: flex;
   align-items: center;
