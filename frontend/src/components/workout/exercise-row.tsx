@@ -2,6 +2,7 @@ import { useState, useEffect } from 'preact/hooks';
 import { SetRow } from './set-row';
 import { LastTimePanel } from './last-time-panel';
 import type { TrackerSet } from './set-row';
+import type { SetWithRow } from '../../api/types';
 
 export interface TrackerExercise {
   exercise_id: string;
@@ -21,6 +22,7 @@ interface Props {
   onRemoveSet: (setNumber: number) => void;
   onQuickFillWeight: (weight: string) => void;
   onQuickFillReps: (reps: string) => void;
+  onCopyDown: (lastTimeSets: SetWithRow[]) => void;
 }
 
 function sectionBadgeClass(section: string): string {
@@ -28,9 +30,10 @@ function sectionBadgeClass(section: string): string {
   return `section-badge section-${section}`;
 }
 
-export function ExerciseRow({ exercise, currentWorkoutId, onUpdateSet, onAddSet, onRemoveSet, onQuickFillWeight, onQuickFillReps }: Props) {
+export function ExerciseRow({ exercise, currentWorkoutId, onUpdateSet, onAddSet, onRemoveSet, onQuickFillWeight, onQuickFillReps, onCopyDown }: Props) {
   const isWarmup = exercise.section === 'warmup';
   const [showLastTime, setShowLastTime] = useState(false);
+  const [flashSets, setFlashSets] = useState(false);
 
   // AC4: Escape key closes the panel
   useEffect(() => {
@@ -85,7 +88,13 @@ export function ExerciseRow({ exercise, currentWorkoutId, onUpdateSet, onAddSet,
       {showLastTime && (
         <LastTimePanel
           exerciseId={exercise.exercise_id}
+          exerciseName={exercise.exercise_name}
           currentWorkoutId={currentWorkoutId}
+          onCopyDown={(lastTimeSets) => {
+            onCopyDown(lastTimeSets);
+            setFlashSets(true);
+            setTimeout(() => setFlashSets(false), 600);
+          }}
         />
       )}
 
@@ -114,7 +123,7 @@ export function ExerciseRow({ exercise, currentWorkoutId, onUpdateSet, onAddSet,
         />
       </div>
 
-      <div class="tracker-set-list">
+      <div class={`tracker-set-list${flashSets ? ' copy-down-flash' : ''}`}>
         {exercise.sets.map((set) => (
           <SetRow
             key={set.set_number}

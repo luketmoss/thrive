@@ -1,8 +1,11 @@
 import { getLastTimeData, formatLastTimeDate } from './last-time-data';
+import type { SetWithRow } from '../../api/types';
 
 interface Props {
   exerciseId: string;
+  exerciseName: string;
   currentWorkoutId: string;
+  onCopyDown: (lastTimeSets: SetWithRow[]) => void;
 }
 
 function effortClass(effort: string): string {
@@ -10,7 +13,7 @@ function effortClass(effort: string): string {
   return `effort-${effort.toLowerCase()}`;
 }
 
-export function LastTimePanel({ exerciseId, currentWorkoutId }: Props) {
+export function LastTimePanel({ exerciseId, exerciseName, currentWorkoutId, onCopyDown }: Props) {
   const data = getLastTimeData(exerciseId, currentWorkoutId);
 
   if (!data) {
@@ -40,6 +43,13 @@ export function LastTimePanel({ exerciseId, currentWorkoutId }: Props) {
           </div>
         ))}
       </div>
+      <button
+        class="copy-down-btn"
+        onClick={() => onCopyDown(data.sets)}
+        aria-label={`Copy previous workout data for ${exerciseName}`}
+      >
+        Copy Down
+      </button>
     </div>
   );
 }

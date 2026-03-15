@@ -9,7 +9,9 @@ import type { TrackerExercise } from './exercise-row';
 import type { TrackerSet } from './set-row';
 import type { ExerciseWithRow, Effort } from '../../api/types';
 import { applyQuickFillWeight, applyQuickFillReps } from './quick-fill';
+import { applyCopyDown } from './copy-down';
 import { isWarmupExercise } from './warmup';
+import type { SetWithRow } from '../../api/types';
 
 interface Props {
   workoutId: string;
@@ -202,6 +204,64 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
       }
       return next;
     });
+  };
+
+  const handleCopyDown = async (exerciseId: string, exerciseOrder: number, lastTimeSets: SetWithRow[]) => {
+    const ex = exerciseList.find(
+      (e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder,
+    );
+    if (!ex) return;
+
+    // AC3: Confirmation when removing sets
+    if (lastTimeSets.length < ex.sets.length) {
+      const ok = confirm(`Replace ${ex.sets.length} sets with ${lastTimeSets.length} from last time?`);
+      if (!ok) return;
+    }
+
+    const { exercises: updated, removedSets } = applyCopyDown(
+      exerciseList, exerciseId, exerciseOrder, lastTimeSets,
+    );
+
+    // Delete removed saved sets from API (bottom-to-top)
+    if (token) {
+      const savedRemoved = removedSets
+        .filter((s) => s.sheetRow > 0)
+        .sort((a, b) => b.sheetRow - a.sheetRow);
+      for (const s of savedRemoved) {
+        try {
+          await removeSet({
+            workout_id: workoutId,
+            exercise_id: exerciseId,
+            exercise_name: ex.exercise_name,
+            section: ex.section,
+            exercise_order: exerciseOrder,
+            set_number: s.set_number,
+            planned_reps: s.planned_reps,
+            weight: s.weight,
+            reps: s.reps,
+            effort: s.effort,
+            notes: s.notes,
+            sheetRow: s.sheetRow,
+          }, token);
+        } catch {
+          return; // Error toast shown by action
+        }
+      }
+    }
+
+    setExerciseList(updated);
+
+    // Trigger auto-save for all copied sets
+    const updatedEx = updated.find(
+      (e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder,
+    );
+    if (updatedEx) {
+      for (const s of updatedEx.sets) {
+        if (s.weight || s.reps) {
+          setTimeout(() => debouncedSave(exerciseOrder, exerciseId, s), 0);
+        }
+      }
+    }
   };
 
   const handleAddSet = (exerciseId: string, exerciseOrder: number) => {
@@ -418,6 +478,9 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
             }
             onQuickFillReps={(reps) =>
               handleQuickFillReps(ex.exercise_id, ex.exercise_order, reps)
+            }
+            onCopyDown={(lastTimeSets) =>
+              handleCopyDown(ex.exercise_id, ex.exercise_order, lastTimeSets)
             }
           />
         ))}
