@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find . -maxdepth 2 -type f \\\\\\(-name package.json -o -name *.json -o -name pnpm-workspace.yaml -o -name yarn.lock \\\\\\))",
+      "Bash(git config:*)",
+      "Bash(ls -la /d/Projects/code/hive/*.md)",
+      "Bash(mkdir -p /d/Projects/code/groundwork/.claude/skills/pm)",
+      "Bash(mkdir -p /d/Projects/code/groundwork/.claude/skills/dev)",
+      "Bash(mkdir -p /d/Projects/code/groundwork/.github/workflows)"
+    ]
+  }
+}

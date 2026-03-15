@@ -1,0 +1,109 @@
+import { useState } from 'preact/hooks';
+import type { WorkoutType } from '../../api/types';
+import { useAuth } from '../../auth/auth-context';
+import { startSimpleWorkout } from '../../state/actions';
+import { navigate } from '../../router/router';
+
+interface Props {
+  workoutType: WorkoutType;
+  onBack: () => void;
+}
+
+const TYPE_LABELS: Record<string, string> = {
+  stretch: 'Stretch',
+  bike: 'Bike',
+  yoga: 'Yoga',
+};
+
+export function SimpleWorkout({ workoutType, onBack }: Props) {
+  const { token } = useAuth();
+  const now = new Date();
+
+  const [name, setName] = useState(TYPE_LABELS[workoutType] || workoutType);
+  const [notes, setNotes] = useState('');
+  const [duration, setDuration] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!token) return;
+    setSaving(true);
+    try {
+      await startSimpleWorkout({
+        type: workoutType,
+        name: name.trim() || TYPE_LABELS[workoutType] || workoutType,
+        notes: notes.trim(),
+        duration_min: duration,
+      }, token);
+      navigate('/');
+    } catch {
+      // Error toast shown by action
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div class="screen simple-workout-form">
+      <div class="template-editor-header">
+        <button
+          class="template-editor-back"
+          onClick={onBack}
+          aria-label="Back"
+        >
+          ← Back
+        </button>
+        <button
+          class="btn btn-primary"
+          onClick={handleSave}
+          disabled={saving}
+        >
+          {saving ? 'Saving...' : 'Save'}
+        </button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Name</label>
+        <input
+          class="form-input"
+          type="text"
+          placeholder={`e.g. ${TYPE_LABELS[workoutType] || 'Workout'}`}
+          value={name}
+          onInput={(e) => setName((e.target as HTMLInputElement).value)}
+        />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Date</label>
+        <input
+          class="form-input"
+          type="date"
+          value={now.toISOString().slice(0, 10)}
+          disabled
+        />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Duration (minutes)</label>
+        <input
+          class="form-input"
+          type="number"
+          inputMode="numeric"
+          placeholder="e.g. 30"
+          value={duration}
+          onInput={(e) => setDuration((e.target as HTMLInputElement).value)}
+        />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <textarea
+          class="form-textarea"
+          placeholder="How did it go?"
+          rows={5}
+          value={notes}
+          onInput={(e) => setNotes((e.target as HTMLTextAreaElement).value)}
+        />
+      </div>
+    </div>
+  );
+}

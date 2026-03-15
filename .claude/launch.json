@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "frontend",
+      "runtimeExecutable": "node.exe",
+      "runtimeArgs": ["C:/Program Files/nodejs/node_modules/npm/bin/npx-cli.js", "vite", "--port", "5173"],
+      "port": 5173,
+      "cwd": "frontend"
+    }
+  ]
+}
