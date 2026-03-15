@@ -1218,6 +1218,7 @@ input, select, textarea {
 }
 
 .tracker-exercise-warmup .tracker-exercise-controls {
+  width: 100%;
   margin-bottom: 0;
 }
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'preact/hooks';
-import { workouts, activeWorkoutId, activeWorkoutSets, sets } from '../../state/store';
+import { workouts, activeWorkoutId, activeWorkoutSets, activeWarmupExercises, sets, templates } from '../../state/store';
 import { startWorkout } from '../../state/actions';
 import { useAuth } from '../../auth/auth-context';
 import { navigate } from '../../router/router';
@@ -7,7 +7,6 @@ import { TypeSelector } from './type-selector';
 import { TemplatePicker } from './template-picker';
 import { WorkoutTracker } from './workout-tracker';
 import { SimpleWorkout } from './simple-workout';
-import { templates } from '../../state/store';
 import type { WorkoutType } from '../../api/types';
 
 type FlowStep = 'type' | 'template' | 'tracker' | 'simple';
@@ -40,6 +39,24 @@ export function WorkoutFlow({ workoutId }: Props) {
 
     // Load this workout's sets into activeWorkoutSets
     activeWorkoutSets.value = sets.value.filter((s) => s.workout_id === workoutId);
+
+    // Restore warmup exercises from template (exclude any already in sets)
+    if (workout.template_id) {
+      const tpl = templates.value.find((t) => t.id === workout.template_id);
+      if (tpl) {
+        const workoutSets = activeWorkoutSets.value;
+        activeWarmupExercises.value = tpl.exercises
+          .filter((ex) => ex.section === 'warmup')
+          .filter((ex) => !workoutSets.some(
+            (s) => s.exercise_id === ex.exercise_id && s.exercise_order === ex.order && s.section === 'warmup',
+          ))
+          .map((ex) => ({
+            exercise_id: ex.exercise_id,
+            exercise_name: ex.exercise_name,
+            exercise_order: ex.order,
+          }));
+      }
+    }
 
     if (workout.type === 'weight') {
       setStep('tracker');
