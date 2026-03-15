@@ -1,10 +1,23 @@
 import { useState } from 'preact/hooks';
 import { navigate } from '../../router/router';
-import { filteredWorkouts, sets } from '../../state/store';
+import { filteredWorkouts, sets, exercises } from '../../state/store';
 import { ActivitiesFilters } from './activities-filters';
+import { groupWorkoutsByDate, getWorkoutTags } from './activities-helpers';
+import { LabelBadge } from '../shared/label-badge';
+
+/** Type-color map for inset box-shadow accent (light theme). */
+const TYPE_COLORS: Record<string, { light: string; dark: string }> = {
+  weight:  { light: '#c53030', dark: '#fca5a5' },
+  stretch: { light: '#2e7d32', dark: '#86efac' },
+  bike:    { light: '#1565c0', dark: '#93c5fd' },
+  yoga:    { light: '#7b1fa2', dark: '#d8b4fe' },
+};
 
 export function ActivitiesScreen() {
   const [showFilters, setShowFilters] = useState(false);
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const groups = groupWorkoutsByDate(filteredWorkouts.value, todayStr);
 
   return (
     <div class="screen activities-screen">
@@ -36,32 +49,49 @@ export function ActivitiesScreen() {
           </div>
         ) : (
           <div class="workout-list">
-            {filteredWorkouts.value.map((w) => {
-              const workoutSets = sets.value.filter((s) => s.workout_id === w.id);
-              const exerciseCount = new Set(workoutSets.map((s) => `${s.exercise_id}__${s.exercise_order}`)).size;
-
-              return (
-                <div
-                  key={w.id}
-                  class="workout-card"
-                  onClick={() => navigate(`/history/${w.id}`)}
-                >
-                  <div class="workout-card-left">
-                    <span class="workout-date">{w.date}</span>
-                    {w.time && <span class="workout-time">{w.time}</span>}
-                  </div>
-                  <div class="workout-card-center">
-                    <span class="workout-name">{w.name || w.type}</span>
-                    <span class="workout-meta">
-                      {w.duration_min ? `${w.duration_min} min` : ''}
-                      {w.duration_min && exerciseCount > 0 ? ' · ' : ''}
-                      {exerciseCount > 0 ? `${exerciseCount} exercise${exerciseCount !== 1 ? 's' : ''}` : ''}
-                    </span>
-                  </div>
-                  <span class={`type-badge badge-${w.type}`}>{w.type}</span>
+            {groups.map((group, groupIdx) => (
+              <div key={group.label}>
+                <div class={`date-group-header${groupIdx === 0 ? ' first' : ''}`}>
+                  {group.label}
                 </div>
-              );
-            })}
+                {group.workouts.map((w) => {
+                  const workoutSets = sets.value.filter((s) => s.workout_id === w.id);
+                  const exerciseCount = new Set(workoutSets.map((s) => `${s.exercise_id}__${s.exercise_order}`)).size;
+                  const typeColor = TYPE_COLORS[w.type];
+                  const tags = w.type === 'weight' ? getWorkoutTags(workoutSets, exercises.value) : [];
+
+                  return (
+                    <div
+                      key={w.id}
+                      class={`workout-card workout-card-${w.type}`}
+                      style={typeColor ? { '--type-accent': typeColor.light, '--type-accent-dark': typeColor.dark } as any : undefined}
+                      onClick={() => navigate(`/history/${w.id}`)}
+                    >
+                      <div class="workout-card-left">
+                        <span class="workout-date">{w.date}</span>
+                        {w.time && <span class="workout-time">{w.time}</span>}
+                      </div>
+                      <div class="workout-card-center">
+                        <span class="workout-name">{w.name || w.type}</span>
+                        <span class="workout-meta">
+                          {w.duration_min ? `${w.duration_min} min` : ''}
+                          {w.duration_min && exerciseCount > 0 ? ' · ' : ''}
+                          {exerciseCount > 0 ? `${exerciseCount} exercise${exerciseCount !== 1 ? 's' : ''}` : ''}
+                        </span>
+                        {tags.length > 0 && (
+                          <div class="workout-card-tags">
+                            {tags.map((tag) => (
+                              <LabelBadge key={tag} name={tag} />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <span class={`type-badge badge-${w.type}`}>{w.type}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
           </div>
         )}
       </div>

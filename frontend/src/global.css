@@ -1541,6 +1541,39 @@ input, select, textarea {
 /* ===== Workout Card Enhancements ===== */
 .workout-card {
   flex-wrap: wrap;
+  box-shadow: inset 4px 0 0 var(--type-accent, transparent);
+}
+
+[data-theme="dark"] .workout-card {
+  box-shadow: inset 4px 0 0 var(--type-accent-dark, transparent);
+}
+
+/* ===== Date Group Headers ===== */
+.date-group-header {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  padding: var(--space-sm) 0;
+  margin-top: var(--space-md);
+}
+
+.date-group-header.first {
+  margin-top: 0;
+}
+
+/* ===== Workout Card Tags ===== */
+.workout-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.workout-card-tags .tag-badge,
+.workout-card-tags .tag-badge-colored {
+  font-size: var(--text-xs);
+  padding: 1px 6px;
 }
 
 .workout-card-left {
