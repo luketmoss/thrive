@@ -1,12 +1,11 @@
-import { useState, useMemo, useEffect, useRef } from 'preact/hooks';
+import { useState, useMemo, useEffect } from 'preact/hooks';
 import { exercises as exercisesSignal, sets, workouts, allTags } from '../../state/store';
 import { editExercise, removeExercise } from '../../state/actions';
 import { useAuth } from '../../auth/auth-context';
 import { ExerciseForm } from './exercise-form';
 import { LabelBadge } from '../shared/label-badge';
 import { getLastTimeDataFrom, formatLastTimeDate } from '../workout/last-time-data';
-import type { ExerciseWithRow } from '../../api/types';
-import type { SetWithRow, WorkoutWithRow } from '../../api/types';
+import type { ExerciseWithRow, SetWithRow, WorkoutWithRow } from '../../api/types';
 
 /** Build a map of exerciseId → most recent workout date string. */
 export function buildLastPerformedMap(
@@ -52,7 +51,6 @@ export function ExercisesScreen() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [editingExercise, setEditingExercise] = useState<ExerciseWithRow | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const expandedRef = useRef<HTMLDivElement>(null);
 
   const toggleTag = (tag: string) => {
     setSelectedTags(prev =>
@@ -192,7 +190,6 @@ export function ExercisesScreen() {
                 <div
                   key={ex.id}
                   class="exercise-list-item"
-                  ref={isExpanded ? expandedRef : undefined}
                 >
                   <div
                     class="exercise-list-item-header"
