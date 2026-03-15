@@ -64,6 +64,14 @@ export interface WorkoutSet {
 }
 export interface SetWithRow extends WorkoutSet { sheetRow: number; }
 
+export interface Label {
+  id: string;
+  name: string;
+  color_key: string;
+  created: string;
+}
+export interface LabelWithRow extends Label { sheetRow: number; }
+
 export interface UserInfo {
   email: string;
   name: string;

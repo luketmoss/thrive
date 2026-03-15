@@ -1,5 +1,5 @@
-import { useState, useRef } from 'preact/hooks';
-import { allTags } from '../../state/store';
+import { useState } from 'preact/hooks';
+import { LabelChipGrid } from '../shared/label-chip-grid';
 
 interface ExerciseFormProps {
   initial?: { name: string; tags: string; notes: string };
@@ -15,40 +15,14 @@ export function ExerciseForm({ initial, onSubmit, onCancel, submitLabel = 'Save'
       ? initial.tags.split(',').map((t) => t.trim()).filter(Boolean)
       : [],
   );
-  const [tagInput, setTagInput] = useState('');
   const [notes, setNotes] = useState(initial?.notes ?? '');
   const [submitting, setSubmitting] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
 
-  const addTag = (raw: string) => {
-    const tag = raw.trim();
-    if (tag && !tags.includes(tag)) {
-      setTags([...tags, tag]);
-    }
-    setTagInput('');
+  const toggleTag = (tagName: string) => {
+    setTags(prev =>
+      prev.includes(tagName) ? prev.filter(t => t !== tagName) : [...prev, tagName],
+    );
   };
-
-  const removeTag = (tag: string) => {
-    setTags(tags.filter((t) => t !== tag));
-  };
-
-  const handleTagKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault();
-      addTag(tagInput);
-    }
-    if (e.key === 'Backspace' && tagInput === '' && tags.length > 0) {
-      removeTag(tags[tags.length - 1]);
-    }
-  };
-
-  const handleTagBlur = () => {
-    if (tagInput.trim()) addTag(tagInput);
-  };
-
-  const suggestions = allTags.value.filter(
-    (t) => !tags.includes(t) && t.toLowerCase().includes(tagInput.toLowerCase()),
-  );
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
@@ -79,48 +53,11 @@ export function ExerciseForm({ initial, onSubmit, onCancel, submitLabel = 'Save'
       </div>
 
       <div class="form-group">
-        <label class="form-label">Tags</label>
-        <div
-          class="tag-input-wrapper"
-          onClick={() => inputRef.current?.focus()}
-        >
-          {tags.map((tag) => (
-            <span key={tag} class="tag-badge tag-badge-removable">
-              {tag}
-              <button
-                type="button"
-                class="tag-badge-remove"
-                onClick={(e) => { e.stopPropagation(); removeTag(tag); }}
-                aria-label={`Remove ${tag}`}
-              >
-                &times;
-              </button>
-            </span>
-          ))}
-          <input
-            ref={inputRef}
-            class="tag-input-field"
-            type="text"
-            value={tagInput}
-            onInput={(e) => setTagInput((e.target as HTMLInputElement).value)}
-            onKeyDown={handleTagKeyDown}
-            onBlur={handleTagBlur}
-            placeholder={tags.length === 0 ? 'Add tags...' : ''}
-          />
-        </div>
-        {tagInput && suggestions.length > 0 && (
-          <div class="tag-suggestions">
-            {suggestions.map((s) => (
-              <span
-                key={s}
-                class="tag-badge tag-suggestion"
-                onClick={() => addTag(s)}
-              >
-                {s}
-              </span>
-            ))}
-          </div>
-        )}
+        <label class="form-label">Labels</label>
+        <LabelChipGrid
+          selected={tags}
+          onToggle={toggleTag}
+        />
       </div>
 
       <div class="form-group">

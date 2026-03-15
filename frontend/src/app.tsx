@@ -13,6 +13,7 @@ import { SettingsScreen } from './components/settings/settings-screen';
 import { ExercisesScreen } from './components/exercises/exercises-screen';
 import { WorkoutFlow } from './components/workout/workout-flow';
 import { WorkoutDetail } from './components/history/workout-detail';
+import { ManageLabelsScreen } from './components/settings/manage-labels-screen';
 
 function Router() {
   const route = currentRoute.value;
@@ -34,6 +35,8 @@ function Router() {
       return <TemplatesScreen />;
     case 'exercises':
       return <ExercisesScreen />;
+    case 'manage-labels':
+      return <ManageLabelsScreen />;
     case 'settings':
       return <SettingsScreen />;
     default:

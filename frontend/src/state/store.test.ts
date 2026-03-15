@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   exercises,
+  labels,
   templates,
   workouts,
   sets,
@@ -8,14 +9,17 @@ import {
   filterTags,
   filteredWorkouts,
   allTags,
+  getLabelByName,
+  labelUsageCount,
   showToast,
   toasts,
 } from './store';
-import type { ExerciseWithRow, WorkoutWithRow, SetWithRow } from '../api/types';
+import type { ExerciseWithRow, LabelWithRow, WorkoutWithRow, SetWithRow } from '../api/types';
 
 // Helper to reset all signals to defaults between tests
 function resetSignals() {
   exercises.value = [];
+  labels.value = [];
   templates.value = [];
   workouts.value = [];
   sets.value = [];
@@ -47,6 +51,17 @@ function makeExercise(overrides: Partial<ExerciseWithRow> = {}): ExerciseWithRow
     name: 'Bench Press',
     tags: 'Push, Chest',
     notes: '',
+    created: '2025-01-01T00:00:00.000Z',
+    sheetRow: 2,
+    ...overrides,
+  };
+}
+
+function makeLabel(overrides: Partial<LabelWithRow> = {}): LabelWithRow {
+  return {
+    id: 'lbl1',
+    name: 'Push',
+    color_key: 'red',
     created: '2025-01-01T00:00:00.000Z',
     sheetRow: 2,
     ...overrides,
@@ -215,38 +230,57 @@ describe('filteredWorkouts', () => {
   });
 });
 
-describe('allTags', () => {
+describe('allTags (sourced from labels signal)', () => {
   beforeEach(resetSignals);
 
-  it('returns empty array when no exercises exist', () => {
+  it('returns empty array when no labels exist', () => {
     expect(allTags.value).toEqual([]);
   });
 
-  it('extracts unique tags from exercises and sorts them', () => {
-    exercises.value = [
-      makeExercise({ id: 'ex1', tags: 'Push, Chest, Compound' }),
-      makeExercise({ id: 'ex2', tags: 'Pull, Back, Compound' }),
-      makeExercise({ id: 'ex3', tags: 'Legs' }),
+  it('returns sorted label names', () => {
+    labels.value = [
+      makeLabel({ id: 'lbl1', name: 'Push' }),
+      makeLabel({ id: 'lbl2', name: 'Chest' }),
+      makeLabel({ id: 'lbl3', name: 'Arms' }),
     ];
 
-    expect(allTags.value).toEqual(['Back', 'Chest', 'Compound', 'Legs', 'Pull', 'Push']);
+    expect(allTags.value).toEqual(['Arms', 'Chest', 'Push']);
+  });
+});
+
+describe('getLabelByName', () => {
+  beforeEach(resetSignals);
+
+  it('finds a label by name', () => {
+    labels.value = [
+      makeLabel({ id: 'lbl1', name: 'Push', color_key: 'red' }),
+      makeLabel({ id: 'lbl2', name: 'Pull', color_key: 'blue' }),
+    ];
+
+    const result = getLabelByName('Pull');
+    expect(result).toBeDefined();
+    expect(result!.color_key).toBe('blue');
   });
 
-  it('handles exercises with no tags', () => {
-    exercises.value = [
-      makeExercise({ id: 'ex1', tags: '' }),
-      makeExercise({ id: 'ex2', tags: 'Push' }),
-    ];
-
-    expect(allTags.value).toEqual(['Push']);
+  it('returns undefined for non-existent label', () => {
+    labels.value = [makeLabel({ name: 'Push' })];
+    expect(getLabelByName('Nonexistent')).toBeUndefined();
   });
+});
 
-  it('trims whitespace from tags', () => {
+describe('labelUsageCount', () => {
+  beforeEach(resetSignals);
+
+  it('counts exercises that use a given label', () => {
     exercises.value = [
-      makeExercise({ id: 'ex1', tags: ' Push , Chest ' }),
+      makeExercise({ id: 'ex1', tags: 'Push, Chest' }),
+      makeExercise({ id: 'ex2', tags: 'Push, Shoulders' }),
+      makeExercise({ id: 'ex3', tags: 'Pull, Back' }),
     ];
 
-    expect(allTags.value).toEqual(['Chest', 'Push']);
+    expect(labelUsageCount('Push')).toBe(2);
+    expect(labelUsageCount('Pull')).toBe(1);
+    expect(labelUsageCount('Core')).toBe(0);
   });
 });
 

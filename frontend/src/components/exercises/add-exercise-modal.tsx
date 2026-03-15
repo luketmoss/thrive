@@ -3,6 +3,7 @@ import { exercises as exercisesSignal, allTags } from '../../state/store';
 import { addExercise } from '../../state/actions';
 import { useAuth } from '../../auth/auth-context';
 import { ExerciseForm } from './exercise-form';
+import { LabelBadge } from '../shared/label-badge';
 import type { ExerciseWithRow } from '../../api/types';
 
 interface AddExerciseModalProps {
@@ -78,14 +79,12 @@ export function AddExerciseModal({ onSelect, onClose }: AddExerciseModalProps) {
             {allTags.value.length > 0 && (
               <div class="tag-filter-row">
                 {allTags.value.map((tag) => (
-                  <button
+                  <LabelBadge
                     key={tag}
-                    type="button"
-                    class={`tag-badge${selectedTags.includes(tag) ? ' active' : ''}`}
+                    name={tag}
+                    active={selectedTags.includes(tag)}
                     onClick={() => toggleTag(tag)}
-                  >
-                    {tag}
-                  </button>
+                  />
                 ))}
               </div>
             )}
@@ -104,9 +103,7 @@ export function AddExerciseModal({ onSelect, onClose }: AddExerciseModalProps) {
                     {ex.tags && (
                       <div class="exercise-list-item-tags">
                         {ex.tags.split(',').map((t) => t.trim()).filter(Boolean).map((tag) => (
-                          <span key={tag} class="tag-badge">
-                            {tag}
-                          </span>
+                          <LabelBadge key={tag} name={tag} />
                         ))}
                       </div>
                     )}

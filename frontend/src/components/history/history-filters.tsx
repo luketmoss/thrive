@@ -1,4 +1,5 @@
 import { filterType, filterTags, allTags } from '../../state/store';
+import { LabelBadge } from '../shared/label-badge';
 import type { WorkoutType } from '../../api/types';
 
 const TYPES: { value: WorkoutType; label: string }[] = [
@@ -46,13 +47,12 @@ export function HistoryFilters() {
       {tags.length > 0 && (
         <div class="filter-row tag-filter-row">
           {tags.map((tag) => (
-            <button
+            <LabelBadge
               key={tag}
-              class={`tag-badge${activeTags.includes(tag) ? ' active' : ''}`}
+              name={tag}
+              active={activeTags.includes(tag)}
               onClick={() => toggleTag(tag)}
-            >
-              {tag}
-            </button>
+            />
           ))}
         </div>
       )}

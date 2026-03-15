@@ -1,8 +1,9 @@
 import { signal, computed } from '@preact/signals';
-import type { ExerciseWithRow, Template, WorkoutWithRow, SetWithRow, WorkoutType } from '../api/types';
+import type { ExerciseWithRow, LabelWithRow, Template, WorkoutWithRow, SetWithRow, WorkoutType } from '../api/types';
 
 // Core data signals
 export const exercises = signal<ExerciseWithRow[]>([]);
+export const labels = signal<LabelWithRow[]>([]);
 export const templates = signal<Template[]>([]);
 export const workouts = signal<WorkoutWithRow[]>([]);
 export const sets = signal<SetWithRow[]>([]);
@@ -50,15 +51,22 @@ export const filteredWorkouts = computed(() => {
   });
 });
 
+// allTags: sourced from labels signal (backwards compat for filter rows)
 export const allTags = computed(() => {
-  const tagSet = new Set<string>();
-  for (const ex of exercises.value) {
-    if (ex.tags) {
-      ex.tags.split(',').map(t => t.trim()).filter(Boolean).forEach(t => tagSet.add(t));
-    }
-  }
-  return Array.from(tagSet).sort();
+  return labels.value.map(l => l.name).sort();
 });
+
+/** Look up a label by name. */
+export function getLabelByName(name: string): LabelWithRow | undefined {
+  return labels.value.find(l => l.name === name);
+}
+
+/** Count how many exercises use a given label name. */
+export function labelUsageCount(labelName: string): number {
+  return exercises.value.filter(ex =>
+    ex.tags.split(',').map(t => t.trim()).filter(Boolean).includes(labelName),
+  ).length;
+}
 
 // Toast system
 export interface ToastMessage {
