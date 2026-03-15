@@ -869,19 +869,34 @@ input, select, textarea {
 .exercise-list-item {
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
-  padding: var(--space-md) var(--space-lg);
   border-bottom: 1px solid var(--color-border-light);
-  cursor: pointer;
   transition: background var(--transition-fast);
 }
 
-.exercise-list-item:hover {
+.exercise-list-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-lg);
+  min-height: 44px;
+  cursor: pointer;
+  gap: var(--space-sm);
+}
+
+.exercise-list-item-header:hover {
   background: var(--color-border-light);
 }
 
-.exercise-list-item:active {
+.exercise-list-item-header:active {
   background: var(--color-primary-light);
+}
+
+.exercise-list-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+  flex: 1;
 }
 
 .exercise-list-item-name {
@@ -889,10 +904,25 @@ input, select, textarea {
   color: var(--color-text);
 }
 
+.exercise-list-item-last-date {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
 .exercise-list-item-tags {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-xs);
+}
+
+.exercise-list-item-panel {
+  padding: 0 var(--space-lg) var(--space-md);
+}
+
+.exercise-list-item-edit-btn {
+  width: 100%;
+  min-height: 44px;
+  margin-top: var(--space-sm);
 }
 
 .exercise-list-empty {
