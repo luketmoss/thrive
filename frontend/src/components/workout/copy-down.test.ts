@@ -50,8 +50,8 @@ function makeLastTimeSet(overrides: Partial<SetWithRow> = {}): SetWithRow {
 }
 
 describe('applyCopyDown', () => {
-  // AC1: Copy down populates current sets from last-time data
-  it('copies weight, reps, effort from last-time sets', () => {
+  // AC1: Copy down populates weight and reps from last-time; effort is blank
+  it('copies weight and reps from last-time sets; effort is always blank', () => {
     const exercises = [makeExercise({
       sets: [
         makeSet({ set_number: 1, planned_reps: '8-10' }),
@@ -71,13 +71,30 @@ describe('applyCopyDown', () => {
     expect(result[0].sets).toHaveLength(3);
     expect(result[0].sets[0].weight).toBe('135');
     expect(result[0].sets[0].reps).toBe('10');
-    expect(result[0].sets[0].effort).toBe('Medium');
+    expect(result[0].sets[0].effort).toBe('');
     expect(result[0].sets[1].weight).toBe('140');
     expect(result[0].sets[1].reps).toBe('8');
-    expect(result[0].sets[1].effort).toBe('Hard');
+    expect(result[0].sets[1].effort).toBe('');
     expect(result[0].sets[2].weight).toBe('145');
     expect(result[0].sets[2].reps).toBe('6');
     expect(removedSets).toHaveLength(0);
+  });
+
+  // AC2: Effort remains blank even when last-time sets had effort values
+  it('leaves effort blank even when last-time sets had effort values', () => {
+    const exercises = [makeExercise({
+      sets: [makeSet({ set_number: 1 }), makeSet({ set_number: 2 })],
+    })];
+
+    const lastTime = [
+      makeLastTimeSet({ set_number: 1, weight: '100', reps: '12', effort: 'Easy' }),
+      makeLastTimeSet({ set_number: 2, weight: '100', reps: '10', effort: 'Hard' }),
+    ];
+
+    const { exercises: result } = applyCopyDown(exercises, 'ex1', 1, lastTime);
+
+    expect(result[0].sets[0].effort).toBe('');
+    expect(result[0].sets[1].effort).toBe('');
   });
 
   // AC1: planned_reps preserved
@@ -146,7 +163,7 @@ describe('applyCopyDown', () => {
     // New sets should have last-time data
     expect(result[0].sets[2].weight).toBe('140');
     expect(result[0].sets[2].reps).toBe('8');
-    expect(result[0].sets[2].effort).toBe('Hard');
+    expect(result[0].sets[2].effort).toBe('');
     expect(result[0].sets[3].weight).toBe('140');
     // New sets have no planned_reps (no current set to inherit from)
     expect(result[0].sets[2].planned_reps).toBe('');

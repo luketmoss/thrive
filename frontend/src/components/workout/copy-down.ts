@@ -9,7 +9,7 @@ export interface CopyDownResult {
 
 /**
  * Apply copy-down from last-time data to a specific exercise's sets.
- * - Copies weight, reps, effort from last-time sets
+ * - Copies weight and reps from last-time sets (effort is always blank)
  * - Adjusts set count to match (adds or removes)
  * - Preserves planned_reps from current sets
  * - Returns updated exercise list + any removed sets (for API cleanup)
@@ -40,7 +40,7 @@ export function applyCopyDown(
         planned_reps: existing?.planned_reps || '',
         weight: lt.weight,
         reps: lt.reps,
-        effort: lt.effort as Effort | '',
+        effort: '',
         notes: '',
         saved: false,
         sheetRow: existing?.sheetRow ?? -1,
