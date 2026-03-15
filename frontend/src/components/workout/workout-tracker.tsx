@@ -8,7 +8,7 @@ import { ExerciseRow } from './exercise-row';
 import type { TrackerExercise } from './exercise-row';
 import type { TrackerSet } from './set-row';
 import type { ExerciseWithRow, Effort } from '../../api/types';
-import { applyQuickFillWeight } from './quick-fill';
+import { applyQuickFillWeight, applyQuickFillReps } from './quick-fill';
 import { isWarmupExercise } from './warmup';
 
 interface Props {
@@ -32,6 +32,7 @@ function buildExerciseList(setRows: typeof activeWorkoutSets.value): TrackerExer
         exercise_order: s.exercise_order,
         sets: [],
         quickFillWeight: '',
+        quickFillReps: '',
       };
       map.set(key, ex);
     }
@@ -74,6 +75,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
       exercise_order: w.exercise_order,
       sets: [],
       quickFillWeight: '',
+      quickFillReps: '',
     }));
     const merged = [...warmups, ...tracked].sort((a, b) => a.exercise_order - b.exercise_order);
     setExerciseList(merged);
@@ -185,6 +187,23 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
     });
   };
 
+  const handleQuickFillReps = (exerciseId: string, exerciseOrder: number, reps: string) => {
+    setExerciseList((prev) => {
+      const next = applyQuickFillReps(prev, exerciseId, exerciseOrder, reps);
+      if (reps) {
+        const ex = next.find((e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder);
+        if (ex) {
+          for (const s of ex.sets) {
+            if (s.weight) {
+              setTimeout(() => debouncedSave(exerciseOrder, exerciseId, s), 0);
+            }
+          }
+        }
+      }
+      return next;
+    });
+  };
+
   const handleAddSet = (exerciseId: string, exerciseOrder: number) => {
     setExerciseList((prev) =>
       prev.map((ex) => {
@@ -260,6 +279,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
         sheetRow: -1,
       }],
       quickFillWeight: '',
+      quickFillReps: '',
     };
     setExerciseList((prev) => [...prev, newExercise]);
     setShowExercisePicker(false);
@@ -395,6 +415,9 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
             }
             onQuickFillWeight={(weight) =>
               handleQuickFillWeight(ex.exercise_id, ex.exercise_order, weight)
+            }
+            onQuickFillReps={(reps) =>
+              handleQuickFillReps(ex.exercise_id, ex.exercise_order, reps)
             }
           />
         ))}

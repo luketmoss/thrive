@@ -10,6 +10,7 @@ export interface TrackerExercise {
   exercise_order: number;
   sets: TrackerSet[];
   quickFillWeight: string;
+  quickFillReps: string;
 }
 
 interface Props {
@@ -19,6 +20,7 @@ interface Props {
   onAddSet: () => void;
   onRemoveSet: (setNumber: number) => void;
   onQuickFillWeight: (weight: string) => void;
+  onQuickFillReps: (reps: string) => void;
 }
 
 function sectionBadgeClass(section: string): string {
@@ -26,7 +28,7 @@ function sectionBadgeClass(section: string): string {
   return `section-badge section-${section}`;
 }
 
-export function ExerciseRow({ exercise, currentWorkoutId, onUpdateSet, onAddSet, onRemoveSet, onQuickFillWeight }: Props) {
+export function ExerciseRow({ exercise, currentWorkoutId, onUpdateSet, onAddSet, onRemoveSet, onQuickFillWeight, onQuickFillReps }: Props) {
   const isWarmup = exercise.section === 'warmup';
   const [showLastTime, setShowLastTime] = useState(false);
 
@@ -88,15 +90,27 @@ export function ExerciseRow({ exercise, currentWorkoutId, onUpdateSet, onAddSet,
       )}
 
       <div class="quick-fill-row">
-        <label class="quick-fill-label" for={`quick-fill-${exercise.exercise_id}-${exercise.exercise_order}`}>Weight</label>
+        <span class="quick-fill-label">Quick fill</span>
         <input
-          id={`quick-fill-${exercise.exercise_id}-${exercise.exercise_order}`}
+          id={`quick-fill-wt-${exercise.exercise_id}-${exercise.exercise_order}`}
           class="form-input quick-fill-input"
           type="number"
           inputMode="decimal"
-          placeholder="Fill all sets (lbs)"
+          placeholder="lbs"
+          aria-label="Fill all sets weight (lbs)"
           value={exercise.quickFillWeight}
           onInput={(e) => onQuickFillWeight((e.target as HTMLInputElement).value)}
+        />
+        <span class="set-input-separator">×</span>
+        <input
+          id={`quick-fill-reps-${exercise.exercise_id}-${exercise.exercise_order}`}
+          class="form-input quick-fill-input"
+          type="number"
+          inputMode="numeric"
+          placeholder="reps"
+          aria-label="Fill all sets reps"
+          value={exercise.quickFillReps}
+          onInput={(e) => onQuickFillReps((e.target as HTMLInputElement).value)}
         />
       </div>
 
