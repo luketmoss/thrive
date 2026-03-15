@@ -48,7 +48,7 @@ gh api graphql -f query='mutation { updateProjectV2ItemFieldValue(input: { proje
 4. **Submit review:**
 
 ```bash
-gh pr review <PR_N> --repo luketmoss/groundwork --approve --body "$(cat <<'EOF'
+gh pr review <PR_N> --repo luketmoss/groundwork --comment --body "$(cat <<'EOF'
 ## Code Review — Issue #<N>
 ### Summary
 ...
@@ -61,7 +61,7 @@ EOF
 )"
 ```
 
-Use `--approve` or `--request-changes`.
+**Note:** Use `--comment` (not `--approve`) because GitHub does not allow approving your own PRs. For CHANGES REQUESTED, use `--comment` and clearly state blocking issues in the body.
 
 5. **Move issue:** APPROVED → Done · CHANGES REQUESTED → In Development
 

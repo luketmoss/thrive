@@ -4,6 +4,7 @@ import { AuthContext } from './auth-context';
 import type { UserInfo } from '../api/types';
 import { registerReauthCallback, onReauthFailed } from './reauth';
 import { showToast } from '../state/store';
+import { isDemo } from '../api/demo-data';
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const SCOPES = 'https://www.googleapis.com/auth/spreadsheets openid email profile';
@@ -51,11 +52,31 @@ interface Props {
   children: ComponentChildren;
 }
 
+const DEMO_USER: UserInfo = { email: 'demo@groundwork.app', name: 'Demo User', picture: '' };
+
 export function AuthProvider({ children }: Props) {
-  const cached = loadCachedAuth();
-  const [token, setToken] = useState<string | null>(cached?.token ?? null);
-  const [user, setUser] = useState<UserInfo | null>(cached?.user ?? null);
+  const demo = isDemo();
+  const cached = demo ? null : loadCachedAuth();
+  const [token, setToken] = useState<string | null>(demo ? 'demo' : (cached?.token ?? null));
+  const [user, setUser] = useState<UserInfo | null>(demo ? DEMO_USER : (cached?.user ?? null));
   const tokenClientRef = useRef<any>(null);
+
+  // Demo mode: skip GIS entirely — provide fake auth context
+  if (demo) {
+    return (
+      <AuthContext.Provider
+        value={{
+          token: 'demo',
+          user: DEMO_USER,
+          isAuthenticated: true,
+          login: () => {},
+          logout: () => {},
+        }}
+      >
+        {children}
+      </AuthContext.Provider>
+    );
+  }
 
   /**
    * Pending reauth resolver. When a silent re-auth is triggered by a 401

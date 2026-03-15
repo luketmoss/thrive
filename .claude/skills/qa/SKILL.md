@@ -35,7 +35,24 @@ gh api graphql -f query='mutation { updateProjectV2ItemFieldValue(input: { proje
 
 `cd frontend && npm run dev` → `http://localhost:5173/groundwork/?demo=true`
 
-Demo data: 16 exercises, 2 templates (Upper Push A, Upper Pull A), 3 workouts (1 weight/20 sets, 1 stretch, 1 bike).
+Demo data: 16 exercises, 10 labels, 2 templates (Upper Push A, Upper Pull A), 3 workouts (1 weight/20 sets, 1 stretch, 1 bike).
+
+### Auth in Preview
+
+Demo mode auto-authenticates — no login screen, no OAuth popups. Just navigate to `http://localhost:5173/groundwork/?demo=true` and the app loads directly into the authenticated state.
+
+### Demo Mode Limitations
+
+- Deletions are not persisted — `fetchLabels`/`fetchExercises` always return the original demo set after re-fetch
+- Creates/renames update signals in-memory but reset on page reload
+- Console will show Google OAuth popup blocked errors — these are expected and not bugs
+
+### Token Efficiency Tips
+
+- Prefer `preview_eval` or `preview_inspect` over `preview_snapshot` when checking specific elements — snapshots return huge accessibility trees
+- Use `preview_screenshot` for visual verification, `preview_inspect` for precise CSS values
+- Batch multiple checks in a single `preview_eval` IIFE instead of multiple calls
+- Skip 480px tablet breakpoint unless the feature specifically involves responsive layout changes
 
 ## Process
 
