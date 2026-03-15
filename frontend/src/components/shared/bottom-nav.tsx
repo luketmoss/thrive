@@ -6,6 +6,7 @@ export function BottomNav() {
   const tabs = [
     { name: 'history', label: 'History', icon: '\u{1F4CB}', path: '/' },
     { name: 'templates', label: 'Templates', icon: '\u{1F4DD}', path: '/templates' },
+    { name: 'exercises', label: 'Exercises', icon: '\u{1F4AA}', path: '/exercises' },
     { name: 'settings', label: 'Settings', icon: '\u2699\uFE0F', path: '/settings' },
   ];
 

@@ -10,6 +10,7 @@ import { currentRoute } from './router/router';
 import { HistoryScreen } from './components/history/history-screen';
 import { TemplatesScreen } from './components/templates/templates-screen';
 import { SettingsScreen } from './components/settings/settings-screen';
+import { ExercisesScreen } from './components/exercises/exercises-screen';
 import { WorkoutFlow } from './components/workout/workout-flow';
 import { WorkoutDetail } from './components/history/workout-detail';
 
@@ -31,6 +32,8 @@ function Router() {
     case 'template-new':
     case 'template-edit':
       return <TemplatesScreen />;
+    case 'exercises':
+      return <ExercisesScreen />;
     case 'settings':
       return <SettingsScreen />;
     default:

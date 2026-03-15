@@ -12,5 +12,6 @@ export const routes: Route[] = [
   { pattern: '/templates', name: 'templates' },
   { pattern: '/templates/new', name: 'template-new' },
   { pattern: '/templates/:id', name: 'template-edit' },
+  { pattern: '/exercises', name: 'exercises' },
   { pattern: '/settings', name: 'settings' },
 ];
