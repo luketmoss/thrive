@@ -1,16 +1,56 @@
-import { useState } from 'preact/hooks';
-import { exercises as exercisesSignal, allTags } from '../../state/store';
+import { useState, useMemo, useEffect } from 'preact/hooks';
+import { exercises as exercisesSignal, sets, workouts, allTags } from '../../state/store';
 import { editExercise, removeExercise } from '../../state/actions';
 import { useAuth } from '../../auth/auth-context';
 import { ExerciseForm } from './exercise-form';
 import { LabelBadge } from '../shared/label-badge';
-import type { ExerciseWithRow } from '../../api/types';
+import { getLastTimeDataFrom, formatLastTimeDate } from '../workout/last-time-data';
+import type { ExerciseWithRow, SetWithRow, WorkoutWithRow } from '../../api/types';
+
+/** Build a map of exerciseId → most recent workout date string. */
+export function buildLastPerformedMap(
+  allSets: SetWithRow[],
+  allWorkouts: WorkoutWithRow[],
+): Map<string, string> {
+  const workoutDateMap = new Map<string, string>();
+  for (const w of allWorkouts) {
+    workoutDateMap.set(w.id, w.date);
+  }
+
+  // For each exercise, find the most recent workout date
+  const result = new Map<string, string>();
+  for (const s of allSets) {
+    const date = workoutDateMap.get(s.workout_id) || '';
+    if (!date) continue;
+    const current = result.get(s.exercise_id) || '';
+    if (date > current) {
+      result.set(s.exercise_id, date);
+    }
+  }
+  return result;
+}
+
+/** Format a date as short display: "Mar 10, 2026" */
+export function formatShortDate(dateStr: string): string {
+  const date = new Date(dateStr + 'T00:00:00');
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function effortClass(effort: string): string {
+  if (!effort) return '';
+  return `effort-${effort.toLowerCase()}`;
+}
 
 export function ExercisesScreen() {
   const { token } = useAuth();
   const [search, setSearch] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [editingExercise, setEditingExercise] = useState<ExerciseWithRow | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const toggleTag = (tag: string) => {
     setSelectedTags(prev =>
@@ -29,6 +69,28 @@ export function ExercisesScreen() {
       return matchesSearch && matchesTags;
     })
     .sort((a, b) => a.name.localeCompare(b.name));
+
+  // AC1/AC5: Compute last-performed date map once
+  const lastPerformedMap = useMemo(
+    () => buildLastPerformedMap(sets.value, workouts.value),
+    [sets.value, workouts.value],
+  );
+
+  // AC2: Escape key closes expanded panel
+  useEffect(() => {
+    if (!expandedId) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setExpandedId(null);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [expandedId]);
+
+  const handleToggle = (exId: string) => {
+    setExpandedId(prev => (prev === exId ? null : exId));
+  };
 
   const handleEdit = async (data: { name: string; tags: string; notes: string }) => {
     if (!token || !editingExercise) return;
@@ -117,22 +179,91 @@ export function ExercisesScreen() {
           </div>
         ) : (
           <div class="exercises-full-list">
-            {filtered.map(ex => (
-              <div
-                key={ex.id}
-                class="exercise-list-item"
-                onClick={() => setEditingExercise(ex)}
-              >
-                <span class="exercise-list-item-name">{ex.name}</span>
-                {ex.tags && (
-                  <div class="exercise-list-item-tags">
-                    {ex.tags.split(',').map(t => t.trim()).filter(Boolean).map(tag => (
-                      <LabelBadge key={tag} name={tag} />
-                    ))}
+            {filtered.map(ex => {
+              const isExpanded = expandedId === ex.id;
+              const lastDate = lastPerformedMap.get(ex.id);
+              const lastTimeData = isExpanded
+                ? getLastTimeDataFrom(ex.id, '', sets.value, workouts.value)
+                : null;
+
+              return (
+                <div
+                  key={ex.id}
+                  class="exercise-list-item"
+                >
+                  <div
+                    class="exercise-list-item-header"
+                    role="button"
+                    aria-expanded={isExpanded}
+                    tabIndex={0}
+                    onClick={() => handleToggle(ex.id)}
+                    onKeyDown={(e: KeyboardEvent) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleToggle(ex.id);
+                      }
+                    }}
+                  >
+                    <div class="exercise-list-item-info">
+                      <span class="exercise-list-item-name">{ex.name}</span>
+                      {lastDate && (
+                        <span class="exercise-list-item-last-date">
+                          Last: {formatShortDate(lastDate)}
+                        </span>
+                      )}
+                      {ex.tags && (
+                        <div class="exercise-list-item-tags">
+                          {ex.tags.split(',').map(t => t.trim()).filter(Boolean).map(tag => (
+                            <LabelBadge key={tag} name={tag} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <span class={`exercise-detail-chevron${isExpanded ? ' expanded' : ''}`}>▸</span>
                   </div>
-                )}
-              </div>
-            ))}
+
+                  {isExpanded && (
+                    <div class="exercise-list-item-panel">
+                      {lastTimeData ? (
+                        <>
+                          <div class="last-time-date">
+                            {formatLastTimeDate(lastTimeData.workoutDate)}
+                          </div>
+                          <div class="exercise-detail-sets">
+                            <div class="exercise-detail-sets-header">
+                              <span>Set</span>
+                              <span>Weight</span>
+                              <span>Reps</span>
+                              <span>Effort</span>
+                            </div>
+                            {lastTimeData.sets.map(s => (
+                              <div key={s.set_number} class="exercise-detail-set-row">
+                                <span class="set-num">{s.set_number}</span>
+                                <span>{s.weight ? `${s.weight} lbs` : '—'}</span>
+                                <span>{s.reps || '—'}</span>
+                                <span class={effortClass(s.effort)}>{s.effort || '—'}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      ) : (
+                        <p class="last-time-empty-text">No previous data</p>
+                      )}
+                      <button
+                        type="button"
+                        class="btn btn-secondary exercise-list-item-edit-btn"
+                        onClick={(e: Event) => {
+                          e.stopPropagation();
+                          setEditingExercise(ex);
+                        }}
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
