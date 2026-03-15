@@ -230,7 +230,7 @@ export function ExerciseRow({
 
   return (
     <div class={cardClass}>
-      <div class="tracker-exercise-header">
+      <div class="tracker-exercise-controls">
         <button
           type="button"
           class={`${sectionBadgeClass(exercise.section)} section-badge-btn`}
@@ -240,23 +240,57 @@ export function ExerciseRow({
         >
           {exercise.section}
         </button>
+        <div class="tracker-exercise-actions">
+          <button
+            class="last-time-toggle exercise-toolbar-btn"
+            onClick={() => setShowLastTime(!showLastTime)}
+            aria-label={`View previous performance for ${exercise.exercise_name}`}
+            aria-expanded={showLastTime ? 'true' : 'false'}
+          >
+            <svg class="last-time-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+          </button>
+          {showToolbar && (
+            <>
+              <button
+                type="button"
+                class="exercise-toolbar-btn"
+                onClick={onMoveUp}
+                disabled={isFirst}
+                aria-label={`Move ${exercise.exercise_name} up`}
+              >
+                ▲
+              </button>
+              <button
+                type="button"
+                class="exercise-toolbar-btn"
+                onClick={onMoveDown}
+                disabled={isLast}
+                aria-label={`Move ${exercise.exercise_name} down`}
+              >
+                ▼
+              </button>
+              <button
+                type="button"
+                class="exercise-toolbar-btn exercise-toolbar-remove"
+                onClick={onRemoveExercise}
+                aria-label={`Remove ${exercise.exercise_name}`}
+              >
+                ✕
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div class="tracker-exercise-name-row">
         <span class="tracker-exercise-name">{exercise.exercise_name}</span>
-        <button
-          class="last-time-toggle"
-          onClick={() => setShowLastTime(!showLastTime)}
-          aria-label={`View previous performance for ${exercise.exercise_name}`}
-          aria-expanded={showLastTime ? 'true' : 'false'}
-        >
-          <svg class="last-time-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10" />
-            <polyline points="12 6 12 12 16 14" />
-          </svg>
-        </button>
       </div>
 
       {sectionPickerRow}
       {warmupConfirmRow}
-      {toolbarRow}
 
       {showLastTime && (
         <LastTimePanel
@@ -271,7 +305,6 @@ export function ExerciseRow({
         />
       )}
 
-      <p class="quick-fill-heading">Quick fill</p>
       <div class="quick-fill-row">
         <span class="quick-fill-spacer" aria-hidden="true" />
         <div class="set-inputs">

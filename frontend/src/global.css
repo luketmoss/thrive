@@ -1232,16 +1232,29 @@ input, select, textarea {
   margin-bottom: var(--space-sm);
 }
 
+.tracker-exercise-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xs);
+}
+
+.tracker-exercise-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.tracker-exercise-name-row {
+  display: block;
+  width: 100%;
+  margin-bottom: var(--space-sm);
+}
+
 .tracker-exercise-name {
   font-weight: 600;
   font-size: var(--text-base);
-}
-
-.quick-fill-heading {
-  font-size: var(--text-sm);
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  margin: 0 0 var(--space-xs) 0;
 }
 
 .quick-fill-row {
@@ -1249,6 +1262,8 @@ input, select, textarea {
   align-items: center;
   gap: var(--space-xs);
   margin-bottom: var(--space-sm);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-sm);
 }
 
 .quick-fill-spacer {
@@ -1727,15 +1742,10 @@ input, select, textarea {
 
 /* ===== Last Time Toggle Button ===== */
 .last-time-toggle {
-  min-width: 44px;
-  min-height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-left: auto;
   background: none;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
   color: var(--color-text-muted);
   cursor: pointer;
   transition: color var(--transition-fast), border-color var(--transition-fast);
@@ -2232,14 +2242,16 @@ input, select, textarea {
 }
 
 .exercise-toolbar-btn {
-  min-height: 44px;
-  min-width: 44px;
-  padding: 0 var(--space-sm);
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface-raised);
   color: var(--color-text-secondary);
-  font-size: var(--text-base);
+  font-size: var(--text-xs);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -2258,7 +2270,6 @@ input, select, textarea {
 }
 
 .exercise-toolbar-remove {
-  margin-left: auto;
   color: var(--color-danger);
   border-color: var(--color-danger);
 }
