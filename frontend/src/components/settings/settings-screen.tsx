@@ -1,6 +1,7 @@
 import { useAuth } from '../../auth/auth-context';
 import { ThemeToggle } from '../shared/theme-toggle';
-import { workouts, exercises, templates } from '../../state/store';
+import { workouts, exercises, templates, labels } from '../../state/store';
+import { navigate } from '../../router/router';
 
 export function SettingsScreen() {
   const { user, logout } = useAuth();
@@ -32,6 +33,16 @@ export function SettingsScreen() {
           <div class="settings-row">
             <span>Templates</span>
             <span class="settings-detail">{templates.value.length} saved</span>
+          </div>
+          <div
+            class="settings-row settings-row-link"
+            onClick={() => navigate('/settings/labels')}
+            role="button"
+            tabIndex={0}
+            onKeyDown={e => { if (e.key === 'Enter') navigate('/settings/labels'); }}
+          >
+            <span>Labels</span>
+            <span class="settings-detail">{labels.value.length} defined &rsaquo;</span>
           </div>
         </div>
 

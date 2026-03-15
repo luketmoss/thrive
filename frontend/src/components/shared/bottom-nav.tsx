@@ -15,7 +15,8 @@ export function BottomNav() {
       {tabs.map(tab => {
         const isActive = route.name === tab.name ||
           (tab.name === 'history' && ['workout-detail', 'workout-edit', 'workout-new', 'workout-active'].includes(route.name)) ||
-          (tab.name === 'templates' && ['template-new', 'template-edit'].includes(route.name));
+          (tab.name === 'templates' && ['template-new', 'template-edit'].includes(route.name)) ||
+          (tab.name === 'settings' && route.name === 'manage-labels');
         return (
           <button
             key={tab.name}

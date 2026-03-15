@@ -1,6 +1,7 @@
 // Demo mode detection and seed data for offline/preview usage.
 
-import type { ExerciseWithRow, TemplateRowWithRow, Template, WorkoutWithRow, SetWithRow } from './types';
+import type { ExerciseWithRow, LabelWithRow, TemplateRowWithRow, Template, WorkoutWithRow, SetWithRow } from './types';
+import { colorKeyFromName } from './label-colors';
 
 let _isDemo: boolean | null = null;
 
@@ -31,6 +32,26 @@ export const DEMO_EXERCISES: ExerciseWithRow[] = [
   { id: 'ex_demo015', name: 'BB Overhead Press', tags: 'Push, Shoulders, Compound', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 16 },
   { id: 'ex_demo_pushup', name: 'Push Ups', tags: 'Push, Chest, Compound', notes: '', created: '2025-01-01T00:00:00.000Z', sheetRow: 17 },
 ];
+
+// Build demo labels from the unique tags in demo exercises
+function buildDemoLabels(): LabelWithRow[] {
+  const tagSet = new Set<string>();
+  for (const ex of DEMO_EXERCISES) {
+    if (ex.tags) {
+      ex.tags.split(',').map(t => t.trim()).filter(Boolean).forEach(t => tagSet.add(t));
+    }
+  }
+  const sorted = Array.from(tagSet).sort();
+  return sorted.map((name, i) => ({
+    id: `lbl_demo${String(i + 1).padStart(3, '0')}`,
+    name,
+    color_key: colorKeyFromName(name),
+    created: '2025-01-01T00:00:00.000Z',
+    sheetRow: i + 2,
+  }));
+}
+
+export const DEMO_LABELS: LabelWithRow[] = buildDemoLabels();
 
 const now = '2025-01-15T00:00:00.000Z';
 

@@ -38,6 +38,9 @@ function parseHash(hash: string): ParsedRoute {
   // /exercises
   if (path === '/exercises') return { name: 'exercises', params: {}, hash: path };
 
+  // /settings/labels
+  if (path === '/settings/labels') return { name: 'manage-labels', params: {}, hash: path };
+
   // /settings
   if (path === '/settings') return { name: 'settings', params: {}, hash: path };
 

@@ -1766,3 +1766,257 @@ input, select, textarea {
   padding: var(--space-md) 0;
   border-bottom: 1px solid var(--color-border-light);
 }
+
+.settings-row-link {
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  border-radius: var(--radius-sm);
+  padding: var(--space-md) var(--space-sm);
+  margin: 0 calc(-1 * var(--space-sm));
+}
+
+.settings-row-link:hover {
+  background: var(--color-border-light);
+}
+
+/* ===== Colored Tag Badges ===== */
+.tag-badge-colored {
+  background: var(--label-bg, var(--color-primary-light));
+  color: var(--label-text, var(--color-primary));
+}
+
+[data-theme="dark"] .tag-badge-colored {
+  background: var(--label-bg-dark, var(--color-primary-light));
+  color: var(--label-text-dark, var(--color-primary));
+}
+
+.tag-badge-colored.active {
+  background: var(--label-text, var(--color-primary));
+  color: #fff;
+}
+
+[data-theme="dark"] .tag-badge-colored.active {
+  background: var(--label-text-dark, var(--color-primary));
+  color: #111;
+}
+
+/* ===== Color Swatch Picker ===== */
+.color-swatch-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  padding: var(--space-sm) 0;
+}
+
+.color-swatch {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  border: 2px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), transform var(--transition-fast);
+  font-size: var(--text-base);
+  font-weight: 700;
+}
+
+.color-swatch:hover {
+  transform: scale(1.08);
+}
+
+.color-swatch.selected {
+  border-color: currentColor;
+}
+
+.color-swatch-check {
+  font-size: var(--text-lg);
+}
+
+/* ===== Label Chip Grid (Exercise Form) ===== */
+.label-chip-grid-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.label-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.label-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  border: 2px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.label-chip:hover {
+  border-color: var(--color-text-muted);
+}
+
+.label-chip.tag-badge-colored {
+  border-color: var(--label-text, var(--color-border));
+  background: transparent;
+  color: var(--label-text, var(--color-text-secondary));
+  opacity: 0.55;
+}
+
+[data-theme="dark"] .label-chip.tag-badge-colored {
+  border-color: var(--label-text-dark, var(--color-border));
+  color: var(--label-text-dark, var(--color-text-secondary));
+}
+
+.label-chip-active {
+  opacity: 1 !important;
+  border-color: transparent;
+}
+
+.label-chip-active.tag-badge-colored {
+  background: var(--label-bg, var(--color-primary-light));
+  color: var(--label-text, var(--color-primary));
+  border-color: var(--label-text, var(--color-primary));
+}
+
+[data-theme="dark"] .label-chip-active.tag-badge-colored {
+  background: var(--label-bg-dark, var(--color-primary-light));
+  color: var(--label-text-dark, var(--color-primary));
+  border-color: var(--label-text-dark, var(--color-primary));
+}
+
+.label-chip-create {
+  border-style: dashed;
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  opacity: 0.6;
+}
+
+.label-chip-create:hover {
+  opacity: 1;
+}
+
+.label-create-inline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.manage-labels-link {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  text-align: left;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.manage-labels-link:hover {
+  color: var(--color-primary);
+}
+
+/* ===== Manage Labels Screen ===== */
+.manage-labels-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.manage-label-row {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.manage-label-main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 44px;
+}
+
+.manage-label-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.manage-label-name {
+  flex: 1;
+  text-align: left;
+  font-weight: 600;
+  font-size: var(--text-base);
+  padding: var(--space-xs) 0;
+  background: none;
+  border: none;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.manage-label-name:hover {
+  color: var(--color-primary);
+}
+
+.manage-label-edit-input {
+  flex: 1;
+  min-height: 36px;
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--text-base);
+}
+
+.manage-label-usage {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.manage-label-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-lg);
+  color: var(--color-text-muted);
+  transition: background var(--transition-fast), color var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.manage-label-delete:hover {
+  background: var(--color-danger);
+  color: #fff;
+}
+
+.manage-label-create-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}

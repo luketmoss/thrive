@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { exercises, allTags } from '../../state/store';
-import type { ExerciseWithRow } from '../../api/types';
+import { exercises, labels, allTags } from '../../state/store';
+import type { ExerciseWithRow, LabelWithRow } from '../../api/types';
 
 const mockExercises: ExerciseWithRow[] = [
   { id: 'ex1', name: 'Bench Press', tags: 'Push, Chest', notes: 'Flat bench', created: '2026-01-01', sheetRow: 2 },
@@ -11,6 +11,7 @@ const mockExercises: ExerciseWithRow[] = [
 describe('ExercisesScreen', () => {
   beforeEach(() => {
     exercises.value = [];
+    labels.value = [];
   });
 
   describe('AC1: /exercises route', () => {
@@ -56,9 +57,13 @@ describe('ExercisesScreen', () => {
       expect(exercises.value.length).toBe(0);
     });
 
-    it('computes allTags from exercises', () => {
-      exercises.value = mockExercises;
-      expect(allTags.value).toEqual(['Back', 'Chest', 'Compound', 'Legs', 'Pull', 'Push']);
+    it('computes allTags from labels signal', () => {
+      labels.value = [
+        { id: 'lbl1', name: 'Back', color_key: 'blue', created: '', sheetRow: 2 },
+        { id: 'lbl2', name: 'Chest', color_key: 'red', created: '', sheetRow: 3 },
+        { id: 'lbl3', name: 'Push', color_key: 'green', created: '', sheetRow: 4 },
+      ];
+      expect(allTags.value).toEqual(['Back', 'Chest', 'Push']);
     });
   });
 

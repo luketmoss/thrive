@@ -1,9 +1,11 @@
-import { exercises, templates, workouts, sets, loading, activeWorkoutId, activeWorkoutSets, activeWarmupExercises, showToast } from './store';
+import { exercises, labels, templates, workouts, sets, loading, activeWorkoutId, activeWorkoutSets, activeWarmupExercises, showToast } from './store';
 import { fetchExercises, createExercise, updateExercise as updateExerciseApi, deleteExercise as deleteExerciseApi } from '../api/exercises-api';
+import { fetchLabels, createLabel as createLabelApi, updateLabel as updateLabelApi, deleteLabel as deleteLabelApi, appendLabels } from '../api/labels-api';
 import { fetchTemplateRows, groupTemplateRows, createTemplate as createTemplateApi, updateTemplate as updateTemplateApi, deleteTemplate as deleteTemplateApi } from '../api/templates-api';
 import { fetchWorkouts, fetchSets, createWorkout as createWorkoutApi, updateWorkout as updateWorkoutApi, deleteWorkoutRows, appendSet as appendSetApi, appendSets as appendSetsApi, updateSet as updateSetApi, deleteSetRow } from '../api/workouts-api';
+import { colorKeyFromName } from '../api/label-colors';
 import type { TemplateExerciseInput } from '../api/templates-api';
-import type { ExerciseWithRow, TemplateRowWithRow, WorkoutType, WorkoutSet, SetWithRow } from '../api/types';
+import type { ExerciseWithRow, LabelWithRow, TemplateRowWithRow, WorkoutType, WorkoutSet, SetWithRow } from '../api/types';
 import { ReauthFailedError } from '../auth/reauth';
 
 function isReauthFailure(err: unknown): boolean {
@@ -22,8 +24,9 @@ export function parseSetCount(setsStr: string): number {
 export async function loadInitialData(token: string): Promise<void> {
   loading.value = true;
   try {
-    const [exerciseData, templateRowData, workoutData, setData] = await Promise.all([
+    const [exerciseData, labelData, templateRowData, workoutData, setData] = await Promise.all([
       fetchExercises(token),
+      fetchLabels(token),
       fetchTemplateRows(token),
       fetchWorkouts(token),
       fetchSets(token),
@@ -32,6 +35,15 @@ export async function loadInitialData(token: string): Promise<void> {
     templates.value = groupTemplateRows(templateRowData);
     workouts.value = workoutData;
     sets.value = setData;
+
+    // Bootstrap labels: if Labels sheet is empty but exercises have tags, auto-create labels
+    if (labelData.length === 0 && exerciseData.length > 0) {
+      const bootstrapped = await bootstrapLabels(exerciseData, token);
+      labels.value = bootstrapped;
+    } else {
+      labels.value = labelData;
+    }
+
     loading.value = false;
   } catch (err) {
     if (isReauthFailure(err)) return; // auth-provider handles this
@@ -39,6 +51,34 @@ export async function loadInitialData(token: string): Promise<void> {
     showToast('Failed to load data', 'error');
     loading.value = false;
   }
+}
+
+/** One-time migration: create label rows for all unique tags found in exercises. */
+async function bootstrapLabels(
+  exerciseData: ExerciseWithRow[],
+  token: string,
+): Promise<LabelWithRow[]> {
+  const tagSet = new Set<string>();
+  for (const ex of exerciseData) {
+    if (ex.tags) {
+      ex.tags.split(',').map(t => t.trim()).filter(Boolean).forEach(t => tagSet.add(t));
+    }
+  }
+  if (tagSet.size === 0) return [];
+
+  const sorted = Array.from(tagSet).sort();
+  const now = new Date().toISOString();
+  const newLabels = sorted.map((name) => ({
+    id: `lbl_${crypto.randomUUID().slice(0, 8)}`,
+    name,
+    color_key: colorKeyFromName(name),
+    created: now,
+  }));
+
+  await appendLabels(newLabels, token);
+
+  // Return with approximate sheetRow values
+  return newLabels.map((l, i) => ({ ...l, sheetRow: i + 2 }));
 }
 
 // ── Templates ────────────────────────────────────────────────────────
@@ -509,6 +549,114 @@ export async function startSimpleWorkout(
   } catch (err) {
     if (isReauthFailure(err)) throw err;
     showToast('Failed to save workout', 'error');
+    throw err;
+  }
+}
+
+// ── Labels ──────────────────────────────────────────────────────────
+
+export async function addLabel(
+  data: { name: string; color_key: string },
+  token: string,
+): Promise<LabelWithRow> {
+  try {
+    const created = await createLabelApi(data, token);
+    const withRow: LabelWithRow = {
+      ...created,
+      sheetRow: labels.value.length + 2,
+    };
+    labels.value = [...labels.value, withRow];
+    showToast('Label created', 'success');
+    return withRow;
+  } catch (err) {
+    if (isReauthFailure(err)) throw err;
+    showToast('Failed to create label', 'error');
+    throw err;
+  }
+}
+
+export async function renameLabel(
+  label: LabelWithRow,
+  newName: string,
+  token: string,
+): Promise<void> {
+  try {
+    const oldName = label.name;
+
+    // Update all exercises that have this tag
+    const affected = exercises.value.filter(ex =>
+      ex.tags.split(',').map(t => t.trim()).filter(Boolean).includes(oldName),
+    );
+
+    for (const ex of affected) {
+      const tags = ex.tags.split(',').map(t => t.trim()).filter(Boolean);
+      const updated = tags.map(t => t === oldName ? newName : t).join(', ');
+      const updatedEx: ExerciseWithRow = { ...ex, tags: updated };
+      await updateExerciseApi(ex.sheetRow, updatedEx, token);
+      exercises.value = exercises.value.map(e => e.id === ex.id ? updatedEx : e);
+    }
+
+    // Update the label itself
+    const updatedLabel: LabelWithRow = { ...label, name: newName };
+    await updateLabelApi(label.sheetRow, updatedLabel, token);
+    labels.value = labels.value.map(l => l.id === label.id ? updatedLabel : l);
+
+    showToast(`Renamed '${oldName}' to '${newName}' across ${affected.length} exercises`, 'success');
+  } catch (err) {
+    if (isReauthFailure(err)) throw err;
+    showToast('Failed to rename label', 'error');
+    throw err;
+  }
+}
+
+export async function updateLabelColor(
+  label: LabelWithRow,
+  newColorKey: string,
+  token: string,
+): Promise<void> {
+  try {
+    const updatedLabel: LabelWithRow = { ...label, color_key: newColorKey };
+    await updateLabelApi(label.sheetRow, updatedLabel, token);
+    labels.value = labels.value.map(l => l.id === label.id ? updatedLabel : l);
+  } catch (err) {
+    if (isReauthFailure(err)) throw err;
+    showToast('Failed to update label color', 'error');
+    throw err;
+  }
+}
+
+export async function removeLabel(
+  label: LabelWithRow,
+  token: string,
+): Promise<number> {
+  try {
+    const labelName = label.name;
+
+    // Remove from all exercises that have this tag
+    const affected = exercises.value.filter(ex =>
+      ex.tags.split(',').map(t => t.trim()).filter(Boolean).includes(labelName),
+    );
+
+    for (const ex of affected) {
+      const tags = ex.tags.split(',').map(t => t.trim()).filter(Boolean);
+      const updated = tags.filter(t => t !== labelName).join(', ');
+      const updatedEx: ExerciseWithRow = { ...ex, tags: updated };
+      await updateExerciseApi(ex.sheetRow, updatedEx, token);
+      exercises.value = exercises.value.map(e => e.id === ex.id ? updatedEx : e);
+    }
+
+    // Delete the label row
+    await deleteLabelApi(label.sheetRow, token);
+
+    // Re-fetch labels to get correct sheetRow values after row shift
+    const fresh = await fetchLabels(token);
+    labels.value = fresh;
+
+    showToast(`Deleted '${labelName}' from ${affected.length} exercises`, 'success');
+    return affected.length;
+  } catch (err) {
+    if (isReauthFailure(err)) throw err;
+    showToast('Failed to delete label', 'error');
     throw err;
   }
 }
