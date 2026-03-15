@@ -37,12 +37,13 @@ export function ExerciseRow({ exercise, onUpdateSet, onAddSet, onRemoveSet, onQu
       </div>
 
       <div class="quick-fill-row">
-        <label class="quick-fill-label">Weight</label>
+        <label class="quick-fill-label" for={`quick-fill-${exercise.exercise_id}-${exercise.exercise_order}`}>Weight</label>
         <input
+          id={`quick-fill-${exercise.exercise_id}-${exercise.exercise_order}`}
           class="form-input quick-fill-input"
           type="number"
           inputMode="decimal"
-          placeholder="Quick-fill lbs"
+          placeholder="Fill all sets (lbs)"
           value={exercise.quickFillWeight}
           onInput={(e) => onQuickFillWeight((e.target as HTMLInputElement).value)}
         />

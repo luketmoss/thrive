@@ -1205,7 +1205,7 @@ input, select, textarea {
 
 .quick-fill-input {
   flex: 1;
-  min-height: 36px;
+  min-height: 44px;
   padding: var(--space-xs) var(--space-sm);
   font-size: var(--text-sm);
 }

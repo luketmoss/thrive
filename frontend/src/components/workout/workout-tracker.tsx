@@ -8,6 +8,7 @@ import { ExerciseRow } from './exercise-row';
 import type { TrackerExercise } from './exercise-row';
 import type { TrackerSet } from './set-row';
 import type { ExerciseWithRow, Effort } from '../../api/types';
+import { applyQuickFillWeight } from './quick-fill';
 
 interface Props {
   workoutId: string;
@@ -156,25 +157,21 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
   };
 
   const handleQuickFillWeight = (exerciseId: string, exerciseOrder: number, weight: string) => {
-    setExerciseList((prev) =>
-      prev.map((ex) => {
-        if (ex.exercise_id !== exerciseId || ex.exercise_order !== exerciseOrder) return ex;
-        return {
-          ...ex,
-          quickFillWeight: weight,
-          sets: ex.sets.map((s) => {
-            // Only fill empty weight fields
-            if (s.weight) return s;
-            const updated = { ...s, weight, saved: false };
-            // Schedule save for filled sets that have reps
-            if (weight && s.reps) {
-              setTimeout(() => debouncedSave(exerciseOrder, exerciseId, updated), 0);
+    setExerciseList((prev) => {
+      const next = applyQuickFillWeight(prev, exerciseId, exerciseOrder, weight);
+      // Schedule save for filled sets that have reps
+      if (weight) {
+        const ex = next.find((e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder);
+        if (ex) {
+          for (const s of ex.sets) {
+            if (s.reps) {
+              setTimeout(() => debouncedSave(exerciseOrder, exerciseId, s), 0);
             }
-            return updated;
-          }),
-        };
-      }),
-    );
+          }
+        }
+      }
+      return next;
+    });
   };
 
   const handleAddSet = (exerciseId: string, exerciseOrder: number) => {
