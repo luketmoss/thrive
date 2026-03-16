@@ -20,7 +20,9 @@ export function SimpleWorkout({ workoutType, onBack }: Props) {
   const { token } = useAuth();
   const now = new Date();
 
+  const todayStr = toLocalDateStr(now);
   const [name, setName] = useState(TYPE_LABELS[workoutType] || workoutType);
+  const [date, setDate] = useState(todayStr);
   const [notes, setNotes] = useState('');
   const [duration, setDuration] = useState('');
   const [saving, setSaving] = useState(false);
@@ -28,12 +30,14 @@ export function SimpleWorkout({ workoutType, onBack }: Props) {
   const handleSave = async () => {
     if (!token) return;
     setSaving(true);
+    const safeDate = (date && !isNaN(Date.parse(date))) ? date : todayStr;
     try {
       await startSimpleWorkout({
         type: workoutType,
         name: name.trim() || TYPE_LABELS[workoutType] || workoutType,
         notes: notes.trim(),
         duration_min: duration,
+        date: safeDate,
       }, token);
       navigate('/');
     } catch {
@@ -74,12 +78,15 @@ export function SimpleWorkout({ workoutType, onBack }: Props) {
       </div>
 
       <div class="form-group">
-        <label class="form-label">Date</label>
+        <label class="form-label" htmlFor="simple-date">Date</label>
         <input
+          id="simple-date"
           class="form-input"
           type="date"
-          value={toLocalDateStr(now)}
-          disabled
+          value={date}
+          max={todayStr}
+          onInput={(e) => setDate((e.target as HTMLInputElement).value)}
+          onBlur={() => { if (!date) setDate(todayStr); }}
         />
       </div>
 
