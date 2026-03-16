@@ -3,6 +3,7 @@ import type { WorkoutType } from '../../api/types';
 import { useAuth } from '../../auth/auth-context';
 import { startSimpleWorkout } from '../../state/actions';
 import { navigate } from '../../router/router';
+import { toLocalDateStr } from '../activities/activities-helpers';
 
 interface Props {
   workoutType: WorkoutType;
@@ -77,7 +78,7 @@ export function SimpleWorkout({ workoutType, onBack }: Props) {
         <input
           class="form-input"
           type="date"
-          value={now.toISOString().slice(0, 10)}
+          value={toLocalDateStr(now)}
           disabled
         />
       </div>

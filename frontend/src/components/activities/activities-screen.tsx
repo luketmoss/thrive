@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks';
 import { navigate } from '../../router/router';
 import { filteredWorkouts, sets, exercises, workouts } from '../../state/store';
 import { ActivitiesFilters } from './activities-filters';
-import { groupWorkoutsByDate, getWorkoutTags, getWeekStreak, getWeekWorkoutCount } from './activities-helpers';
+import { groupWorkoutsByDate, getWorkoutTags, getWeekStreak, getWeekWorkoutCount, toLocalDateStr } from './activities-helpers';
 import { LabelBadge } from '../shared/label-badge';
 
 /** Type-color map for inset box-shadow accent (light theme). */
@@ -16,7 +16,7 @@ const TYPE_COLORS: Record<string, { light: string; dark: string }> = {
 export function ActivitiesScreen() {
   const [showFilters, setShowFilters] = useState(false);
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = toLocalDateStr(new Date());
   const groups = groupWorkoutsByDate(filteredWorkouts.value, todayStr);
   const weekDays = getWeekStreak(workouts.value, todayStr);
   const weekCount = getWeekWorkoutCount(workouts.value, todayStr);

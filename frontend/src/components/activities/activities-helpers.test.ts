@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { groupWorkoutsByDate, getWeekStreak, getWeekWorkoutCount, getWorkoutTags, EQUIPMENT_TAGS } from './activities-helpers';
+import { groupWorkoutsByDate, getWeekStreak, getWeekWorkoutCount, getWorkoutTags, EQUIPMENT_TAGS, toLocalDateStr } from './activities-helpers';
 import type { WorkoutWithRow, SetWithRow, ExerciseWithRow } from '../../api/types';
 
 function makeWorkout(overrides: Partial<WorkoutWithRow> = {}): WorkoutWithRow {
@@ -18,6 +18,27 @@ function makeWorkout(overrides: Partial<WorkoutWithRow> = {}): WorkoutWithRow {
     ...overrides,
   };
 }
+
+// ── toLocalDateStr ───────────────────────────────────────────────────
+
+describe('toLocalDateStr', () => {
+  it('formats a date as YYYY-MM-DD in local time', () => {
+    const d = new Date(2026, 2, 15); // March 15, 2026 local
+    expect(toLocalDateStr(d)).toBe('2026-03-15');
+  });
+
+  it('pads single-digit month and day', () => {
+    const d = new Date(2026, 0, 5); // January 5
+    expect(toLocalDateStr(d)).toBe('2026-01-05');
+  });
+
+  it('uses local date, not UTC (avoids timezone shift)', () => {
+    // Create a date at local midnight — toISOString would shift this to
+    // the previous day for timezones west of UTC
+    const d = new Date('2026-03-15T00:00:00'); // local midnight
+    expect(toLocalDateStr(d)).toBe('2026-03-15');
+  });
+});
 
 // ── Month-based date grouping ────────────────────────────────────────
 
@@ -176,6 +197,17 @@ describe('getWeekStreak', () => {
     expect(days[0].date).toBe('2026-03-09');
     expect(days[6].date).toBe('2026-03-15');
     expect(days[0].isToday).toBe(true);
+  });
+
+  it('uses local dates (no UTC shift from toISOString)', () => {
+    // All generated dates should match the expected local-time dates,
+    // regardless of the runtime timezone offset
+    const days = getWeekStreak([], '2026-03-15');
+    const dates = days.map(d => d.date);
+    expect(dates).toEqual([
+      '2026-03-09', '2026-03-10', '2026-03-11', '2026-03-12',
+      '2026-03-13', '2026-03-14', '2026-03-15',
+    ]);
   });
 });
 

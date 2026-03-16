@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { getLastTimeDataFrom, formatLastTimeDate } from './last-time-data';
 import type { SetWithRow, WorkoutWithRow } from '../../api/types';
+import { toLocalDateStr } from '../activities/activities-helpers';
 
 function makeSet(overrides: Partial<SetWithRow> = {}): SetWithRow {
   return {
@@ -159,8 +160,7 @@ describe('formatLastTimeDate', () => {
   });
 
   it('shows "today" for current date', () => {
-    const today = new Date();
-    const dateStr = today.toISOString().slice(0, 10);
+    const dateStr = toLocalDateStr(new Date());
     const result = formatLastTimeDate(dateStr);
     expect(result).toContain('(today)');
   });
@@ -168,7 +168,7 @@ describe('formatLastTimeDate', () => {
   it('shows "yesterday" for one day ago', () => {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-    const dateStr = yesterday.toISOString().slice(0, 10);
+    const dateStr = toLocalDateStr(yesterday);
     const result = formatLastTimeDate(dateStr);
     expect(result).toContain('(yesterday)');
   });

@@ -74,6 +74,14 @@ export interface WeekDay {
 
 const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
+/** Format a Date as 'YYYY-MM-DD' in local time (avoids UTC shift from toISOString). */
+export function toLocalDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 /**
  * Returns the Mon–Sun week days for the week containing `todayStr`,
  * with `hasWorkout` true for days that have at least one workout.
@@ -96,7 +104,7 @@ export function getWeekStreak(
   return DAY_LABELS.map((label, i) => {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
-    const dateStr = d.toISOString().slice(0, 10);
+    const dateStr = toLocalDateStr(d);
     return {
       label,
       date: dateStr,

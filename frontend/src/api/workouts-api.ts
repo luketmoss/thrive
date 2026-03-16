@@ -3,6 +3,7 @@
 import type { Workout, WorkoutWithRow, WorkoutSet, SetWithRow, WorkoutType } from './types';
 import { sheetsGet, sheetsAppend, sheetsUpdate, sheetsDeleteRow, getSheetId, withReauth } from './sheets';
 import { isDemo, DEMO_WORKOUTS, DEMO_SETS } from './demo-data';
+import { toLocalDateStr } from '../components/activities/activities-helpers';
 
 // ── Workouts tab (A:J) ──────────────────────────────────────────────
 
@@ -33,7 +34,7 @@ export async function createWorkout(
 ): Promise<Workout> {
   const id = `w_${crypto.randomUUID().slice(0, 8)}`;
   const now = new Date();
-  const date = now.toISOString().slice(0, 10);
+  const date = toLocalDateStr(now);
   const time = now.toTimeString().slice(0, 5);
   const created = now.toISOString();
 
