@@ -592,7 +592,7 @@ export async function copyWorkout(
 }
 
 export async function startSimpleWorkout(
-  data: { type: WorkoutType; name: string; notes: string; duration_min: string },
+  data: { type: WorkoutType; name: string; notes: string; duration_min: string; date?: string },
   token: string,
 ): Promise<void> {
   try {
@@ -601,6 +601,7 @@ export async function startSimpleWorkout(
       name: data.name,
       notes: data.notes,
       duration_min: data.duration_min,
+      date: data.date,
     }, token);
 
     const withRow = { ...workout, sheetRow: workouts.value.length + 2 };

@@ -29,12 +29,12 @@ export async function fetchWorkouts(token: string): Promise<WorkoutWithRow[]> {
 }
 
 export async function createWorkout(
-  data: { type: WorkoutType; name: string; template_id?: string; notes?: string; duration_min?: string; copied_from?: string },
+  data: { type: WorkoutType; name: string; template_id?: string; notes?: string; duration_min?: string; copied_from?: string; date?: string },
   token: string,
 ): Promise<Workout> {
   const id = `w_${crypto.randomUUID().slice(0, 8)}`;
   const now = new Date();
-  const date = toLocalDateStr(now);
+  const date = data.date || toLocalDateStr(now);
   const time = now.toTimeString().slice(0, 5);
   const created = now.toISOString();
 
