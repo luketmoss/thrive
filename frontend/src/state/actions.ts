@@ -634,6 +634,7 @@ export interface EditWorkoutData {
   date: string;
   name: string;
   notes: string;
+  duration_min: string;
 }
 
 export interface EditSetData {
@@ -660,12 +661,13 @@ export async function saveWorkoutEdits(
     const workout = workouts.value.find((w) => w.id === workoutId);
     if (!workout) throw new Error('Workout not found');
 
-    // Update workout row (preserve duration, type, template, etc.)
+    // Update workout row (type, template, etc. preserved from original)
     const updatedWorkout = {
       ...workout,
       date: metadata.date,
       name: metadata.name,
       notes: metadata.notes,
+      duration_min: metadata.duration_min,
     };
     await updateWorkoutApi(workout.sheetRow, updatedWorkout, token);
 
@@ -778,6 +780,7 @@ export async function saveSimpleWorkoutEdits(
       date: metadata.date,
       name: metadata.name,
       notes: metadata.notes,
+      duration_min: metadata.duration_min,
     };
     await updateWorkoutApi(workout.sheetRow, updatedWorkout, token);
 

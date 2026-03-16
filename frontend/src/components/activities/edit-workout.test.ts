@@ -159,9 +159,9 @@ describe('Edit workout - weight vs non-weight routing', () => {
   });
 });
 
-describe('Edit workout - duration preservation', () => {
+describe('Edit workout - duration editing', () => {
   beforeEach(() => {
-    workouts.value = [WORKOUT_WEIGHT];
+    workouts.value = [WORKOUT_WEIGHT, WORKOUT_STRETCH];
     sets.value = [...SETS];
   });
 
@@ -169,5 +169,31 @@ describe('Edit workout - duration preservation', () => {
     enterEditMode('w_test1');
     const w = workouts.value.find((w) => w.id === 'w_test1');
     expect(w?.duration_min).toBe('55');
+  });
+
+  it('EditWorkoutData interface includes duration_min', () => {
+    // Verify the interface accepts duration_min
+    const metadata: import('../../state/actions').EditWorkoutData = {
+      date: '2026-03-10',
+      name: 'Push Day',
+      notes: 'Felt strong',
+      duration_min: '45',
+    };
+    expect(metadata.duration_min).toBe('45');
+  });
+
+  it('EditWorkoutData allows empty duration_min', () => {
+    const metadata: import('../../state/actions').EditWorkoutData = {
+      date: '2026-03-10',
+      name: 'Push Day',
+      notes: '',
+      duration_min: '',
+    };
+    expect(metadata.duration_min).toBe('');
+  });
+
+  it('non-weight workout has duration_min accessible for editing', () => {
+    const w = workouts.value.find((w) => w.id === 'w_test2');
+    expect(w?.duration_min).toBe('15');
   });
 });

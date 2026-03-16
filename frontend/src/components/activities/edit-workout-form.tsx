@@ -14,6 +14,7 @@ export function EditWorkoutForm({ workoutId }: Props) {
 
   const [date, setDate] = useState(workout?.date || '');
   const [name, setName] = useState(workout?.name || '');
+  const [duration, setDuration] = useState(workout?.duration_min || '');
   const [notes, setNotes] = useState(workout?.notes || '');
   const [saving, setSaving] = useState(false);
 
@@ -32,7 +33,7 @@ export function EditWorkoutForm({ workoutId }: Props) {
     if (!token) return;
     setSaving(true);
     try {
-      await saveSimpleWorkoutEdits(workoutId, { date, name: name.trim(), notes: notes.trim() }, token);
+      await saveSimpleWorkoutEdits(workoutId, { date, name: name.trim(), notes: notes.trim(), duration_min: duration }, token);
       navigate(`/history/${workoutId}`);
     } catch {
       // Error toast shown by action
@@ -42,7 +43,7 @@ export function EditWorkoutForm({ workoutId }: Props) {
   };
 
   const handleDiscard = () => {
-    if (date !== workout.date || name !== workout.name || notes !== workout.notes) {
+    if (date !== workout.date || name !== workout.name || duration !== (workout.duration_min || '') || notes !== workout.notes) {
       if (!confirm('Discard changes? Your edits will not be saved.')) return;
     }
     navigate(`/history/${workoutId}`);
@@ -88,6 +89,18 @@ export function EditWorkoutForm({ workoutId }: Props) {
           type="date"
           value={date}
           onInput={(e) => setDate((e.target as HTMLInputElement).value)}
+        />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Duration (minutes)</label>
+        <input
+          class="form-input"
+          type="number"
+          inputMode="numeric"
+          placeholder="e.g. 30"
+          value={duration}
+          onInput={(e) => setDuration((e.target as HTMLInputElement).value)}
         />
       </div>
 

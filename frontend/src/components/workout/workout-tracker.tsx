@@ -76,6 +76,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
   // Edit mode metadata
   const [editDate, setEditDate] = useState(workout?.date || '');
   const [editName, setEditName] = useState(workout?.name || '');
+  const [editDuration, setEditDuration] = useState(workout?.duration_min || '');
 
   // Initialize from signal, merging warmup exercises (list-only, no sets)
   useEffect(() => {
@@ -534,7 +535,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
 
       await saveWorkoutEdits(
         workoutId,
-        { date: editDate, name: editName.trim(), notes: notes.trim() },
+        { date: editDate, name: editName.trim(), notes: notes.trim(), duration_min: editDuration },
         editedSets,
         token,
       );
@@ -649,6 +650,17 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
               type="date"
               value={editDate}
               onInput={(e) => setEditDate((e.target as HTMLInputElement).value)}
+            />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Duration (minutes)</label>
+            <input
+              class="form-input"
+              type="number"
+              inputMode="numeric"
+              placeholder="e.g. 30"
+              value={editDuration}
+              onInput={(e) => setEditDuration((e.target as HTMLInputElement).value)}
             />
           </div>
           <div class="form-group">
