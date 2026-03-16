@@ -166,6 +166,11 @@ input, select, textarea {
   width: 100%;
 }
 
+.login-icon {
+  margin-bottom: var(--space-md);
+  border-radius: var(--radius-md);
+}
+
 .login-card h1 {
   font-size: var(--text-2xl);
   font-weight: 700;
