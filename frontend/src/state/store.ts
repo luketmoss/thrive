@@ -20,6 +20,7 @@ export interface WarmupExerciseInfo {
 export const activeWorkoutId = signal<string | null>(null);
 export const activeWorkoutSets = signal<SetWithRow[]>([]);
 export const activeWarmupExercises = signal<WarmupExerciseInfo[]>([]);
+export const isEditMode = signal(false);
 export const filterType = signal<WorkoutType | null>(null);
 export const filterTags = signal<string[]>([]);
 

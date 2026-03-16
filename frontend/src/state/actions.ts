@@ -1,4 +1,4 @@
-import { exercises, labels, templates, workouts, sets, loading, activeWorkoutId, activeWorkoutSets, activeWarmupExercises, showToast } from './store';
+import { exercises, labels, templates, workouts, sets, loading, activeWorkoutId, activeWorkoutSets, activeWarmupExercises, isEditMode, showToast } from './store';
 import { isDemo } from '../api/demo-data';
 import { fetchExercises, createExercise, updateExercise as updateExerciseApi, deleteExercise as deleteExerciseApi } from '../api/exercises-api';
 import { fetchLabels, createLabel as createLabelApi, updateLabel as updateLabelApi, deleteLabel as deleteLabelApi, appendLabels } from '../api/labels-api';
@@ -609,6 +609,186 @@ export async function startSimpleWorkout(
   } catch (err) {
     if (isReauthFailure(err)) throw err;
     showToast('Failed to save workout', 'error');
+    throw err;
+  }
+}
+
+export function enterEditMode(workoutId: string): void {
+  const workout = workouts.value.find((w) => w.id === workoutId);
+  if (!workout) return;
+
+  activeWorkoutId.value = workoutId;
+  activeWorkoutSets.value = sets.value.filter((s) => s.workout_id === workoutId);
+  activeWarmupExercises.value = [];
+  isEditMode.value = true;
+}
+
+export function exitEditMode(): void {
+  activeWorkoutId.value = null;
+  activeWorkoutSets.value = [];
+  activeWarmupExercises.value = [];
+  isEditMode.value = false;
+}
+
+export interface EditWorkoutData {
+  date: string;
+  name: string;
+  notes: string;
+}
+
+export interface EditSetData {
+  exercise_id: string;
+  exercise_name: string;
+  section: string;
+  exercise_order: number;
+  set_number: number;
+  planned_reps: string;
+  weight: string;
+  reps: string;
+  effort: string;
+  notes: string;
+  sheetRow: number;
+}
+
+export async function saveWorkoutEdits(
+  workoutId: string,
+  metadata: EditWorkoutData,
+  editedSets: EditSetData[],
+  token: string,
+): Promise<void> {
+  try {
+    const workout = workouts.value.find((w) => w.id === workoutId);
+    if (!workout) throw new Error('Workout not found');
+
+    // Update workout row (preserve duration, type, template, etc.)
+    const updatedWorkout = {
+      ...workout,
+      date: metadata.date,
+      name: metadata.name,
+      notes: metadata.notes,
+    };
+    await updateWorkoutApi(workout.sheetRow, updatedWorkout, token);
+
+    // Determine original sets for this workout
+    const originalSets = sets.value.filter((s) => s.workout_id === workoutId);
+
+    // Find removed sets (in original but not in edited)
+    const editedKeys = new Set(
+      editedSets.map((s) => `${s.exercise_id}__${s.exercise_order}__${s.set_number}`),
+    );
+    const removedSets = originalSets.filter(
+      (s) => !editedKeys.has(`${s.exercise_id}__${s.exercise_order}__${s.set_number}`),
+    );
+
+    // Delete removed sets bottom-to-top
+    const toDelete = removedSets
+      .filter((s) => s.sheetRow > 0)
+      .sort((a, b) => b.sheetRow - a.sheetRow);
+    for (const s of toDelete) {
+      await deleteSetRow(s.sheetRow, token);
+    }
+
+    // Find new sets (no sheetRow or sheetRow <= 0)
+    const newSets = editedSets.filter((s) => s.sheetRow <= 0);
+    if (newSets.length > 0) {
+      const toAppend: WorkoutSet[] = newSets.map((s) => ({
+        workout_id: workoutId,
+        exercise_id: s.exercise_id,
+        exercise_name: s.exercise_name,
+        section: s.section,
+        exercise_order: s.exercise_order,
+        set_number: s.set_number,
+        planned_reps: s.planned_reps,
+        weight: s.weight,
+        reps: s.reps,
+        effort: s.effort as SetWithRow['effort'],
+        notes: s.notes,
+      }));
+      await appendSetsApi(toAppend, token);
+    }
+
+    // Update existing sets that may have changed
+    const existingSets = editedSets.filter((s) => s.sheetRow > 0);
+    for (const s of existingSets) {
+      await updateSetApi(s.sheetRow, {
+        workout_id: workoutId,
+        exercise_id: s.exercise_id,
+        exercise_name: s.exercise_name,
+        section: s.section,
+        exercise_order: s.exercise_order,
+        set_number: s.set_number,
+        planned_reps: s.planned_reps,
+        weight: s.weight,
+        reps: s.reps,
+        effort: s.effort as SetWithRow['effort'],
+        notes: s.notes,
+      }, token);
+    }
+
+    // Re-fetch sets to get correct sheetRow values
+    if (!isDemo()) {
+      const allSets = await fetchSets(token);
+      sets.value = allSets;
+    } else {
+      // In demo mode, update local signals directly
+      const nonWorkoutSets = sets.value.filter((s) => s.workout_id !== workoutId);
+      const updatedSets: SetWithRow[] = editedSets.map((s, i) => ({
+        workout_id: workoutId,
+        exercise_id: s.exercise_id,
+        exercise_name: s.exercise_name,
+        section: s.section,
+        exercise_order: s.exercise_order,
+        set_number: s.set_number,
+        planned_reps: s.planned_reps,
+        weight: s.weight,
+        reps: s.reps,
+        effort: s.effort as SetWithRow['effort'],
+        notes: s.notes,
+        sheetRow: s.sheetRow > 0 ? s.sheetRow : 1000 + i,
+      }));
+      sets.value = [...nonWorkoutSets, ...updatedSets];
+    }
+
+    // Update workout in local signal
+    workouts.value = workouts.value.map((w) =>
+      w.id === workoutId ? { ...updatedWorkout, sheetRow: workout.sheetRow } : w,
+    );
+
+    // Clear edit mode
+    exitEditMode();
+    showToast('Workout updated', 'success');
+  } catch (err) {
+    if (isReauthFailure(err)) throw err;
+    showToast('Failed to save changes', 'error');
+    throw err;
+  }
+}
+
+export async function saveSimpleWorkoutEdits(
+  workoutId: string,
+  metadata: EditWorkoutData,
+  token: string,
+): Promise<void> {
+  try {
+    const workout = workouts.value.find((w) => w.id === workoutId);
+    if (!workout) throw new Error('Workout not found');
+
+    const updatedWorkout = {
+      ...workout,
+      date: metadata.date,
+      name: metadata.name,
+      notes: metadata.notes,
+    };
+    await updateWorkoutApi(workout.sheetRow, updatedWorkout, token);
+
+    workouts.value = workouts.value.map((w) =>
+      w.id === workoutId ? { ...updatedWorkout, sheetRow: workout.sheetRow } : w,
+    );
+
+    showToast('Workout updated', 'success');
+  } catch (err) {
+    if (isReauthFailure(err)) throw err;
+    showToast('Failed to save changes', 'error');
     throw err;
   }
 }

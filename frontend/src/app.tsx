@@ -13,6 +13,7 @@ import { SettingsScreen } from './components/settings/settings-screen';
 import { ExercisesScreen } from './components/exercises/exercises-screen';
 import { WorkoutFlow } from './components/workout/workout-flow';
 import { WorkoutDetail } from './components/activities/workout-detail';
+import { WorkoutEdit } from './components/activities/workout-edit';
 import { ManageLabelsScreen } from './components/settings/manage-labels-screen';
 
 function Router() {
@@ -28,7 +29,7 @@ function Router() {
     case 'workout-detail':
       return <WorkoutDetail workoutId={route.params.id} />;
     case 'workout-edit':
-      return <WorkoutDetail workoutId={route.params.id} />;
+      return <WorkoutEdit workoutId={route.params.id} />;
     case 'templates':
     case 'template-new':
     case 'template-edit':

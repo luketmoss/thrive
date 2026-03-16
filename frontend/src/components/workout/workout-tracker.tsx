@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
-import { activeWorkoutSets, activeWarmupExercises } from '../../state/store';
-import { saveSet, removeSet, finishWorkout, deleteWorkout } from '../../state/actions';
+import { activeWorkoutSets, activeWarmupExercises, isEditMode, workouts } from '../../state/store';
+import { saveSet, removeSet, finishWorkout, deleteWorkout, saveWorkoutEdits, exitEditMode } from '../../state/actions';
+import type { EditSetData } from '../../state/actions';
 import { useAuth } from '../../auth/auth-context';
 import { navigate } from '../../router/router';
 import { AddExerciseModal } from '../exercises/add-exercise-modal';
@@ -61,13 +62,20 @@ function buildExerciseList(setRows: typeof activeWorkoutSets.value): TrackerExer
 
 export function WorkoutTracker({ workoutId, workoutName }: Props) {
   const { token } = useAuth();
+  const editMode = isEditMode.value;
+  const workout = workouts.value.find((w) => w.id === workoutId);
+
   const [exerciseList, setExerciseList] = useState<TrackerExercise[]>([]);
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [finishing, setFinishing] = useState(false);
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState(editMode ? (workout?.notes || '') : '');
   const [showFinishForm, setShowFinishForm] = useState(false);
   const [reorderAnnouncement, setReorderAnnouncement] = useState('');
   const saveTimers = useRef<Map<string, number>>(new Map());
+
+  // Edit mode metadata
+  const [editDate, setEditDate] = useState(workout?.date || '');
+  const [editName, setEditName] = useState(workout?.name || '');
 
   // Initialize from signal, merging warmup exercises (list-only, no sets)
   useEffect(() => {
@@ -86,9 +94,9 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
     setExerciseList(merged);
   }, []);
 
-  // Debounced save for a specific set
+  // Debounced save for a specific set (disabled in edit mode)
   const debouncedSave = useCallback((exerciseOrder: number, exerciseId: string, set: TrackerSet) => {
-    if (!token) return;
+    if (!token || editMode) return;
     // Only save if there's meaningful data
     if (!set.weight && !set.reps) return;
 
@@ -143,7 +151,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
     }, 1000);
 
     saveTimers.current.set(key, timer);
-  }, [token, workoutId, exerciseList]);
+  }, [token, workoutId, exerciseList, editMode]);
 
   const handleUpdateSet = (
     exerciseId: string,
@@ -162,7 +170,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
         };
       });
 
-      // Schedule save for the updated set
+      // Schedule save for the updated set (no-op in edit mode)
       const ex = next.find((e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder);
       const set = ex?.sets.find((s) => s.set_number === setNumber);
       if (set) {
@@ -177,7 +185,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
   const handleQuickFillWeight = (exerciseId: string, exerciseOrder: number, weight: string) => {
     setExerciseList((prev) => {
       const next = applyQuickFillWeight(prev, exerciseId, exerciseOrder, weight);
-      // Schedule save for filled sets that have reps
+      // Schedule save for filled sets that have reps (no-op in edit mode)
       if (weight) {
         const ex = next.find((e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder);
         if (ex) {
@@ -242,8 +250,8 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
       exerciseList, exerciseId, exerciseOrder, lastTimeSets,
     );
 
-    // Delete removed saved sets from API (bottom-to-top)
-    if (token) {
+    // In edit mode, don't delete from API — just update local state
+    if (!editMode && token) {
       const savedRemoved = removedSets
         .filter((s) => s.sheetRow > 0)
         .sort((a, b) => b.sheetRow - a.sheetRow);
@@ -271,14 +279,16 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
 
     setExerciseList(updated);
 
-    // Trigger auto-save for all copied sets
-    const updatedEx = updated.find(
-      (e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder,
-    );
-    if (updatedEx) {
-      for (const s of updatedEx.sets) {
-        if (s.weight || s.reps) {
-          setTimeout(() => debouncedSave(exerciseOrder, exerciseId, s), 0);
+    // Trigger auto-save for all copied sets (no-op in edit mode)
+    if (!editMode) {
+      const updatedEx = updated.find(
+        (e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder,
+      );
+      if (updatedEx) {
+        for (const s of updatedEx.sets) {
+          if (s.weight || s.reps) {
+            setTimeout(() => debouncedSave(exerciseOrder, exerciseId, s), 0);
+          }
         }
       }
     }
@@ -307,29 +317,32 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
   const handleRemoveSet = async (exerciseId: string, exerciseOrder: number, setNumber: number) => {
     if (!token) return;
 
-    const ex = exerciseList.find(
-      (e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder,
-    );
-    const set = ex?.sets.find((s) => s.set_number === setNumber);
+    // In edit mode, just remove from local state — deletion happens on save
+    if (!editMode) {
+      const ex = exerciseList.find(
+        (e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder,
+      );
+      const set = ex?.sets.find((s) => s.set_number === setNumber);
 
-    if (set && set.sheetRow > 0) {
-      try {
-        await removeSet({
-          workout_id: workoutId,
-          exercise_id: exerciseId,
-          exercise_name: ex!.exercise_name,
-          section: ex!.section,
-          exercise_order: exerciseOrder,
-          set_number: setNumber,
-          planned_reps: set.planned_reps,
-          weight: set.weight,
-          reps: set.reps,
-          effort: set.effort,
-          notes: set.notes,
-          sheetRow: set.sheetRow,
-        }, token);
-      } catch {
-        return; // Error toast shown by action
+      if (set && set.sheetRow > 0) {
+        try {
+          await removeSet({
+            workout_id: workoutId,
+            exercise_id: exerciseId,
+            exercise_name: ex!.exercise_name,
+            section: ex!.section,
+            exercise_order: exerciseOrder,
+            set_number: setNumber,
+            planned_reps: set.planned_reps,
+            weight: set.weight,
+            reps: set.reps,
+            effort: set.effort,
+            notes: set.notes,
+            sheetRow: set.sheetRow,
+          }, token);
+        } catch {
+          return; // Error toast shown by action
+        }
       }
     }
 
@@ -345,31 +358,33 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
     if (!token) return;
     const { exercises: updated, removedSets } = applyChangeSection(exerciseList, exerciseId, exerciseOrder, newSection);
 
-    // Delete saved sets bottom-to-top when converting to warmup
-    const savedRemoved = removedSets
-      .filter((s) => s.sheetRow > 0)
-      .sort((a, b) => b.sheetRow - a.sheetRow);
-    for (const s of savedRemoved) {
-      const ex = exerciseList.find(
-        (e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder,
-      );
-      try {
-        await removeSet({
-          workout_id: workoutId,
-          exercise_id: exerciseId,
-          exercise_name: ex?.exercise_name ?? '',
-          section: ex?.section ?? '',
-          exercise_order: exerciseOrder,
-          set_number: s.set_number,
-          planned_reps: s.planned_reps,
-          weight: s.weight,
-          reps: s.reps,
-          effort: s.effort,
-          notes: s.notes,
-          sheetRow: s.sheetRow,
-        }, token);
-      } catch {
-        return; // Error toast shown by action
+    // In edit mode, don't delete from API
+    if (!editMode) {
+      const savedRemoved = removedSets
+        .filter((s) => s.sheetRow > 0)
+        .sort((a, b) => b.sheetRow - a.sheetRow);
+      for (const s of savedRemoved) {
+        const ex = exerciseList.find(
+          (e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder,
+        );
+        try {
+          await removeSet({
+            workout_id: workoutId,
+            exercise_id: exerciseId,
+            exercise_name: ex?.exercise_name ?? '',
+            section: ex?.section ?? '',
+            exercise_order: exerciseOrder,
+            set_number: s.set_number,
+            planned_reps: s.planned_reps,
+            weight: s.weight,
+            reps: s.reps,
+            effort: s.effort,
+            notes: s.notes,
+            sheetRow: s.sheetRow,
+          }, token);
+        } catch {
+          return; // Error toast shown by action
+        }
       }
     }
 
@@ -423,28 +438,30 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
 
     if (!confirm(`Remove ${ex.exercise_name}? Logged sets will be deleted.`)) return;
 
-    // Delete saved sets bottom-to-top
-    const savedSets = ex.sets
-      .filter((s) => s.sheetRow > 0)
-      .sort((a, b) => b.sheetRow - a.sheetRow);
-    for (const s of savedSets) {
-      try {
-        await removeSet({
-          workout_id: workoutId,
-          exercise_id: exerciseId,
-          exercise_name: ex.exercise_name,
-          section: ex.section,
-          exercise_order: exerciseOrder,
-          set_number: s.set_number,
-          planned_reps: s.planned_reps,
-          weight: s.weight,
-          reps: s.reps,
-          effort: s.effort,
-          notes: s.notes,
-          sheetRow: s.sheetRow,
-        }, token);
-      } catch {
-        return; // Error toast shown by action
+    // In edit mode, just remove locally — deletion happens on save
+    if (!editMode) {
+      const savedSets = ex.sets
+        .filter((s) => s.sheetRow > 0)
+        .sort((a, b) => b.sheetRow - a.sheetRow);
+      for (const s of savedSets) {
+        try {
+          await removeSet({
+            workout_id: workoutId,
+            exercise_id: exerciseId,
+            exercise_name: ex.exercise_name,
+            section: ex.section,
+            exercise_order: exerciseOrder,
+            set_number: s.set_number,
+            planned_reps: s.planned_reps,
+            weight: s.weight,
+            reps: s.reps,
+            effort: s.effort,
+            notes: s.notes,
+            sheetRow: s.sheetRow,
+          }, token);
+        } catch {
+          return; // Error toast shown by action
+        }
       }
     }
 
@@ -490,6 +507,45 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
     });
   };
 
+  const handleSaveEdits = async () => {
+    if (!token) return;
+    setFinishing(true);
+    try {
+      // Collect all sets from exercise list (skip warmup)
+      const editedSets: EditSetData[] = [];
+      for (const ex of exerciseList) {
+        if (isWarmupExercise(ex)) continue;
+        for (const set of ex.sets) {
+          editedSets.push({
+            exercise_id: ex.exercise_id,
+            exercise_name: ex.exercise_name,
+            section: ex.section,
+            exercise_order: ex.exercise_order,
+            set_number: set.set_number,
+            planned_reps: set.planned_reps,
+            weight: set.weight,
+            reps: set.reps,
+            effort: set.effort,
+            notes: set.notes,
+            sheetRow: set.sheetRow,
+          });
+        }
+      }
+
+      await saveWorkoutEdits(
+        workoutId,
+        { date: editDate, name: editName.trim(), notes: notes.trim() },
+        editedSets,
+        token,
+      );
+      navigate(`/history/${workoutId}`);
+    } catch {
+      // Error toast shown by action
+    } finally {
+      setFinishing(false);
+    }
+  };
+
   const handleFinish = async () => {
     if (!token) return;
     setFinishing(true);
@@ -529,6 +585,14 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
 
   const handleDiscard = async () => {
     if (!token) return;
+
+    if (editMode) {
+      if (!confirm('Discard changes? Your edits will not be saved.')) return;
+      exitEditMode();
+      navigate(`/history/${workoutId}`);
+      return;
+    }
+
     if (!confirm('Discard this workout? All logged sets will be deleted.')) return;
     setFinishing(true);
     try {
@@ -544,17 +608,64 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
   return (
     <div class="screen workout-tracker">
       <div class="workout-tracker-header">
-        <h2 class="workout-tracker-title">{workoutName}</h2>
-        <button
-          class="btn btn-primary"
-          onClick={() => setShowFinishForm(!showFinishForm)}
-          disabled={finishing}
-        >
-          Finish
-        </button>
+        <h2 class="workout-tracker-title">
+          {editMode ? `Edit: ${workoutName}` : workoutName}
+        </h2>
+        {editMode ? (
+          <button
+            class="btn btn-primary"
+            onClick={handleSaveEdits}
+            disabled={finishing}
+          >
+            {finishing ? 'Saving...' : 'Save Changes'}
+          </button>
+        ) : (
+          <button
+            class="btn btn-primary"
+            onClick={() => setShowFinishForm(!showFinishForm)}
+            disabled={finishing}
+          >
+            Finish
+          </button>
+        )}
       </div>
 
-      {showFinishForm && (
+      {/* Edit mode metadata fields */}
+      {editMode && (
+        <div class="finish-form" style={{ marginBottom: 'var(--space-md)' }}>
+          <div class="form-group">
+            <label class="form-label">Name</label>
+            <input
+              class="form-input"
+              type="text"
+              value={editName}
+              onInput={(e) => setEditName((e.target as HTMLInputElement).value)}
+            />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Date</label>
+            <input
+              class="form-input"
+              type="date"
+              value={editDate}
+              onInput={(e) => setEditDate((e.target as HTMLInputElement).value)}
+            />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Notes</label>
+            <textarea
+              class="form-textarea"
+              placeholder="How did it go?"
+              rows={3}
+              value={notes}
+              onInput={(e) => setNotes((e.target as HTMLTextAreaElement).value)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Finish form (non-edit mode only) */}
+      {!editMode && showFinishForm && (
         <div class="finish-form">
           <div class="form-group">
             <label class="form-label">Workout Notes (optional)</label>
@@ -657,7 +768,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
         onClick={handleDiscard}
         disabled={finishing}
       >
-        Discard Workout
+        {editMode ? 'Discard Changes' : 'Discard Workout'}
       </button>
 
       {showExercisePicker && (

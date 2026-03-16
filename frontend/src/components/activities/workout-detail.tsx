@@ -115,10 +115,16 @@ export function WorkoutDetail({ workoutId }: Props) {
             </button>
           )}
           {workout.type === 'weight' && (
-            <button class="btn btn-primary btn-sm" onClick={handleCopy}>
+            <button class="btn btn-secondary btn-sm" onClick={handleCopy}>
               Copy
             </button>
           )}
+          <button
+            class="btn btn-primary btn-sm"
+            onClick={() => navigate(`/history/${workoutId}/edit`)}
+          >
+            Edit
+          </button>
         </div>
       </div>
 
