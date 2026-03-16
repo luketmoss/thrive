@@ -281,6 +281,9 @@ export function ExerciseRow({
 
       <div class="quick-fill-row">
         <span class="quick-fill-spacer" aria-hidden="true" />
+        {exercise.sets.some(s => s.planned_reps) && (
+          <span class="quick-fill-planned-spacer" aria-hidden="true" />
+        )}
         <div class="set-inputs">
           <input
             id={`quick-fill-wt-${exercise.exercise_id}-${exercise.exercise_order}`}
