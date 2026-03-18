@@ -5,6 +5,7 @@ import type { EditSetData } from '../../state/actions';
 import { useAuth } from '../../auth/auth-context';
 import { navigate } from '../../router/router';
 import { AddExerciseModal } from '../exercises/add-exercise-modal';
+import { FinishWorkoutModal } from './finish-modal';
 import { ExerciseRow } from './exercise-row';
 import type { TrackerExercise } from './exercise-row';
 import type { TrackerSet } from './set-row';
@@ -72,6 +73,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
   const [showFinishForm, setShowFinishForm] = useState(false);
   const [reorderAnnouncement, setReorderAnnouncement] = useState('');
   const saveTimers = useRef<Map<string, number>>(new Map());
+  const finishBtnRef = useRef<HTMLButtonElement>(null);
 
   // Edit mode metadata
   const [editDate, setEditDate] = useState(workout?.date || '');
@@ -622,6 +624,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
           </button>
         ) : (
           <button
+            ref={finishBtnRef}
             class="btn btn-primary"
             onClick={() => setShowFinishForm(!showFinishForm)}
             disabled={finishing}
@@ -676,37 +679,18 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
         </div>
       )}
 
-      {/* Finish form (non-edit mode only) */}
+      {/* Finish modal (non-edit mode only) */}
       {!editMode && showFinishForm && (
-        <div class="finish-form">
-          <div class="form-group">
-            <label class="form-label">Workout Notes (optional)</label>
-            <textarea
-              class="form-textarea"
-              placeholder="How did it go?"
-              rows={3}
-              value={notes}
-              onInput={(e) => setNotes((e.target as HTMLTextAreaElement).value)}
-            />
-          </div>
-          <div class="finish-form-actions">
-            <button
-              class="btn btn-primary"
-              onClick={handleFinish}
-              disabled={finishing}
-              style={{ flex: 1 }}
-            >
-              {finishing ? 'Saving...' : 'Save & Finish'}
-            </button>
-            <button
-              class="btn btn-secondary"
-              onClick={() => setShowFinishForm(false)}
-              style={{ flex: 1 }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
+        <FinishWorkoutModal
+          notes={notes}
+          onNotesChange={(e) => setNotes((e.target as HTMLTextAreaElement).value)}
+          onFinish={handleFinish}
+          onCancel={() => {
+            setShowFinishForm(false);
+            finishBtnRef.current?.focus();
+          }}
+          finishing={finishing}
+        />
       )}
 
       {/* aria-live region for reorder announcements */}
