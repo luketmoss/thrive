@@ -39,7 +39,7 @@ Google Sheet "Groundwork" with 5 tabs:
 - `weight` — structured weight training with exercises, sets, reps, effort
 - `stretch` — notes + date only
 - `bike` — notes + date only
-- `yoga` — notes + date only
+- `hike` — notes + date only
 
 ### Template Sections
 Exercises in templates are tagged with sections: `warmup`, `primary`, `SS1`, `SS2`, `SS3`, `burnout`, `cooldown`. Superset exercises share the same `SS*` tag.
