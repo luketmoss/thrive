@@ -6,7 +6,7 @@ const TYPES: { value: WorkoutType; label: string }[] = [
   { value: 'weight', label: 'Weight' },
   { value: 'stretch', label: 'Stretch' },
   { value: 'bike', label: 'Bike' },
-  { value: 'yoga', label: 'Yoga' },
+  { value: 'hike', label: 'Hike' },
 ];
 
 export function ActivitiesFilters() {

@@ -430,9 +430,9 @@ input, select, textarea {
   color: #1565c0;
 }
 
-.badge-yoga {
-  background: #f3e5f5;
-  color: #7b1fa2;
+.badge-hike {
+  background: #efebe9;
+  color: #5d4037;
 }
 
 [data-theme="dark"] .badge-weight {
@@ -450,9 +450,9 @@ input, select, textarea {
   color: #93c5fd;
 }
 
-[data-theme="dark"] .badge-yoga {
-  background: #2a1533;
-  color: #d8b4fe;
+[data-theme="dark"] .badge-hike {
+  background: #2c1f1a;
+  color: #d7ccc8;
 }
 
 /* ===== Section Badges ===== */

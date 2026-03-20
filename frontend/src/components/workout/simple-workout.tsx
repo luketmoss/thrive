@@ -13,7 +13,7 @@ interface Props {
 const TYPE_LABELS: Record<string, string> = {
   stretch: 'Stretch',
   bike: 'Bike',
-  yoga: 'Yoga',
+  hike: 'Hike',
 };
 
 export function SimpleWorkout({ workoutType, onBack }: Props) {

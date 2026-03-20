@@ -10,7 +10,7 @@ const TYPE_COLORS: Record<string, { light: string; dark: string }> = {
   weight:  { light: '#c53030', dark: '#fca5a5' },
   stretch: { light: '#2e7d32', dark: '#86efac' },
   bike:    { light: '#1565c0', dark: '#93c5fd' },
-  yoga:    { light: '#7b1fa2', dark: '#d8b4fe' },
+  hike:    { light: '#5d4037', dark: '#d7ccc8' },
 };
 
 export function ActivitiesScreen() {

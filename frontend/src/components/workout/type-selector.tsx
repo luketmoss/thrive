@@ -9,7 +9,7 @@ const TYPES: { type: WorkoutType; label: string; icon: string }[] = [
   { type: 'weight', label: 'Weight', icon: '🏋️' },
   { type: 'stretch', label: 'Stretch', icon: '🤸' },
   { type: 'bike', label: 'Bike', icon: '🚴' },
-  { type: 'yoga', label: 'Yoga', icon: '🧘' },
+  { type: 'hike', label: 'Hike', icon: '🥾' },
 ];
 
 export function TypeSelector({ onSelect }: Props) {

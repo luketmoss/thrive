@@ -1,6 +1,6 @@
 // Groundwork data types — mirrors Google Sheet column structure.
 
-export type WorkoutType = 'weight' | 'stretch' | 'bike' | 'yoga';
+export type WorkoutType = 'weight' | 'stretch' | 'bike' | 'hike';
 export type Effort = 'Easy' | 'Medium' | 'Hard';
 export type Section = 'warmup' | 'primary' | 'SS1' | 'SS2' | 'SS3' | 'burnout' | 'cooldown';
 
