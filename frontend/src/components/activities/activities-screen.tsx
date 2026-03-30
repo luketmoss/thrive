@@ -2,7 +2,18 @@ import { useState } from 'preact/hooks';
 import { navigate } from '../../router/router';
 import { filteredWorkouts, plannedWorkouts, completedWorkouts, sets, exercises } from '../../state/store';
 import { ActivitiesFilters } from './activities-filters';
-import { groupWorkoutsByDate, getWorkoutTags, getWeekStreak, getWeekWorkoutCount, getWeekTotalMinutes, toLocalDateStr } from './activities-helpers';
+import {
+  groupWorkoutsByDate,
+  getWorkoutTags,
+  getWeekStreak,
+  getWeekWorkoutCount,
+  getWeekTotalMinutes,
+  getLastWeekWorkoutCount,
+  getLastWeekTotalMinutes,
+  getMonthWorkoutCount,
+  getMonthTotalMinutes,
+  toLocalDateStr,
+} from './activities-helpers';
 import { LabelBadge } from '../shared/label-badge';
 
 /** Type-color map for inset box-shadow accent (light theme). */
@@ -13,18 +24,31 @@ const TYPE_COLORS: Record<string, { light: string; dark: string }> = {
   hike:    { light: '#5d4037', dark: '#d7ccc8' },
 };
 
+function pluralWorkout(n: number): string {
+  return `${n} ${n === 1 ? 'workout' : 'workouts'}`;
+}
+
 export function ActivitiesScreen() {
   const [showFilters, setShowFilters] = useState(false);
 
   const todayStr = toLocalDateStr(new Date());
   const groups = groupWorkoutsByDate(filteredWorkouts.value, todayStr);
   const planned = plannedWorkouts.value;
-  // Week stats use only completed workouts (planned workouts haven't happened yet)
-  const weekDays = getWeekStreak(completedWorkouts.value, todayStr);
-  const weekCount = getWeekWorkoutCount(completedWorkouts.value, todayStr);
-  const weekMinutes = getWeekTotalMinutes(completedWorkouts.value, todayStr);
-  const countText = `${weekCount} ${weekCount === 1 ? 'workout' : 'workouts'} this week`;
-  const ariaLabel = weekMinutes > 0 ? `${countText}, ${weekMinutes} min` : countText;
+  // All stats use only completed workouts (planned workouts haven't happened yet)
+  const completed = completedWorkouts.value;
+  const weekDays = getWeekStreak(completed, todayStr);
+  const weekCount = getWeekWorkoutCount(completed, todayStr);
+  const weekMinutes = getWeekTotalMinutes(completed, todayStr);
+  const lastWeekCount = getLastWeekWorkoutCount(completed, todayStr);
+  const lastWeekMinutes = getLastWeekTotalMinutes(completed, todayStr);
+  const monthCount = getMonthWorkoutCount(completed, todayStr);
+  const monthMinutes = getMonthTotalMinutes(completed, todayStr);
+
+  const statsAriaLabel = [
+    `${pluralWorkout(weekCount)} this week, ${weekMinutes} minutes.`,
+    `${pluralWorkout(lastWeekCount)} last week, ${lastWeekMinutes} minutes.`,
+    `${pluralWorkout(monthCount)} this month, ${monthMinutes} minutes.`,
+  ].join(' ');
 
   return (
     <div class="screen activities-screen">
@@ -46,10 +70,7 @@ export function ActivitiesScreen() {
         </div>
       </header>
 
-      <div
-        class="week-streak-bar"
-        aria-label={ariaLabel}
-      >
+      <div class="week-streak-bar">
         <div class="week-streak-dots" aria-hidden="true">
           {weekDays.map((d) => (
             <div
@@ -63,9 +84,23 @@ export function ActivitiesScreen() {
             <span key={d.date} class={`streak-label${d.isToday ? ' today' : ''}`}>{d.label}</span>
           ))}
         </div>
-        <p class="week-streak-count">
-          {countText}{weekMinutes > 0 ? ` · ${weekMinutes} min` : ''}
-        </p>
+        <div
+          class="stats-bar"
+          aria-label={statsAriaLabel}
+        >
+          <div class="stats-bar-cell" aria-hidden="true">
+            <span class="stats-bar-label">This week</span>
+            <span class="stats-bar-value">{pluralWorkout(weekCount)} · {weekMinutes} min</span>
+          </div>
+          <div class="stats-bar-cell stats-bar-cell--center" aria-hidden="true">
+            <span class="stats-bar-label">Last week</span>
+            <span class="stats-bar-value">{pluralWorkout(lastWeekCount)} · {lastWeekMinutes} min</span>
+          </div>
+          <div class="stats-bar-cell stats-bar-cell--right" aria-hidden="true">
+            <span class="stats-bar-label">This month</span>
+            <span class="stats-bar-value">{pluralWorkout(monthCount)} · {monthMinutes} min</span>
+          </div>
+        </div>
       </div>
 
       {showFilters && <ActivitiesFilters />}

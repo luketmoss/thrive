@@ -3,22 +3,18 @@ import type { WorkoutWithRow, SetWithRow, ExerciseWithRow } from '../../api/type
 // ── Equipment / non-muscle tags to exclude from card pills ───────────
 export const EQUIPMENT_TAGS = new Set(['BB', 'DB', 'FT', 'Warmup']);
 
-// ── Date grouping (month-based) ──────────────────────────────────────
+// ── Date grouping (week-based) ───────────────────────────────────────
 
 export interface WorkoutGroup {
   label: string;
   workouts: WorkoutWithRow[];
 }
 
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
-
 /**
- * Groups workouts into calendar-month buckets: "This Month", "Last Month",
- * then "Month Year" for older entries. Each workout appears in exactly one group.
- * Preserves the order of workouts within each group. Empty groups are omitted.
+ * Groups workouts into weekly sections: "This Week" (current Mon–Sun),
+ * "Last Week" (previous Mon–Sun), and "Earlier" (everything before last week).
+ * Each workout appears in exactly one section. Empty sections are omitted.
+ * Preserves the order of workouts within each section.
  */
 export function groupWorkoutsByDate(
   workouts: WorkoutWithRow[],
@@ -27,29 +23,28 @@ export function groupWorkoutsByDate(
   if (workouts.length === 0) return [];
 
   const today = new Date(todayStr + 'T00:00:00');
-  const thisYear = today.getFullYear();
-  const thisMonth = today.getMonth();
+  const day = today.getDay(); // 0=Sun…6=Sat
+  const diffToMonday = day === 0 ? 6 : day - 1;
 
-  const lastMonthDate = new Date(today);
-  lastMonthDate.setDate(1);
-  lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
-  const lastYear = lastMonthDate.getFullYear();
-  const lastMonth = lastMonthDate.getMonth();
+  const thisMonday = new Date(today);
+  thisMonday.setDate(today.getDate() - diffToMonday);
+
+  const lastMonday = new Date(thisMonday);
+  lastMonday.setDate(thisMonday.getDate() - 7);
+
+  const thisMondayStr = toLocalDateStr(thisMonday);
+  const lastMondayStr = toLocalDateStr(lastMonday);
 
   const groups = new Map<string, WorkoutWithRow[]>();
 
   for (const w of workouts) {
-    const d = new Date(w.date + 'T00:00:00');
-    const wYear = d.getFullYear();
-    const wMonth = d.getMonth();
-
     let label: string;
-    if (wYear === thisYear && wMonth === thisMonth) {
-      label = 'This Month';
-    } else if (wYear === lastYear && wMonth === lastMonth) {
-      label = 'Last Month';
+    if (w.date >= thisMondayStr) {
+      label = 'This Week';
+    } else if (w.date >= lastMondayStr) {
+      label = 'Last Week';
     } else {
-      label = `${MONTH_NAMES[wMonth]} ${wYear}`;
+      label = 'Earlier';
     }
 
     let arr = groups.get(label);
@@ -60,7 +55,11 @@ export function groupWorkoutsByDate(
     arr.push(w);
   }
 
-  return Array.from(groups.entries()).map(([label, wks]) => ({ label, workouts: wks }));
+  // Enforce canonical order regardless of insertion order
+  const ORDER = ['This Week', 'Last Week', 'Earlier'];
+  return ORDER
+    .filter(label => groups.has(label))
+    .map(label => ({ label, workouts: groups.get(label)! }));
 }
 
 // ── Weekly streak ────────────────────────────────────────────────────
@@ -139,6 +138,95 @@ export function getWeekTotalMinutes(
   let total = 0;
   for (const w of allWorkouts) {
     if (!weekDates.has(w.date)) continue;
+    const mins = parseInt(w.duration_min, 10);
+    if (!isNaN(mins)) total += mins;
+  }
+  return total;
+}
+
+// ── Last-week helpers ────────────────────────────────────────────────
+
+/** Returns the set of ISO date strings for the Mon–Sun week before `todayStr`. */
+function getLastWeekDateSet(todayStr: string): Set<string> {
+  const today = new Date(todayStr + 'T00:00:00');
+  const day = today.getDay();
+  const diffToMonday = day === 0 ? 6 : day - 1;
+
+  const thisMonday = new Date(today);
+  thisMonday.setDate(today.getDate() - diffToMonday);
+
+  const dates = new Set<string>();
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(thisMonday);
+    d.setDate(thisMonday.getDate() - 7 + i);
+    dates.add(toLocalDateStr(d));
+  }
+  return dates;
+}
+
+/**
+ * Returns the count of workouts in the Mon–Sun week prior to the week
+ * containing `todayStr`.
+ */
+export function getLastWeekWorkoutCount(
+  allWorkouts: WorkoutWithRow[],
+  todayStr: string,
+): number {
+  const lastWeekDates = getLastWeekDateSet(todayStr);
+  return allWorkouts.filter(w => lastWeekDates.has(w.date)).length;
+}
+
+/**
+ * Returns the total duration in minutes for workouts in the Mon–Sun week
+ * prior to the week containing `todayStr`.
+ */
+export function getLastWeekTotalMinutes(
+  allWorkouts: WorkoutWithRow[],
+  todayStr: string,
+): number {
+  const lastWeekDates = getLastWeekDateSet(todayStr);
+  let total = 0;
+  for (const w of allWorkouts) {
+    if (!lastWeekDates.has(w.date)) continue;
+    const mins = parseInt(w.duration_min, 10);
+    if (!isNaN(mins)) total += mins;
+  }
+  return total;
+}
+
+// ── This-month helpers ───────────────────────────────────────────────
+
+/**
+ * Returns the count of workouts in the current calendar month (1st to today).
+ */
+export function getMonthWorkoutCount(
+  allWorkouts: WorkoutWithRow[],
+  todayStr: string,
+): number {
+  const today = new Date(todayStr + 'T00:00:00');
+  const thisYear = today.getFullYear();
+  const thisMonth = today.getMonth();
+  return allWorkouts.filter(w => {
+    const d = new Date(w.date + 'T00:00:00');
+    return d.getFullYear() === thisYear && d.getMonth() === thisMonth;
+  }).length;
+}
+
+/**
+ * Returns the total duration in minutes for workouts in the current calendar
+ * month. Workouts with no duration contribute 0 minutes.
+ */
+export function getMonthTotalMinutes(
+  allWorkouts: WorkoutWithRow[],
+  todayStr: string,
+): number {
+  const today = new Date(todayStr + 'T00:00:00');
+  const thisYear = today.getFullYear();
+  const thisMonth = today.getMonth();
+  let total = 0;
+  for (const w of allWorkouts) {
+    const d = new Date(w.date + 'T00:00:00');
+    if (d.getFullYear() !== thisYear || d.getMonth() !== thisMonth) continue;
     const mins = parseInt(w.duration_min, 10);
     if (!isNaN(mins)) total += mins;
   }

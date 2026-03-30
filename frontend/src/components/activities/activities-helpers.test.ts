@@ -1,5 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { groupWorkoutsByDate, getWeekStreak, getWeekWorkoutCount, getWeekTotalMinutes, getWorkoutTags, EQUIPMENT_TAGS, toLocalDateStr } from './activities-helpers';
+import {
+  groupWorkoutsByDate,
+  getWeekStreak,
+  getWeekWorkoutCount,
+  getWeekTotalMinutes,
+  getLastWeekWorkoutCount,
+  getLastWeekTotalMinutes,
+  getMonthWorkoutCount,
+  getMonthTotalMinutes,
+  getWorkoutTags,
+  EQUIPMENT_TAGS,
+  toLocalDateStr,
+} from './activities-helpers';
 import type { WorkoutWithRow, SetWithRow, ExerciseWithRow } from '../../api/types';
 
 function makeWorkout(overrides: Partial<WorkoutWithRow> = {}): WorkoutWithRow {
@@ -34,105 +46,129 @@ describe('toLocalDateStr', () => {
   });
 
   it('uses local date, not UTC (avoids timezone shift)', () => {
-    // Create a date at local midnight — toISOString would shift this to
-    // the previous day for timezones west of UTC
     const d = new Date('2026-03-15T00:00:00'); // local midnight
     expect(toLocalDateStr(d)).toBe('2026-03-15');
   });
 });
 
-// ── Month-based date grouping ────────────────────────────────────────
+// ── Weekly section grouping ──────────────────────────────────────────
+// today = '2026-03-18' (Wednesday)
+// This week: 2026-03-16 (Mon) – 2026-03-22 (Sun)
+// Last week: 2026-03-09 (Mon) – 2026-03-15 (Sun)
+// Earlier:   anything before 2026-03-09
 
 describe('groupWorkoutsByDate', () => {
-  // today = 2026-03-15 → "This Month" = March 2026, "Last Month" = February 2026
-  const today = '2026-03-15';
+  const today = '2026-03-18'; // Wednesday
 
   it('returns empty array for no workouts', () => {
     expect(groupWorkoutsByDate([], today)).toEqual([]);
   });
 
-  it('groups workouts in the current month into "This Month"', () => {
+  it('groups workouts in the current Mon–Sun week into "This Week"', () => {
     const workouts = [
-      makeWorkout({ id: 'w1', date: '2026-03-01' }),
-      makeWorkout({ id: 'w2', date: '2026-03-15' }),
+      makeWorkout({ id: 'w1', date: '2026-03-16' }), // Mon
+      makeWorkout({ id: 'w2', date: '2026-03-18' }), // Wed (today)
     ];
     const groups = groupWorkoutsByDate(workouts, today);
     expect(groups).toHaveLength(1);
-    expect(groups[0].label).toBe('This Month');
+    expect(groups[0].label).toBe('This Week');
     expect(groups[0].workouts).toHaveLength(2);
   });
 
-  it('groups workouts in the previous month into "Last Month"', () => {
+  it('groups workouts in the previous Mon–Sun week into "Last Week"', () => {
     const workouts = [
-      makeWorkout({ id: 'w1', date: '2026-02-01' }),
-      makeWorkout({ id: 'w2', date: '2026-02-28' }),
+      makeWorkout({ id: 'w1', date: '2026-03-09' }), // Mon last week
+      makeWorkout({ id: 'w2', date: '2026-03-15' }), // Sun last week
     ];
     const groups = groupWorkoutsByDate(workouts, today);
     expect(groups).toHaveLength(1);
-    expect(groups[0].label).toBe('Last Month');
+    expect(groups[0].label).toBe('Last Week');
     expect(groups[0].workouts).toHaveLength(2);
   });
 
-  it('groups older workouts by "Month Year"', () => {
+  it('groups workouts before last week into "Earlier"', () => {
     const workouts = [
-      makeWorkout({ id: 'w1', date: '2026-01-15' }),
-      makeWorkout({ id: 'w2', date: '2025-12-20' }),
+      makeWorkout({ id: 'w1', date: '2026-03-08' }), // day before last Mon
+      makeWorkout({ id: 'w2', date: '2025-12-01' }),
     ];
-    const groups = groupWorkoutsByDate(workouts, today);
-    expect(groups).toHaveLength(2);
-    expect(groups[0].label).toBe('January 2026');
-    expect(groups[1].label).toBe('December 2025');
-  });
-
-  it('handles mixed groups in correct order', () => {
-    const workouts = [
-      makeWorkout({ id: 'w1', date: '2026-03-10' }), // This Month
-      makeWorkout({ id: 'w2', date: '2026-02-20' }), // Last Month
-      makeWorkout({ id: 'w3', date: '2026-01-05' }), // January 2026
-      makeWorkout({ id: 'w4', date: '2025-11-10' }), // November 2025
-    ];
-    const groups = groupWorkoutsByDate(workouts, today);
-    expect(groups.map(g => g.label)).toEqual([
-      'This Month',
-      'Last Month',
-      'January 2026',
-      'November 2025',
-    ]);
-  });
-
-  it('omits empty groups', () => {
-    const workouts = [makeWorkout({ date: '2026-02-10' })];
     const groups = groupWorkoutsByDate(workouts, today);
     expect(groups).toHaveLength(1);
-    expect(groups[0].label).toBe('Last Month');
+    expect(groups[0].label).toBe('Earlier');
+    expect(groups[0].workouts).toHaveLength(2);
   });
 
-  it('no duplicates — month boundary workout falls into exactly one group', () => {
-    // Mar 1 is "This Month", Feb 28 is "Last Month" — no overlap
-    // Input already sorted newest-first (as filteredWorkouts provides)
+  it('handles mixed groups in correct order: This Week → Last Week → Earlier', () => {
     const workouts = [
-      makeWorkout({ id: 'w1', date: '2026-03-01' }),
-      makeWorkout({ id: 'w2', date: '2026-02-28' }),
+      makeWorkout({ id: 'w1', date: '2026-03-18' }), // This Week
+      makeWorkout({ id: 'w2', date: '2026-03-12' }), // Last Week
+      makeWorkout({ id: 'w3', date: '2026-03-01' }), // Earlier
+    ];
+    const groups = groupWorkoutsByDate(workouts, today);
+    expect(groups.map(g => g.label)).toEqual(['This Week', 'Last Week', 'Earlier']);
+  });
+
+  it('omits empty sections', () => {
+    const workouts = [makeWorkout({ date: '2026-03-18' })];
+    const groups = groupWorkoutsByDate(workouts, today);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].label).toBe('This Week');
+  });
+
+  it('no duplicates — week boundary workout falls into exactly one section', () => {
+    // Sunday of last week vs Monday of this week
+    const workouts = [
+      makeWorkout({ id: 'w1', date: '2026-03-16' }), // Mon this week
+      makeWorkout({ id: 'w2', date: '2026-03-15' }), // Sun last week
     ];
     const groups = groupWorkoutsByDate(workouts, today);
     expect(groups).toHaveLength(2);
-    expect(groups[0].label).toBe('This Month');
+    expect(groups[0].label).toBe('This Week');
     expect(groups[0].workouts).toHaveLength(1);
-    expect(groups[0].workouts[0].date).toBe('2026-03-01');
-    expect(groups[1].label).toBe('Last Month');
+    expect(groups[0].workouts[0].date).toBe('2026-03-16');
+    expect(groups[1].label).toBe('Last Week');
     expect(groups[1].workouts).toHaveLength(1);
-    expect(groups[1].workouts[0].date).toBe('2026-02-28');
+    expect(groups[1].workouts[0].date).toBe('2026-03-15');
   });
 
-  it('handles January today with December as Last Month', () => {
-    const janToday = '2026-01-15';
+  it('works correctly when today is Monday', () => {
+    // today = 2026-03-16 (Monday)
+    // This week: Mar 16–22; Last week: Mar 9–15
+    const monday = '2026-03-16';
     const workouts = [
-      makeWorkout({ id: 'w1', date: '2026-01-10' }),
-      makeWorkout({ id: 'w2', date: '2025-12-20' }),
+      makeWorkout({ id: 'w1', date: '2026-03-16' }), // This Week (today)
+      makeWorkout({ id: 'w2', date: '2026-03-15' }), // Last Week (Sun)
+      makeWorkout({ id: 'w3', date: '2026-03-09' }), // Last Week (Mon)
+      makeWorkout({ id: 'w4', date: '2026-03-08' }), // Earlier
     ];
-    const groups = groupWorkoutsByDate(workouts, janToday);
-    expect(groups[0].label).toBe('This Month');
-    expect(groups[1].label).toBe('Last Month');
+    const groups = groupWorkoutsByDate(workouts, monday);
+    expect(groups.map(g => g.label)).toEqual(['This Week', 'Last Week', 'Earlier']);
+    expect(groups[0].workouts).toHaveLength(1);
+    expect(groups[1].workouts).toHaveLength(2);
+    expect(groups[2].workouts).toHaveLength(1);
+  });
+
+  it('works correctly when today is Sunday', () => {
+    // today = 2026-03-22 (Sunday)
+    // This week: Mar 16–22; Last week: Mar 9–15
+    const sunday = '2026-03-22';
+    const workouts = [
+      makeWorkout({ id: 'w1', date: '2026-03-22' }), // This Week (today)
+      makeWorkout({ id: 'w2', date: '2026-03-16' }), // This Week (Mon)
+      makeWorkout({ id: 'w3', date: '2026-03-15' }), // Last Week (Sun)
+    ];
+    const groups = groupWorkoutsByDate(workouts, sunday);
+    expect(groups.map(g => g.label)).toEqual(['This Week', 'Last Week']);
+    expect(groups[0].workouts).toHaveLength(2);
+  });
+
+  it('preserves reverse-chronological order within each section', () => {
+    const workouts = [
+      makeWorkout({ id: 'w1', date: '2026-03-18' }),
+      makeWorkout({ id: 'w2', date: '2026-03-16' }),
+    ];
+    const groups = groupWorkoutsByDate(workouts, today);
+    expect(groups[0].workouts[0].date).toBe('2026-03-18');
+    expect(groups[0].workouts[1].date).toBe('2026-03-16');
   });
 });
 
@@ -201,8 +237,6 @@ describe('getWeekStreak', () => {
   });
 
   it('uses local dates (no UTC shift from toISOString)', () => {
-    // All generated dates should match the expected local-time dates,
-    // regardless of the runtime timezone offset
     const days = getWeekStreak([], '2026-03-15');
     const dates = days.map(d => d.date);
     expect(dates).toEqual([
@@ -281,19 +315,140 @@ describe('getWeekTotalMinutes', () => {
   });
 });
 
+// ── Last week stats ──────────────────────────────────────────────────
+// today = '2026-03-18' (Wed); last week = Mar 9–15
+
+describe('getLastWeekWorkoutCount', () => {
+  const today = '2026-03-18';
+
+  it('returns 0 for no workouts', () => {
+    expect(getLastWeekWorkoutCount([], today)).toBe(0);
+  });
+
+  it('counts workouts in the previous Mon–Sun week', () => {
+    const workouts = [
+      makeWorkout({ id: 'w1', date: '2026-03-09' }), // Mon last week
+      makeWorkout({ id: 'w2', date: '2026-03-12' }), // Thu last week
+      makeWorkout({ id: 'w3', date: '2026-03-15' }), // Sun last week
+      makeWorkout({ id: 'w4', date: '2026-03-16' }), // This week (excluded)
+      makeWorkout({ id: 'w5', date: '2026-03-08' }), // Earlier (excluded)
+    ];
+    expect(getLastWeekWorkoutCount(workouts, today)).toBe(3);
+  });
+
+  it('returns 0 when no workouts fall in last week', () => {
+    const workouts = [
+      makeWorkout({ id: 'w1', date: '2026-03-17' }), // This week
+      makeWorkout({ id: 'w2', date: '2026-03-01' }), // Earlier
+    ];
+    expect(getLastWeekWorkoutCount(workouts, today)).toBe(0);
+  });
+
+  it('AC4: planned workouts filtered by caller are excluded', () => {
+    const completed = makeWorkout({ id: 'w1', date: '2026-03-11', status: '' });
+    expect(getLastWeekWorkoutCount([completed], today)).toBe(1);
+  });
+});
+
+describe('getLastWeekTotalMinutes', () => {
+  const today = '2026-03-18'; // last week = Mar 9–15
+
+  it('returns 0 for no workouts', () => {
+    expect(getLastWeekTotalMinutes([], today)).toBe(0);
+  });
+
+  it('sums durations for last week only', () => {
+    const workouts = [
+      makeWorkout({ id: 'w1', date: '2026-03-09', duration_min: '60' }),
+      makeWorkout({ id: 'w2', date: '2026-03-12', duration_min: '45' }),
+      makeWorkout({ id: 'w3', date: '2026-03-16', duration_min: '30' }), // This week (excluded)
+      makeWorkout({ id: 'w4', date: '2026-03-01', duration_min: '90' }), // Earlier (excluded)
+    ];
+    expect(getLastWeekTotalMinutes(workouts, today)).toBe(105);
+  });
+
+  it('skips workouts with no duration (contributes 0 min but still counted)', () => {
+    const workouts = [
+      makeWorkout({ id: 'w1', date: '2026-03-09', duration_min: '60' }),
+      makeWorkout({ id: 'w2', date: '2026-03-11', duration_min: '' }),
+    ];
+    expect(getLastWeekTotalMinutes(workouts, today)).toBe(60);
+  });
+});
+
+// ── This month stats ─────────────────────────────────────────────────
+// today = '2026-03-18'; this month = March 2026
+
+describe('getMonthWorkoutCount', () => {
+  const today = '2026-03-18';
+
+  it('returns 0 for no workouts', () => {
+    expect(getMonthWorkoutCount([], today)).toBe(0);
+  });
+
+  it('counts workouts in the current calendar month', () => {
+    const workouts = [
+      makeWorkout({ id: 'w1', date: '2026-03-01' }),
+      makeWorkout({ id: 'w2', date: '2026-03-15' }),
+      makeWorkout({ id: 'w3', date: '2026-03-18' }),
+      makeWorkout({ id: 'w4', date: '2026-02-28' }), // Last month (excluded)
+      makeWorkout({ id: 'w5', date: '2026-04-01' }), // Next month (excluded)
+    ];
+    expect(getMonthWorkoutCount(workouts, today)).toBe(3);
+  });
+
+  it('returns 0 when no workouts this month', () => {
+    const workouts = [makeWorkout({ date: '2026-02-15' })];
+    expect(getMonthWorkoutCount(workouts, today)).toBe(0);
+  });
+
+  it('handles January correctly (year boundary)', () => {
+    const workouts = [
+      makeWorkout({ id: 'w1', date: '2026-01-10' }),
+      makeWorkout({ id: 'w2', date: '2025-12-31' }), // Last year (excluded)
+    ];
+    expect(getMonthWorkoutCount(workouts, '2026-01-15')).toBe(1);
+  });
+
+  it('AC5: excludes planned workouts when caller passes completedWorkouts', () => {
+    const completed = makeWorkout({ id: 'w1', date: '2026-03-15', status: '' });
+    expect(getMonthWorkoutCount([completed], today)).toBe(1);
+  });
+});
+
+describe('getMonthTotalMinutes', () => {
+  const today = '2026-03-18';
+
+  it('returns 0 for no workouts', () => {
+    expect(getMonthTotalMinutes([], today)).toBe(0);
+  });
+
+  it('sums durations for this month only', () => {
+    const workouts = [
+      makeWorkout({ id: 'w1', date: '2026-03-01', duration_min: '60' }),
+      makeWorkout({ id: 'w2', date: '2026-03-15', duration_min: '45' }),
+      makeWorkout({ id: 'w3', date: '2026-02-28', duration_min: '90' }), // Last month (excluded)
+    ];
+    expect(getMonthTotalMinutes(workouts, today)).toBe(105);
+  });
+
+  it('AC4: workouts with no duration contribute 0 min but count in workout count', () => {
+    const workouts = [
+      makeWorkout({ id: 'w1', date: '2026-03-10', duration_min: '60' }),
+      makeWorkout({ id: 'w2', date: '2026-03-12', duration_min: '' }),
+    ];
+    expect(getMonthTotalMinutes(workouts, today)).toBe(60);
+    expect(getMonthWorkoutCount(workouts, today)).toBe(2);
+  });
+});
+
 // ── Planned workout exclusion (caller responsibility) ────────────────
-// The helpers receive pre-filtered workout lists. These tests confirm
-// that passing only completedWorkouts (status !== 'planned') correctly
-// excludes planned workouts from streak / stats.
 
 describe('week stats exclude planned workouts (via caller filtering)', () => {
   const today = '2026-03-15'; // week = Mar 9–15
 
   it('getWeekStreak: planned workouts filtered out by caller are not counted', () => {
-    const planned = makeWorkout({ id: 'w_planned', date: '2026-03-11', status: 'planned' });
     const completed = makeWorkout({ id: 'w_done', date: '2026-03-09', status: '' });
-
-    // Caller filters out planned before passing
     const completedOnly = [completed];
     const days = getWeekStreak(completedOnly, today);
 
@@ -302,14 +457,12 @@ describe('week stats exclude planned workouts (via caller filtering)', () => {
   });
 
   it('getWeekWorkoutCount: planned workouts filtered out by caller are not counted', () => {
-    const planned = makeWorkout({ id: 'w_planned', date: '2026-03-11', status: 'planned' });
     const completed = makeWorkout({ id: 'w_done', date: '2026-03-09', status: '' });
     const completedOnly = [completed];
     expect(getWeekWorkoutCount(completedOnly, today)).toBe(1);
   });
 
   it('getWeekTotalMinutes: planned workouts filtered out by caller are not summed', () => {
-    const planned = makeWorkout({ id: 'w_planned', date: '2026-03-11', duration_min: '45', status: 'planned' });
     const completed = makeWorkout({ id: 'w_done', date: '2026-03-09', duration_min: '60', status: '' });
     const completedOnly = [completed];
     expect(getWeekTotalMinutes(completedOnly, today)).toBe(60);
