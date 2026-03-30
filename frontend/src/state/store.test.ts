@@ -8,6 +8,8 @@ import {
   filterType,
   filterTags,
   filteredWorkouts,
+  plannedWorkouts,
+  completedWorkouts,
   allTags,
   getLabelByName,
   labelUsageCount,
@@ -40,6 +42,7 @@ function makeWorkout(overrides: Partial<WorkoutWithRow> = {}): WorkoutWithRow {
     duration_min: '60',
     created: '2025-01-15T08:00:00.000Z',
     copied_from: '',
+    status: '',
     sheetRow: 2,
     ...overrides,
   };
@@ -227,6 +230,75 @@ describe('filteredWorkouts', () => {
 
   it('returns empty array when no workouts exist', () => {
     expect(filteredWorkouts.value).toEqual([]);
+  });
+
+  it('excludes planned workouts from the history list', () => {
+    workouts.value = [
+      makeWorkout({ id: 'w1', date: '2025-01-15', status: '' }),
+      makeWorkout({ id: 'w2', date: '2025-01-14', status: 'planned' }),
+    ];
+
+    const result = filteredWorkouts.value;
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('w1');
+  });
+
+  it('returns empty when all workouts are planned', () => {
+    workouts.value = [
+      makeWorkout({ id: 'w1', status: 'planned' }),
+      makeWorkout({ id: 'w2', status: 'planned' }),
+    ];
+
+    expect(filteredWorkouts.value).toHaveLength(0);
+  });
+});
+
+describe('plannedWorkouts', () => {
+  beforeEach(resetSignals);
+
+  it('returns only workouts with status="planned"', () => {
+    workouts.value = [
+      makeWorkout({ id: 'w1', status: '' }),
+      makeWorkout({ id: 'w2', status: 'planned' }),
+      makeWorkout({ id: 'w3', status: 'planned' }),
+    ];
+
+    expect(plannedWorkouts.value).toHaveLength(2);
+    expect(plannedWorkouts.value.every(w => w.status === 'planned')).toBe(true);
+  });
+
+  it('returns empty when no planned workouts exist', () => {
+    workouts.value = [makeWorkout({ status: '' })];
+    expect(plannedWorkouts.value).toHaveLength(0);
+  });
+
+  it('returns empty when no workouts exist', () => {
+    expect(plannedWorkouts.value).toEqual([]);
+  });
+});
+
+describe('completedWorkouts', () => {
+  beforeEach(resetSignals);
+
+  it('returns only workouts without status="planned"', () => {
+    workouts.value = [
+      makeWorkout({ id: 'w1', status: '' }),
+      makeWorkout({ id: 'w2', status: 'planned' }),
+      makeWorkout({ id: 'w3', type: 'stretch', status: '' }),
+    ];
+
+    expect(completedWorkouts.value).toHaveLength(2);
+    expect(completedWorkouts.value.map(w => w.id)).toContain('w1');
+    expect(completedWorkouts.value.map(w => w.id)).toContain('w3');
+  });
+
+  it('returns all workouts when none are planned', () => {
+    workouts.value = [
+      makeWorkout({ id: 'w1', status: '' }),
+      makeWorkout({ id: 'w2', status: '' }),
+    ];
+
+    expect(completedWorkouts.value).toHaveLength(2);
   });
 });
 

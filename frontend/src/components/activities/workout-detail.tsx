@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
-import { workouts, sets } from '../../state/store';
-import { deleteWorkout, copyWorkout, saveWorkoutAsTemplate } from '../../state/actions';
+import { workouts, sets, activeWorkoutId, showToast } from '../../state/store';
+import { deleteWorkout, copyWorkout, saveWorkoutAsTemplate, startPlannedWorkout } from '../../state/actions';
 import { useAuth } from '../../auth/auth-context';
 import { navigate } from '../../router/router';
 import { ExerciseDetail, groupSetsIntoExercises } from './exercise-detail';
@@ -37,6 +37,7 @@ export function WorkoutDetail({ workoutId }: Props) {
   const workout = workouts.value.find((w) => w.id === workoutId);
   const [expandedIndex, setExpandedIndex] = useState(-1);
   const [deleting, setDeleting] = useState(false);
+  const [startingPlanned, setStartingPlanned] = useState(false);
   const [showLastTime, setShowLastTime] = useState(false);
 
   if (!workout) {
@@ -62,6 +63,24 @@ export function WorkoutDetail({ workoutId }: Props) {
     ? sets.value.filter((s) => s.workout_id === prevWorkout.id)
     : [];
   const prevGroups = prevSets.length > 0 ? groupSetsIntoExercises(prevSets) : [];
+
+  const handleStartPlanned = async () => {
+    if (!token || startingPlanned) return;
+    // Guard: cannot start if another workout is already active
+    if (activeWorkoutId.value) {
+      showToast('Finish your current workout before starting a new one', 'error');
+      return;
+    }
+    setStartingPlanned(true);
+    try {
+      const id = await startPlannedWorkout(workoutId, token);
+      navigate(`/workout/${id}`);
+    } catch {
+      // Error toast shown by action
+    } finally {
+      setStartingPlanned(false);
+    }
+  };
 
   const handleDelete = async () => {
     if (!token) return;
@@ -98,6 +117,8 @@ export function WorkoutDetail({ workoutId }: Props) {
     }
   };
 
+  const isPlanned = workout.status === 'planned';
+
   return (
     <div class="screen workout-detail-screen">
       <div class="template-editor-header">
@@ -108,33 +129,38 @@ export function WorkoutDetail({ workoutId }: Props) {
         >
           ← Back
         </button>
-        <div class="detail-header-actions">
-          {workout.type === 'weight' && exerciseGroups.length > 0 && (
-            <button class="btn btn-secondary btn-sm" onClick={handleSaveAsTemplate}>
-              Save Template
+        {!isPlanned && (
+          <div class="detail-header-actions">
+            {workout.type === 'weight' && exerciseGroups.length > 0 && (
+              <button class="btn btn-secondary btn-sm" onClick={handleSaveAsTemplate}>
+                Save Template
+              </button>
+            )}
+            {workout.type === 'weight' && (
+              <button class="btn btn-secondary btn-sm" onClick={handleCopy}>
+                Copy
+              </button>
+            )}
+            <button
+              class="btn btn-primary btn-sm"
+              onClick={() => navigate(`/history/${workoutId}/edit`)}
+            >
+              Edit
             </button>
-          )}
-          {workout.type === 'weight' && (
-            <button class="btn btn-secondary btn-sm" onClick={handleCopy}>
-              Copy
-            </button>
-          )}
-          <button
-            class="btn btn-primary btn-sm"
-            onClick={() => navigate(`/history/${workoutId}/edit`)}
-          >
-            Edit
-          </button>
-        </div>
+          </div>
+        )}
       </div>
 
       <div class="detail-meta">
         <h2 class="detail-title">{workout.name || workout.type}</h2>
         <div class="detail-info-row">
-          <span class={`type-badge badge-${workout.type}`}>{workout.type}</span>
-          <span class="detail-date">{workout.date}</span>
-          {workout.time && <span class="detail-time">{workout.time}</span>}
-          {workout.duration_min && (
+          {isPlanned
+            ? <span class="type-badge badge-planned">Planned</span>
+            : <span class={`type-badge badge-${workout.type}`}>{workout.type}</span>
+          }
+          {!isPlanned && <span class="detail-date">{workout.date}</span>}
+          {!isPlanned && workout.time && <span class="detail-time">{workout.time}</span>}
+          {!isPlanned && workout.duration_min && (
             <span class="detail-duration">{workout.duration_min} min</span>
           )}
         </div>
@@ -145,6 +171,19 @@ export function WorkoutDetail({ workoutId }: Props) {
           <p class="detail-copied">Copied from a previous workout</p>
         )}
       </div>
+
+      {/* Planned workout: Start Workout as the primary CTA */}
+      {isPlanned && (
+        <div class="planned-detail-start">
+          <button
+            class="btn btn-primary planned-start-btn"
+            onClick={handleStartPlanned}
+            disabled={startingPlanned}
+          >
+            {startingPlanned ? 'Starting…' : 'Start Workout'}
+          </button>
+        </div>
+      )}
 
       {/* Exercise breakdown for weight workouts */}
       {exerciseGroups.length > 0 && (

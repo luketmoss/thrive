@@ -202,7 +202,7 @@ const mockSets: SetWithRow[] = [
 ];
 
 const mockWorkouts: WorkoutWithRow[] = [
-  { id: 'w1', date: '2026-03-10', time: '07:00', type: 'weight', name: 'Push A', template_id: '', notes: '', duration_min: '60', created: '2026-03-10T07:00:00.000Z', copied_from: '', sheetRow: 2 },
+  { id: 'w1', date: '2026-03-10', time: '07:00', type: 'weight', name: 'Push A', template_id: '', notes: '', duration_min: '60', created: '2026-03-10T07:00:00.000Z', copied_from: '', status: '', sheetRow: 2 },
 ];
 
 describe('Issue #23 — Exercise card last-workout info', () => {
@@ -230,8 +230,8 @@ describe('Issue #23 — Exercise card last-workout info', () => {
         { workout_id: 'w_new', exercise_id: 'ex1', exercise_name: 'Bench Press', section: 'primary', exercise_order: 1, set_number: 1, planned_reps: '', weight: '185', reps: '8', effort: '', notes: '', sheetRow: 3 },
       ];
       const wkts: WorkoutWithRow[] = [
-        { id: 'w_old', date: '2026-01-01', time: '', type: 'weight', name: '', template_id: '', notes: '', duration_min: '', created: '', copied_from: '', sheetRow: 2 },
-        { id: 'w_new', date: '2026-03-10', time: '', type: 'weight', name: '', template_id: '', notes: '', duration_min: '', created: '', copied_from: '', sheetRow: 3 },
+        { id: 'w_old', date: '2026-01-01', time: '', type: 'weight', name: '', template_id: '', notes: '', duration_min: '', created: '', copied_from: '', status: '', sheetRow: 2 },
+        { id: 'w_new', date: '2026-03-10', time: '', type: 'weight', name: '', template_id: '', notes: '', duration_min: '', created: '', copied_from: '', status: '', sheetRow: 3 },
       ];
       const map = buildLastPerformedMap(setsMulti, wkts);
       expect(map.get('ex1')).toBe('2026-03-10');

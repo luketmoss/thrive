@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'preact/hooks';
 import { workouts, activeWorkoutId, activeWorkoutSets, activeWarmupExercises, sets, templates } from '../../state/store';
-import { startWorkout } from '../../state/actions';
+import { startWorkout, saveWorkoutForLater } from '../../state/actions';
 import { useAuth } from '../../auth/auth-context';
 import { navigate } from '../../router/router';
 import { TypeSelector } from './type-selector';
 import { TemplatePicker } from './template-picker';
 import { WorkoutTracker } from './workout-tracker';
 import { SimpleWorkout } from './simple-workout';
+import { PlanActionSheet } from './plan-action-sheet';
 import type { WorkoutType } from '../../api/types';
 
 type FlowStep = 'type' | 'template' | 'tracker' | 'simple';
@@ -22,6 +23,12 @@ export function WorkoutFlow({ workoutId }: Props) {
   const [activeId, setActiveId] = useState<string | null>(workoutId || null);
   const [workoutName, setWorkoutName] = useState('');
   const [starting, setStarting] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Action sheet state
+  const [showActionSheet, setShowActionSheet] = useState(false);
+  const [pendingTemplateId, setPendingTemplateId] = useState<string | null>(null);
+  const [pendingIsCustom, setPendingIsCustom] = useState(false);
 
   // If resuming an existing workout, jump to the correct step
   useEffect(() => {
@@ -74,21 +81,49 @@ export function WorkoutFlow({ workoutId }: Props) {
     }
   };
 
-  const handleTemplateSelect = async (templateId: string) => {
+  // Called when the user taps a template card — show the action sheet
+  const handleTemplateCardTap = (templateId: string) => {
+    setPendingTemplateId(templateId);
+    setPendingIsCustom(false);
+    setShowActionSheet(true);
+  };
+
+  // Called when the user taps "Build Custom" — show the action sheet
+  const handleBuildCustomTap = () => {
+    setPendingTemplateId(null);
+    setPendingIsCustom(true);
+    setShowActionSheet(true);
+  };
+
+  const handleCancelActionSheet = () => {
+    setShowActionSheet(false);
+    setPendingTemplateId(null);
+    setPendingIsCustom(false);
+  };
+
+  // "Start Now" path
+  const handleStartNow = async () => {
     if (!token || starting) return;
     setStarting(true);
     try {
-      const tpl = templates.value.find((t) => t.id === templateId);
-      const name = tpl?.name || 'Workout';
-      const id = await startWorkout({
-        type: 'weight',
-        name,
-        template_id: templateId,
-      }, token);
+      let name: string;
+      let id: string;
+
+      if (pendingIsCustom) {
+        name = 'Custom Workout';
+        id = await startWorkout({ type: 'weight', name }, token);
+      } else if (pendingTemplateId) {
+        const tpl = templates.value.find((t) => t.id === pendingTemplateId);
+        name = tpl?.name || 'Workout';
+        id = await startWorkout({ type: 'weight', name, template_id: pendingTemplateId }, token);
+      } else {
+        return;
+      }
+
+      setShowActionSheet(false);
       setActiveId(id);
       setWorkoutName(name);
       setStep('tracker');
-      // Update URL without triggering re-render loop
       window.location.hash = `#/workout/${id}`;
     } catch {
       // Error toast shown by action
@@ -97,31 +132,44 @@ export function WorkoutFlow({ workoutId }: Props) {
     }
   };
 
-  const handleBuildCustom = async () => {
-    if (!token || starting) return;
-    setStarting(true);
+  // "Save for Later" path
+  const handleSaveForLater = async () => {
+    if (!token || saving) return;
+    setSaving(true);
     try {
-      const name = 'Custom Workout';
-      const id = await startWorkout({
-        type: 'weight',
-        name,
-      }, token);
-      setActiveId(id);
-      setWorkoutName(name);
-      setStep('tracker');
-      window.location.hash = `#/workout/${id}`;
+      if (pendingIsCustom) {
+        await saveWorkoutForLater({ type: 'weight', name: 'Custom Workout' }, token);
+      } else if (pendingTemplateId) {
+        const tpl = templates.value.find((t) => t.id === pendingTemplateId);
+        const name = tpl?.name || 'Workout';
+        await saveWorkoutForLater({ type: 'weight', name, template_id: pendingTemplateId }, token);
+      } else {
+        return;
+      }
+      setShowActionSheet(false);
+      navigate('/');
     } catch {
       // Error toast shown by action
     } finally {
-      setStarting(false);
+      setSaving(false);
     }
   };
 
-  if (starting) {
+  // Pending workout name for the action sheet title
+  const getPendingName = () => {
+    if (pendingIsCustom) return 'Custom Workout';
+    if (pendingTemplateId) {
+      const tpl = templates.value.find((t) => t.id === pendingTemplateId);
+      return tpl?.name || 'Workout';
+    }
+    return 'Workout';
+  };
+
+  if (starting || saving) {
     return (
       <div class="loading-screen">
         <div class="spinner" />
-        <p>Starting workout...</p>
+        <p>{saving ? 'Saving…' : 'Starting workout…'}</p>
       </div>
     );
   }
@@ -131,11 +179,24 @@ export function WorkoutFlow({ workoutId }: Props) {
       return <TypeSelector onSelect={handleTypeSelect} />;
     case 'template':
       return (
-        <TemplatePicker
-          onSelectTemplate={handleTemplateSelect}
-          onBuildCustom={handleBuildCustom}
-          onBack={() => setStep('type')}
-        />
+        <>
+          <TemplatePicker
+            onSelectTemplate={handleTemplateCardTap}
+            onBuildCustom={handleBuildCustomTap}
+            onBack={() => setStep('type')}
+          />
+          {showActionSheet && (
+            <PlanActionSheet
+              workoutName={getPendingName()}
+              isCustom={pendingIsCustom}
+              starting={starting}
+              saving={saving}
+              onStartNow={handleStartNow}
+              onSaveForLater={handleSaveForLater}
+              onCancel={handleCancelActionSheet}
+            />
+          )}
+        </>
       );
     case 'tracker':
       return activeId ? (

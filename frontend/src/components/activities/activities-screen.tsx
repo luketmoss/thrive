@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 import { navigate } from '../../router/router';
-import { filteredWorkouts, sets, exercises, workouts } from '../../state/store';
+import { filteredWorkouts, plannedWorkouts, completedWorkouts, sets, exercises } from '../../state/store';
 import { ActivitiesFilters } from './activities-filters';
 import { groupWorkoutsByDate, getWorkoutTags, getWeekStreak, getWeekWorkoutCount, getWeekTotalMinutes, toLocalDateStr } from './activities-helpers';
 import { LabelBadge } from '../shared/label-badge';
@@ -18,9 +18,11 @@ export function ActivitiesScreen() {
 
   const todayStr = toLocalDateStr(new Date());
   const groups = groupWorkoutsByDate(filteredWorkouts.value, todayStr);
-  const weekDays = getWeekStreak(workouts.value, todayStr);
-  const weekCount = getWeekWorkoutCount(workouts.value, todayStr);
-  const weekMinutes = getWeekTotalMinutes(workouts.value, todayStr);
+  const planned = plannedWorkouts.value;
+  // Week stats use only completed workouts (planned workouts haven't happened yet)
+  const weekDays = getWeekStreak(completedWorkouts.value, todayStr);
+  const weekCount = getWeekWorkoutCount(completedWorkouts.value, todayStr);
+  const weekMinutes = getWeekTotalMinutes(completedWorkouts.value, todayStr);
   const countText = `${weekCount} ${weekCount === 1 ? 'workout' : 'workouts'} this week`;
   const ariaLabel = weekMinutes > 0 ? `${countText}, ${weekMinutes} min` : countText;
 
@@ -67,6 +69,41 @@ export function ActivitiesScreen() {
       </div>
 
       {showFilters && <ActivitiesFilters />}
+
+      {/* Planned workouts section — between streak bar and history */}
+      {planned.length > 0 && (
+        <div class="planned-section">
+          <div class="date-group-header first">Planned</div>
+          {planned.map((w) => {
+            const workoutSets = sets.value.filter((s) => s.workout_id === w.id);
+            const exerciseCount = new Set(workoutSets.map((s) => `${s.exercise_id}__${s.exercise_order}`)).size;
+            const tags = getWorkoutTags(workoutSets, exercises.value);
+
+            return (
+              <div
+                key={w.id}
+                class="workout-card workout-card-planned"
+                onClick={() => navigate(`/history/${w.id}`)}
+              >
+                <div class="workout-card-center">
+                  <span class="workout-name">{w.name || w.type}</span>
+                  <span class="workout-meta">
+                    {exerciseCount > 0 ? `${exerciseCount} exercise${exerciseCount !== 1 ? 's' : ''}` : 'No exercises yet'}
+                  </span>
+                  {tags.length > 0 && (
+                    <div class="workout-card-tags">
+                      {tags.map((tag) => (
+                        <LabelBadge key={tag} name={tag} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <span class="type-badge badge-planned">Planned</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <div class="screen-body">
         {filteredWorkouts.value.length === 0 ? (

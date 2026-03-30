@@ -100,10 +100,11 @@ export const DEMO_TEMPLATES: Template[] = groupRows(DEMO_TEMPLATE_ROWS);
 const workoutDate = '2025-01-14';
 
 export const DEMO_WORKOUTS: WorkoutWithRow[] = [
-  { id: 'w_demo001', date: workoutDate, time: '06:30', type: 'weight', name: 'Upper Push A', template_id: 'tpl_demo001', notes: 'Felt strong today', duration_min: '62', created: '2025-01-14T06:30:00.000Z', copied_from: '', sheetRow: 2 },
-  { id: 'w_demo002', date: '2025-01-13', time: '07:00', type: 'stretch', name: 'Morning Stretch', template_id: '', notes: 'Full body stretch, focused on hamstrings and hip flexors', duration_min: '20', created: '2025-01-13T07:00:00.000Z', copied_from: '', sheetRow: 3 },
-  { id: 'w_demo003', date: '2025-01-12', time: '17:30', type: 'bike', name: 'Evening Ride', template_id: '', notes: 'Easy 30 min zone 2 ride on the trainer', duration_min: '30', created: '2025-01-12T17:30:00.000Z', copied_from: '', sheetRow: 4 },
-  { id: 'w_demo004', date: '2025-01-07', time: '06:30', type: 'weight', name: 'Upper Push A', template_id: 'tpl_demo001', notes: 'Good session', duration_min: '58', created: '2025-01-07T06:30:00.000Z', copied_from: '', sheetRow: 5 },
+  { id: 'w_demo001', date: workoutDate, time: '06:30', type: 'weight', name: 'Upper Push A', template_id: 'tpl_demo001', notes: 'Felt strong today', duration_min: '62', created: '2025-01-14T06:30:00.000Z', copied_from: '', status: '', sheetRow: 2 },
+  { id: 'w_demo002', date: '2025-01-13', time: '07:00', type: 'stretch', name: 'Morning Stretch', template_id: '', notes: 'Full body stretch, focused on hamstrings and hip flexors', duration_min: '20', created: '2025-01-13T07:00:00.000Z', copied_from: '', status: '', sheetRow: 3 },
+  { id: 'w_demo003', date: '2025-01-12', time: '17:30', type: 'bike', name: 'Evening Ride', template_id: '', notes: 'Easy 30 min zone 2 ride on the trainer', duration_min: '30', created: '2025-01-12T17:30:00.000Z', copied_from: '', status: '', sheetRow: 4 },
+  { id: 'w_demo004', date: '2025-01-07', time: '06:30', type: 'weight', name: 'Upper Push A', template_id: 'tpl_demo001', notes: 'Good session', duration_min: '58', created: '2025-01-07T06:30:00.000Z', copied_from: '', status: '', sheetRow: 5 },
+  { id: 'w_demo005', date: workoutDate, time: '06:30', type: 'weight', name: 'Upper Pull A', template_id: 'tpl_demo002', notes: '', duration_min: '', created: '2025-01-14T06:30:00.000Z', copied_from: '', status: 'planned', sheetRow: 6 },
 ];
 
 export const DEMO_SETS: SetWithRow[] = [

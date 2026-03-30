@@ -4,6 +4,7 @@ import { fetchExercises, createExercise, updateExercise as updateExerciseApi, de
 import { fetchLabels, createLabel as createLabelApi, updateLabel as updateLabelApi, deleteLabel as deleteLabelApi, appendLabels } from '../api/labels-api';
 import { fetchTemplateRows, groupTemplateRows, createTemplate as createTemplateApi, updateTemplate as updateTemplateApi, deleteTemplate as deleteTemplateApi, updateExerciseNameInTemplates } from '../api/templates-api';
 import { fetchWorkouts, fetchSets, createWorkout as createWorkoutApi, updateWorkout as updateWorkoutApi, deleteWorkoutRows, appendSet as appendSetApi, appendSets as appendSetsApi, updateSet as updateSetApi, deleteSetRow, updateExerciseNameInSets } from '../api/workouts-api';
+import { toLocalDateStr } from '../components/activities/activities-helpers';
 import { colorKeyFromName } from '../api/label-colors';
 import type { TemplateExerciseInput } from '../api/templates-api';
 import type { ExerciseWithRow, LabelWithRow, TemplateRowWithRow, WorkoutType, WorkoutSet, SetWithRow } from '../api/types';
@@ -247,6 +248,87 @@ export async function removeExercise(
 }
 
 // ── Workouts ─────────────────────────────────────────────────────────
+
+export async function saveWorkoutForLater(
+  data: { type: WorkoutType; name: string; template_id?: string },
+  token: string,
+): Promise<void> {
+  try {
+    const workout = await createWorkoutApi({
+      type: data.type,
+      name: data.name,
+      template_id: data.template_id,
+      status: 'planned',
+    }, token);
+
+    const withRow = { ...workout, sheetRow: workouts.value.length + 2 };
+    workouts.value = [withRow, ...workouts.value];
+
+    // Pre-populate set structure from template (same as startWorkout)
+    if (data.template_id) {
+      await prepopulateSetsFromTemplate(workout.id, data.template_id, token);
+    } else {
+      activeWorkoutSets.value = [];
+      activeWarmupExercises.value = [];
+    }
+
+    showToast('Workout saved for later', 'success');
+  } catch (err) {
+    if (isReauthFailure(err)) throw err;
+    showToast('Failed to save workout', 'error');
+    throw err;
+  }
+}
+
+export async function startPlannedWorkout(
+  workoutId: string,
+  token: string,
+): Promise<string> {
+  try {
+    const workout = workouts.value.find((w) => w.id === workoutId);
+    if (!workout) throw new Error('Workout not found');
+
+    const now = new Date();
+    const date = toLocalDateStr(now);
+    const time = now.toTimeString().slice(0, 5);
+
+    const updated = { ...workout, status: '', date, time };
+
+    await updateWorkoutApi(workout.sheetRow, updated, token);
+    workouts.value = workouts.value.map((w) =>
+      w.id === workoutId ? { ...updated, sheetRow: workout.sheetRow } : w,
+    );
+
+    activeWorkoutId.value = workoutId;
+    activeWorkoutSets.value = sets.value.filter((s) => s.workout_id === workoutId);
+
+    // Restore warmup exercises from template if applicable
+    if (workout.template_id) {
+      const tpl = templates.value.find((t) => t.id === workout.template_id);
+      if (tpl) {
+        const workoutSets = activeWorkoutSets.value;
+        activeWarmupExercises.value = tpl.exercises
+          .filter((ex) => ex.section === 'warmup')
+          .filter((ex) => !workoutSets.some(
+            (s) => s.exercise_id === ex.exercise_id && s.exercise_order === ex.order && s.section === 'warmup',
+          ))
+          .map((ex) => ({
+            exercise_id: ex.exercise_id,
+            exercise_name: ex.exercise_name,
+            exercise_order: ex.order,
+          }));
+      }
+    } else {
+      activeWarmupExercises.value = [];
+    }
+
+    return workoutId;
+  } catch (err) {
+    if (isReauthFailure(err)) throw err;
+    showToast('Failed to start workout', 'error');
+    throw err;
+  }
+}
 
 export async function startWorkout(
   data: { type: WorkoutType; name: string; template_id?: string; copied_from?: string },
