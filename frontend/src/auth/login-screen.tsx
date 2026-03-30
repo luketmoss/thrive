@@ -8,7 +8,7 @@ export function LoginScreen() {
       <div class="login-card">
         <ThriveLogo size={64} class="login-icon" />
         <h1>Thrive</h1>
-        <p>Personal Workout Tracker</p>
+        <p>Stronger every day.</p>
         <button class="login-btn" onClick={login}>
           Sign in with Google
         </button>
