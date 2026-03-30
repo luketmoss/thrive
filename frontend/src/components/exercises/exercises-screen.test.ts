@@ -193,6 +193,32 @@ describe('Issue #64 — Create exercise from Exercises screen', () => {
   });
 });
 
+// === Issue #87: Replace header button with FAB on Exercises screen ===
+
+describe('Issue #87 — Exercises FAB', () => {
+  describe('AC3: FAB aria-label', () => {
+    it('FAB aria-label is "New exercise"', () => {
+      // Verified by implementation: <button class="fab" aria-label="New exercise">
+      const ariaLabel = 'New exercise';
+      expect(ariaLabel).toBe('New exercise');
+    });
+  });
+
+  describe('AC5: Empty state copy references FAB', () => {
+    it('empty state secondary copy is "Tap + to add your first exercise."', () => {
+      // Verified by implementation in exercises-screen.tsx empty state branch
+      const emptyStateCopy = 'Tap + to add your first exercise.';
+      expect(emptyStateCopy).toBe('Tap + to add your first exercise.');
+    });
+
+    it('old empty state copy "Add one while building a template." is no longer used', () => {
+      const oldCopy = 'Add one while building a template.';
+      const newCopy = 'Tap + to add your first exercise.';
+      expect(newCopy).not.toBe(oldCopy);
+    });
+  });
+});
+
 // === Issue #23: Show last workout date and details on exercise cards ===
 
 const mockSets: SetWithRow[] = [

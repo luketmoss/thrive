@@ -167,16 +167,8 @@ export function ExercisesScreen() {
 
   return (
     <div class="screen exercises-screen">
-      <header class="screen-header" style="display: flex; align-items: center; justify-content: space-between;">
+      <header class="screen-header">
         <h1>Exercises</h1>
-        <button
-          type="button"
-          class="btn btn-sm btn-primary"
-          style="min-height: 44px;"
-          onClick={() => setCreatingExercise(true)}
-        >
-          New Exercise
-        </button>
       </header>
       <div class="screen-body">
         <input
@@ -203,14 +195,14 @@ export function ExercisesScreen() {
         {exercisesSignal.value.length === 0 ? (
           <div class="empty-state">
             <p>No exercises yet.</p>
-            <p>Add one while building a template.</p>
+            <p>Tap + to add your first exercise.</p>
           </div>
         ) : filtered.length === 0 ? (
           <div class="empty-state">
             <p>No matching exercises</p>
           </div>
         ) : (
-          <div class="exercises-full-list">
+          <div class="exercises-full-list" style="padding-bottom: 88px;">
             {filtered.map(ex => {
               const isExpanded = expandedId === ex.id;
               const lastDate = lastPerformedMap.get(ex.id);
@@ -299,6 +291,13 @@ export function ExercisesScreen() {
           </div>
         )}
       </div>
+      <button
+        class="fab"
+        aria-label="New exercise"
+        onClick={() => setCreatingExercise(true)}
+      >
+        +
+      </button>
     </div>
   );
 }
