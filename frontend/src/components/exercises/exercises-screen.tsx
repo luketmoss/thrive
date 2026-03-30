@@ -63,7 +63,7 @@ export function ExercisesScreen() {
       const matchesSearch = ex.name.toLowerCase().includes(search.toLowerCase());
       const matchesTags =
         selectedTags.length === 0 ||
-        selectedTags.some(tag =>
+        selectedTags.every(tag =>
           ex.tags.split(',').map(t => t.trim()).includes(tag),
         );
       return matchesSearch && matchesTags;
