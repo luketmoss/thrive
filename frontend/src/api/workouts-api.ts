@@ -5,13 +5,13 @@ import { sheetsGet, sheetsAppend, sheetsUpdate, sheetsDeleteRow, getSheetId, wit
 import { isDemo, DEMO_WORKOUTS, DEMO_SETS } from './demo-data';
 import { toLocalDateStr } from '../components/activities/activities-helpers';
 
-// ── Workouts tab (A:J) ──────────────────────────────────────────────
+// ── Workouts tab (A:K) ──────────────────────────────────────────────
 
 export async function fetchWorkouts(token: string): Promise<WorkoutWithRow[]> {
   if (isDemo()) return [...DEMO_WORKOUTS];
 
   return withReauth(token, async (t) => {
-    const rows = await sheetsGet('Workouts!A2:J', t);
+    const rows = await sheetsGet('Workouts!A2:K', t);
     return rows.map((row, i) => ({
       id: row[0] || '',
       date: row[1] || '',
@@ -23,13 +23,14 @@ export async function fetchWorkouts(token: string): Promise<WorkoutWithRow[]> {
       duration_min: row[7] || '',
       created: row[8] || '',
       copied_from: row[9] || '',
+      status: row[10] || '',
       sheetRow: i + 2,
     }));
   });
 }
 
 export async function createWorkout(
-  data: { type: WorkoutType; name: string; template_id?: string; notes?: string; duration_min?: string; copied_from?: string; date?: string },
+  data: { type: WorkoutType; name: string; template_id?: string; notes?: string; duration_min?: string; copied_from?: string; date?: string; status?: string },
   token: string,
 ): Promise<Workout> {
   const id = `w_${crypto.randomUUID().slice(0, 8)}`;
@@ -49,11 +50,12 @@ export async function createWorkout(
     duration_min: data.duration_min || '',
     created,
     copied_from: data.copied_from || '',
+    status: data.status || '',
   };
 
   if (!isDemo()) {
     await withReauth(token, (t) =>
-      sheetsAppend('Workouts!A:J', [[
+      sheetsAppend('Workouts!A:K', [[
         workout.id,
         workout.date,
         workout.time,
@@ -64,6 +66,7 @@ export async function createWorkout(
         workout.duration_min,
         workout.created,
         workout.copied_from,
+        workout.status,
       ]], t),
     );
   }
@@ -79,7 +82,7 @@ export async function updateWorkout(
   if (isDemo()) return;
 
   await withReauth(token, (t) =>
-    sheetsUpdate(`Workouts!A${sheetRow}:J${sheetRow}`, [[
+    sheetsUpdate(`Workouts!A${sheetRow}:K${sheetRow}`, [[
       workout.id,
       workout.date,
       workout.time,
@@ -90,6 +93,7 @@ export async function updateWorkout(
       workout.duration_min,
       workout.created,
       workout.copied_from,
+      workout.status,
     ]], t),
   );
 }

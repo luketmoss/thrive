@@ -46,6 +46,7 @@ export interface Workout {
   duration_min: string;
   created: string;
   copied_from: string;
+  status: string; // '' = active/complete, 'planned' = saved for later
 }
 export interface WorkoutWithRow extends Workout { sheetRow: number; }
 

@@ -14,6 +14,7 @@ const WORKOUT_WEIGHT: WorkoutWithRow = {
   duration_min: '55',
   created: '2026-03-10T08:00:00.000Z',
   copied_from: '',
+  status: '',
   sheetRow: 2,
 };
 
@@ -28,6 +29,7 @@ const WORKOUT_STRETCH: WorkoutWithRow = {
   duration_min: '15',
   created: '2026-03-11T09:00:00.000Z',
   copied_from: '',
+  status: '',
   sheetRow: 3,
 };
 

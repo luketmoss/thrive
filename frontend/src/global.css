@@ -455,6 +455,91 @@ input, select, textarea {
   color: #d7ccc8;
 }
 
+.badge-planned {
+  background: #ede9fe;
+  color: #4c1d95;
+  border: 1.5px dashed #7c3aed;
+}
+
+[data-theme="dark"] .badge-planned {
+  background: #1e1a33;
+  color: #c4b5fd;
+  border-color: #7c3aed;
+}
+
+/* ===== Planned Section (Activities screen) ===== */
+.planned-section {
+  padding: 0 var(--space-md);
+}
+
+.workout-card-planned {
+  border: 1.5px dashed var(--color-border);
+  background: var(--color-surface-raised);
+}
+
+/* ===== Planned Workout Detail ===== */
+.planned-detail-start {
+  padding: var(--space-md) var(--space-md) 0;
+}
+
+.planned-start-btn {
+  width: 100%;
+}
+
+/* ===== Plan Action Sheet ===== */
+.plan-action-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.plan-action-sheet-title {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  margin-bottom: var(--space-xs);
+}
+
+.plan-action-sheet-note {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-sm);
+}
+
+.plan-action-sheet-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.plan-action-sheet-btn {
+  width: 100%;
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: var(--text-base);
+  min-height: 48px;
+  transition: background var(--transition-fast), opacity var(--transition-fast);
+}
+
+.btn-ghost:hover {
+  background: var(--color-surface-raised);
+}
+
+.btn-ghost:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ===== Section Badges ===== */
 .section-badge {
   display: inline-flex;

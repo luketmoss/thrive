@@ -24,9 +24,20 @@ export const isEditMode = signal(false);
 export const filterType = signal<WorkoutType | null>(null);
 export const filterTags = signal<string[]>([]);
 
+// Planned workouts (status === 'planned') — shown in dedicated section, excluded from history/stats
+export const plannedWorkouts = computed(() =>
+  workouts.value.filter(w => w.status === 'planned'),
+);
+
+// Completed workouts (status !== 'planned') — used for week streak / stats
+export const completedWorkouts = computed(() =>
+  workouts.value.filter(w => w.status !== 'planned'),
+);
+
 // Derived signals
 export const filteredWorkouts = computed(() => {
-  let result = workouts.value;
+  // Exclude planned workouts — they live in the planned section, not the history list
+  let result = workouts.value.filter(w => w.status !== 'planned');
   if (filterType.value) {
     result = result.filter(w => w.type === filterType.value);
   }

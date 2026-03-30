@@ -33,6 +33,7 @@ function makeWorkout(overrides: Partial<WorkoutWithRow> = {}): WorkoutWithRow {
     duration_min: '60',
     created: '2026-03-10T07:00:00.000Z',
     copied_from: '',
+    status: '',
     sheetRow: 2,
     ...overrides,
   };
@@ -139,7 +140,7 @@ describe('getLastTimeDataFrom', () => {
       { workout_id: 'w_demo001', exercise_id: 'ex_demo001', exercise_name: 'Bench Press BB', section: 'primary', exercise_order: 3, set_number: 4, planned_reps: '4-6', weight: '185', reps: '4', effort: 'Hard', notes: 'Last rep was a grinder', sheetRow: 7 },
     ];
     const allWorkouts: WorkoutWithRow[] = [
-      { id: 'w_demo001', date: '2025-01-14', time: '06:30', type: 'weight', name: 'Upper Push A', template_id: 'tpl_demo001', notes: '', duration_min: '62', created: '2025-01-14T06:30:00.000Z', copied_from: '', sheetRow: 2 },
+      { id: 'w_demo001', date: '2025-01-14', time: '06:30', type: 'weight', name: 'Upper Push A', template_id: 'tpl_demo001', notes: '', duration_min: '62', created: '2025-01-14T06:30:00.000Z', copied_from: '', status: '', sheetRow: 2 },
     ];
 
     const result = getLastTimeDataFrom('ex_demo001', 'w_new', allSets, allWorkouts);

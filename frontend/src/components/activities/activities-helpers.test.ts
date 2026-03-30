@@ -14,6 +14,7 @@ function makeWorkout(overrides: Partial<WorkoutWithRow> = {}): WorkoutWithRow {
     duration_min: '60',
     created: '',
     copied_from: '',
+    status: '',
     sheetRow: 2,
     ...overrides,
   };
@@ -277,6 +278,41 @@ describe('getWeekTotalMinutes', () => {
       makeWorkout({ id: 'w2', date: '2026-03-01', duration_min: '90' }), // outside week
     ];
     expect(getWeekTotalMinutes(workouts, today)).toBe(60);
+  });
+});
+
+// ── Planned workout exclusion (caller responsibility) ────────────────
+// The helpers receive pre-filtered workout lists. These tests confirm
+// that passing only completedWorkouts (status !== 'planned') correctly
+// excludes planned workouts from streak / stats.
+
+describe('week stats exclude planned workouts (via caller filtering)', () => {
+  const today = '2026-03-15'; // week = Mar 9–15
+
+  it('getWeekStreak: planned workouts filtered out by caller are not counted', () => {
+    const planned = makeWorkout({ id: 'w_planned', date: '2026-03-11', status: 'planned' });
+    const completed = makeWorkout({ id: 'w_done', date: '2026-03-09', status: '' });
+
+    // Caller filters out planned before passing
+    const completedOnly = [completed];
+    const days = getWeekStreak(completedOnly, today);
+
+    expect(days[0].hasWorkout).toBe(true);  // Mon Mar 9 — completed
+    expect(days[2].hasWorkout).toBe(false); // Wed Mar 11 — planned was excluded
+  });
+
+  it('getWeekWorkoutCount: planned workouts filtered out by caller are not counted', () => {
+    const planned = makeWorkout({ id: 'w_planned', date: '2026-03-11', status: 'planned' });
+    const completed = makeWorkout({ id: 'w_done', date: '2026-03-09', status: '' });
+    const completedOnly = [completed];
+    expect(getWeekWorkoutCount(completedOnly, today)).toBe(1);
+  });
+
+  it('getWeekTotalMinutes: planned workouts filtered out by caller are not summed', () => {
+    const planned = makeWorkout({ id: 'w_planned', date: '2026-03-11', duration_min: '45', status: 'planned' });
+    const completed = makeWorkout({ id: 'w_done', date: '2026-03-09', duration_min: '60', status: '' });
+    const completedOnly = [completed];
+    expect(getWeekTotalMinutes(completedOnly, today)).toBe(60);
   });
 });
 
