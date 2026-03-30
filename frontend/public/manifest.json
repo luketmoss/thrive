@@ -1,8 +1,8 @@
 {
-  "name": "Groundwork — Workout Tracker",
-  "short_name": "Groundwork",
+  "name": "Thrive — Workout Tracker",
+  "short_name": "Thrive",
   "description": "Personal workout tracker powered by Google Sheets",
-  "start_url": "/groundwork/",
+  "start_url": "/thrive/",
   "display": "standalone",
   "background_color": "#f8f9fa",
   "theme_color": "#4f6ef7",
