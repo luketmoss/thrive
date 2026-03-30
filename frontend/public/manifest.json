@@ -5,7 +5,7 @@
   "start_url": "/thrive/",
   "display": "standalone",
   "background_color": "#f8f9fa",
-  "theme_color": "#4f6ef7",
+  "theme_color": "#FF6B35",
   "icons": [
     {
       "src": "thrive-icon-192.svg",

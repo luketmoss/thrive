@@ -37,6 +37,9 @@
 
   /* Bottom nav height */
   --nav-height: 64px;
+
+  /* Brand accent (does not invert in dark mode) */
+  --color-accent: #FF6B35;
 }
 
 /* ===== Light Theme ===== */

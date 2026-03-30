@@ -1,9 +1,14 @@
-<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-  <rect width="512" height="512" fill="#4f6ef7"/>
-  <g transform="translate(128, 128) scale(4)">
-    <rect x="10" y="42" width="44" height="3" fill="white"/>
-    <rect x="24" y="32" width="16" height="3" fill="white"/>
-    <rect x="19" y="29" width="4" height="9" fill="white"/>
-    <rect x="41" y="29" width="4" height="9" fill="white"/>
+<svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <rect width="256" height="256" fill="#FF6B35"/>
+  <polygon fill="#FF6B35" points="128,36 200,78 200,164 128,206 56,164 56,78"/>
+  <g transform="translate(128 121) scale(1.5)">
+    <g fill="#FFFFFF" stroke="#1E1E1E" stroke-width="2.5" stroke-linejoin="miter" stroke-linecap="butt">
+      <rect x="-36" y="-16" width="9" height="32" rx="4"/>
+      <rect x="-25" y="-22" width="11" height="44" rx="5"/>
+      <rect x="14" y="-22" width="11" height="44" rx="5"/>
+      <rect x="27" y="-16" width="9" height="32" rx="4"/>
+    </g>
+    <rect x="-16" y="-3" width="32" height="6" fill="#FFFFFF"/>
+    <rect x="-14" y="-3" width="28" height="6" fill="#FFFFFF" stroke="#1E1E1E" stroke-width="2.5"/>
   </g>
 </svg>
