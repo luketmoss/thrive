@@ -16,8 +16,9 @@
   --space-2xl: 48px;
 
   /* Border radius */
-  --radius-sm: 6px;
-  --radius-md: 10px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius: 8px;
   --radius-lg: 16px;
   --radius-full: 9999px;
 
@@ -40,15 +41,20 @@
 
   /* Brand accent (does not invert in dark mode) */
   --color-accent: #FF6B35;
+
+  /* Composite shadows (light-mode optimized — add dark-mode overrides before use in dark contexts) */
+  --shadow: 0 1px 3px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-lg: 0 4px 12px rgba(0,0,0,0.15);
+  --shadow-strong: 0 4px 24px rgba(0,0,0,0.15);
 }
 
 /* ===== Light Theme ===== */
 [data-theme="light"] {
-  --color-bg: #f8f9fa;
+  --color-bg: #f0f2f5;
   --color-surface: #ffffff;
   --color-surface-raised: #ffffff;
   --color-border: #e2e6ea;
-  --color-border-light: #f0f2f4;
+  --color-border-light: #e4e8ec;
   --color-text: #1a1d21;
   --color-text-secondary: #5f6b7a;
   --color-text-muted: #8e99a4;
@@ -64,6 +70,14 @@
   --color-overlay: rgba(0, 0, 0, 0.4);
   --color-shadow: rgba(0, 0, 0, 0.08);
   --color-shadow-strong: rgba(0, 0, 0, 0.15);
+  --overlay-xs: rgba(0, 0, 0, 0.04);
+  --overlay-sm: rgba(0, 0, 0, 0.08);
+  --overlay-md: rgba(0, 0, 0, 0.12);
+  --overlay-lg: rgba(0, 0, 0, 0.16);
+  --overlay-xl: rgba(0, 0, 0, 0.24);
+  --overlay-2xl: rgba(0, 0, 0, 0.32);
+  --overlay-3xl: rgba(0, 0, 0, 0.40);
+  --overlay-4xl: rgba(0, 0, 0, 0.60);
 }
 
 /* ===== Dark Theme ===== */
@@ -88,6 +102,14 @@
   --color-overlay: rgba(0, 0, 0, 0.6);
   --color-shadow: rgba(0, 0, 0, 0.25);
   --color-shadow-strong: rgba(0, 0, 0, 0.4);
+  --overlay-xs: rgba(255, 255, 255, 0.04);
+  --overlay-sm: rgba(255, 255, 255, 0.08);
+  --overlay-md: rgba(255, 255, 255, 0.12);
+  --overlay-lg: rgba(255, 255, 255, 0.16);
+  --overlay-xl: rgba(255, 255, 255, 0.24);
+  --overlay-2xl: rgba(255, 255, 255, 0.32);
+  --overlay-3xl: rgba(255, 255, 255, 0.40);
+  --overlay-4xl: rgba(0, 0, 0, 0.60);
 }
 
 /* ===== Base Styles ===== */
@@ -165,7 +187,7 @@ input, select, textarea {
   background: var(--color-surface);
   border-radius: var(--radius-lg);
   box-shadow: 0 4px 24px var(--color-shadow);
-  max-width: 360px;
+  max-width: 400px;
   width: 100%;
 }
 
@@ -178,7 +200,7 @@ input, select, textarea {
   font-size: var(--text-2xl);
   font-weight: 700;
   margin-bottom: var(--space-xs);
-  color: var(--color-primary);
+  color: var(--color-text);
 }
 
 .login-card p {
