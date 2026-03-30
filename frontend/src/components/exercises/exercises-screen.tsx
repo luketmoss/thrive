@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'preact/hooks';
 import { exercises as exercisesSignal, sets, workouts, allTags } from '../../state/store';
-import { editExercise, removeExercise } from '../../state/actions';
+import { addExercise, editExercise, removeExercise } from '../../state/actions';
 import { useAuth } from '../../auth/auth-context';
 import { ExerciseForm } from './exercise-form';
 import { LabelBadge } from '../shared/label-badge';
@@ -50,6 +50,7 @@ export function ExercisesScreen() {
   const [search, setSearch] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [editingExercise, setEditingExercise] = useState<ExerciseWithRow | null>(null);
+  const [creatingExercise, setCreatingExercise] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const toggleTag = (tag: string) => {
@@ -92,6 +93,12 @@ export function ExercisesScreen() {
     setExpandedId(prev => (prev === exId ? null : exId));
   };
 
+  const handleCreate = async (data: { name: string; tags: string; notes: string }) => {
+    if (!token) return;
+    await addExercise(data, token);
+    setCreatingExercise(false);
+  };
+
   const handleEdit = async (data: { name: string; tags: string; notes: string }) => {
     if (!token || !editingExercise) return;
     const updated: ExerciseWithRow = {
@@ -110,6 +117,23 @@ export function ExercisesScreen() {
     await removeExercise(editingExercise, token);
     setEditingExercise(null);
   };
+
+  if (creatingExercise) {
+    return (
+      <div class="screen exercises-screen">
+        <header class="screen-header">
+          <h1>New Exercise</h1>
+        </header>
+        <div class="screen-body">
+          <ExerciseForm
+            onSubmit={handleCreate}
+            onCancel={() => setCreatingExercise(false)}
+            submitLabel="Create"
+          />
+        </div>
+      </div>
+    );
+  }
 
   if (editingExercise) {
     return (
@@ -143,8 +167,16 @@ export function ExercisesScreen() {
 
   return (
     <div class="screen exercises-screen">
-      <header class="screen-header">
+      <header class="screen-header" style="display: flex; align-items: center; justify-content: space-between;">
         <h1>Exercises</h1>
+        <button
+          type="button"
+          class="btn btn-sm btn-primary"
+          style="min-height: 44px;"
+          onClick={() => setCreatingExercise(true)}
+        >
+          New Exercise
+        </button>
       </header>
       <div class="screen-body">
         <input
