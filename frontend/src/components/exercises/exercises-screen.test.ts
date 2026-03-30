@@ -44,7 +44,7 @@ describe('ExercisesScreen', () => {
       expect(filtered[0].name).toBe('Bench Press');
     });
 
-    it('filters exercises by tag', () => {
+    it('filters exercises by tag (single tag — OR unchanged)', () => {
       exercises.value = mockExercises;
       const selectedTag = 'Pull';
       const filtered = exercises.value.filter(ex =>
@@ -52,6 +52,51 @@ describe('ExercisesScreen', () => {
       );
       expect(filtered).toHaveLength(1);
       expect(filtered[0].name).toBe('Row BB');
+    });
+
+    // Issue #63 — AND logic tests
+    it('AC2: multiple selected tags use AND logic — only exercises with ALL tags shown', () => {
+      exercises.value = mockExercises;
+      const selectedTags = ['Push', 'Chest'];
+      const filtered = exercises.value.filter(ex => {
+        const exTags = ex.tags.split(',').map(t => t.trim());
+        return selectedTags.every(tag => exTags.includes(tag));
+      });
+      // Only Bench Press has both Push and Chest
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].name).toBe('Bench Press');
+    });
+
+    it('AC2: AND logic excludes exercises that match only one of two selected tags', () => {
+      exercises.value = mockExercises;
+      const selectedTags = ['Pull', 'Chest'];
+      const filtered = exercises.value.filter(ex => {
+        const exTags = ex.tags.split(',').map(t => t.trim());
+        return selectedTags.every(tag => exTags.includes(tag));
+      });
+      // No exercise has both Pull and Chest
+      expect(filtered).toHaveLength(0);
+    });
+
+    it('AC3: no tags selected shows all exercises', () => {
+      exercises.value = mockExercises;
+      const selectedTags: string[] = [];
+      const filtered = exercises.value.filter(ex => {
+        if (selectedTags.length === 0) return true;
+        const exTags = ex.tags.split(',').map(t => t.trim());
+        return selectedTags.every(tag => exTags.includes(tag));
+      });
+      expect(filtered).toHaveLength(mockExercises.length);
+    });
+
+    it('AC4: AND filter returning zero results triggers empty state', () => {
+      exercises.value = mockExercises;
+      const selectedTags = ['Chest', 'Legs']; // no exercise has both
+      const filtered = exercises.value.filter(ex => {
+        const exTags = ex.tags.split(',').map(t => t.trim());
+        return selectedTags.every(tag => exTags.includes(tag));
+      });
+      expect(filtered).toHaveLength(0);
     });
 
     it('shows empty state when no exercises exist', () => {
