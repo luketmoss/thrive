@@ -568,16 +568,6 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
 
   const handleFinish = async () => {
     if (!token) return;
-
-    // AC7: Confirm before finishing when there are unsynced sets in the queue
-    const queuedCount = pendingSyncCount.value;
-    if (queuedCount > 0) {
-      const ok = confirm(
-        `You have ${queuedCount} unsynced set${queuedCount === 1 ? '' : 's'}. Finish anyway? Your sets will sync next time you open the app.`,
-      );
-      if (!ok) return;
-    }
-
     setFinishing(true);
     try {
       await flushPendingSaves();
@@ -653,7 +643,17 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
           <button
             ref={finishBtnRef}
             class="btn btn-primary"
-            onClick={() => setShowFinishForm(!showFinishForm)}
+            onClick={() => {
+              // AC7: Guard against finishing with unsynced sets
+              const queuedCount = pendingSyncCount.value;
+              if (queuedCount > 0) {
+                const ok = confirm(
+                  `You have ${queuedCount} unsynced set${queuedCount === 1 ? '' : 's'}. Finish anyway? Your sets will sync next time you open the app.`,
+                );
+                if (!ok) return;
+              }
+              setShowFinishForm(!showFinishForm);
+            }}
             disabled={finishing}
           >
             Finish
