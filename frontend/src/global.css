@@ -1691,11 +1691,9 @@ input, select, textarea {
   text-align: center;
 }
 
-.tracker-set-planned {
+.set-planned-target {
   font-size: var(--text-xs);
   color: var(--color-text-muted);
-  min-width: 32px;
-  text-align: center;
 }
 
 .set-inputs {

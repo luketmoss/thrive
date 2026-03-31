@@ -19,6 +19,62 @@ function makeSet(overrides: Partial<TrackerSet> = {}): TrackerSet {
 
 const noop = () => {};
 
+describe('SetRow — planned reps position (issue #91)', () => {
+  // AC1: planned_reps appears inside .set-inputs after the reps input
+  it('renders planned reps inside .set-inputs when provided', () => {
+    const { container } = render(
+      SetRow({ set: makeSet({ planned_reps: '6' }), onUpdate: noop, onRemove: noop })
+    );
+    const setInputs = container.querySelector('.set-inputs');
+    expect(setInputs).not.toBeNull();
+    const planned = setInputs!.querySelector('.set-planned-target');
+    expect(planned).not.toBeNull();
+  });
+
+  // AC1: old .tracker-set-planned span outside .set-inputs is gone
+  it('does not render .tracker-set-planned outside .set-inputs', () => {
+    const { container } = render(
+      SetRow({ set: makeSet({ planned_reps: '6' }), onUpdate: noop, onRemove: noop })
+    );
+    const trackerSet = container.querySelector('.tracker-set');
+    // .tracker-set-planned should not be a direct child of .tracker-set
+    const oldPlanned = trackerSet!.querySelector(':scope > .tracker-set-planned');
+    expect(oldPlanned).toBeNull();
+  });
+
+  // AC2: nothing rendered when planned_reps is empty
+  it('does not render planned reps element when planned_reps is empty', () => {
+    const { container } = render(
+      SetRow({ set: makeSet({ planned_reps: '' }), onUpdate: noop, onRemove: noop })
+    );
+    expect(container.querySelector('.set-planned-target')).toBeNull();
+  });
+
+  // AC3: DOM order inside .set-inputs is weight → separator → reps → planned-reps
+  it('renders planned reps after reps input inside .set-inputs', () => {
+    const { container } = render(
+      SetRow({ set: makeSet({ planned_reps: '4-6' }), onUpdate: noop, onRemove: noop })
+    );
+    const setInputs = container.querySelector('.set-inputs')!;
+    const children = Array.from(setInputs.children);
+    const repsInput = setInputs.querySelector('.set-reps-input')!;
+    const planned = setInputs.querySelector('.set-planned-target')!;
+    expect(children.indexOf(repsInput)).toBeLessThan(children.indexOf(planned));
+  });
+
+  // AC5: aria-label conveys target reps meaningfully; visual prefix is aria-hidden
+  it('has accessible aria-label and aria-hidden prefix on planned reps span', () => {
+    const { container } = render(
+      SetRow({ set: makeSet({ planned_reps: '6' }), onUpdate: noop, onRemove: noop })
+    );
+    const planned = container.querySelector('.set-planned-target') as HTMLElement;
+    expect(planned.getAttribute('aria-label')).toBe('target: 6 reps');
+    const prefix = planned.querySelector('[aria-hidden]') as HTMLElement;
+    expect(prefix).not.toBeNull();
+    expect(prefix.getAttribute('aria-hidden')).toBe('true');
+  });
+});
+
 describe('SetRow — saved checkmark layout (issue #26)', () => {
   // AC1 + AC2: The .set-saved span is always in the DOM (reserves space)
   it('always renders the .set-saved span regardless of saved state', () => {
