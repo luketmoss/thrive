@@ -25,10 +25,6 @@ export function SetRow({ set, onUpdate, onRemove }: Props) {
     <div class="tracker-set">
       <span class="tracker-set-number">S{set.set_number}</span>
 
-      {set.planned_reps && (
-        <span class="tracker-set-planned">{set.planned_reps}</span>
-      )}
-
       <div class="set-inputs">
         <input
           class="form-input set-weight-input"
@@ -47,6 +43,11 @@ export function SetRow({ set, onUpdate, onRemove }: Props) {
           value={set.reps}
           onInput={(e) => onUpdate({ reps: (e.target as HTMLInputElement).value })}
         />
+        {set.planned_reps && (
+          <span class="set-planned-target" aria-label={`target: ${set.planned_reps} reps`}>
+            <span aria-hidden="true">/ </span>{set.planned_reps}
+          </span>
+        )}
       </div>
 
       <div class="effort-toggle">
