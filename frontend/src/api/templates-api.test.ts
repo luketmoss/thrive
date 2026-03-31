@@ -12,8 +12,6 @@ function makeRow(overrides: Partial<TemplateRowWithRow> = {}): TemplateRowWithRo
     section: 'primary',
     sets: '4',
     reps: '8-10',
-    rest_seconds: '90',
-    group_rest_seconds: '120',
     created: '2025-01-01T00:00:00.000Z',
     updated: '2025-01-01T00:00:00.000Z',
     sheetRow: 2,
@@ -85,8 +83,6 @@ describe('groupTemplateRows', () => {
       section: 'SS1',
       sets: '3',
       reps: '12-15',
-      rest_seconds: '15',
-      group_rest_seconds: '60',
     });
     const templates = groupTemplateRows([row]);
     const exercise = templates[0].exercises[0];
@@ -94,8 +90,6 @@ describe('groupTemplateRows', () => {
     expect(exercise.section).toBe('SS1');
     expect(exercise.sets).toBe('3');
     expect(exercise.reps).toBe('12-15');
-    expect(exercise.rest_seconds).toBe('15');
-    expect(exercise.group_rest_seconds).toBe('60');
     expect(exercise.sheetRow).toBe(2);
   });
 

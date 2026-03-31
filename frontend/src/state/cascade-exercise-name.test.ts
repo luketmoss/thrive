@@ -66,15 +66,15 @@ const mockTemplates: Template[] = [
     id: 'tpl_1',
     name: 'Push Day',
     exercises: [
-      { template_id: 'tpl_1', template_name: 'Push Day', order: 1, exercise_id: 'ex_1', exercise_name: 'Bench Press', section: 'primary', sets: '4', reps: '6', rest_seconds: '90', group_rest_seconds: '', created: '', updated: '', sheetRow: 2 },
-      { template_id: 'tpl_1', template_name: 'Push Day', order: 2, exercise_id: 'ex_2', exercise_name: 'Squat', section: 'primary', sets: '3', reps: '8', rest_seconds: '60', group_rest_seconds: '', created: '', updated: '', sheetRow: 3 },
+      { template_id: 'tpl_1', template_name: 'Push Day', order: 1, exercise_id: 'ex_1', exercise_name: 'Bench Press', section: 'primary', sets: '4', reps: '6', created: '', updated: '', sheetRow: 2 },
+      { template_id: 'tpl_1', template_name: 'Push Day', order: 2, exercise_id: 'ex_2', exercise_name: 'Squat', section: 'primary', sets: '3', reps: '8', created: '', updated: '', sheetRow: 3 },
     ],
   },
   {
     id: 'tpl_2',
     name: 'Full Body',
     exercises: [
-      { template_id: 'tpl_2', template_name: 'Full Body', order: 1, exercise_id: 'ex_1', exercise_name: 'Bench Press', section: 'SS1', sets: '3', reps: '10', rest_seconds: '', group_rest_seconds: '60', created: '', updated: '', sheetRow: 4 },
+      { template_id: 'tpl_2', template_name: 'Full Body', order: 1, exercise_id: 'ex_1', exercise_name: 'Bench Press', section: 'SS1', sets: '3', reps: '10', created: '', updated: '', sheetRow: 4 },
     ],
   },
 ];

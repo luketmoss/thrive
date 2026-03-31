@@ -20,10 +20,8 @@ export interface TemplateRow {
   exercise_id: string;
   exercise_name: string;
   section: Section | string;
-  sets: string;        // "4-5" range
-  reps: string;        // "4-6" range
-  rest_seconds: string;
-  group_rest_seconds: string;
+  sets: string;
+  reps: string;
   created: string;
   updated: string;
 }
@@ -68,6 +66,7 @@ export interface SetWithRow extends WorkoutSet { sheetRow: number; }
 export interface BuilderExercise {
   exercise_id: string;
   exercise_name: string;
+  section: string;
   sets: number;
   planned_reps: string;
 }

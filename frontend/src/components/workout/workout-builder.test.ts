@@ -9,6 +9,7 @@ describe('WorkoutBuilder — BuilderExercise type', () => {
     const ex: BuilderExercise = {
       exercise_id: 'ex_1',
       exercise_name: 'Bench Press',
+      section: 'primary',
       sets: 3,
       planned_reps: '',
     };
@@ -20,6 +21,7 @@ describe('WorkoutBuilder — BuilderExercise type', () => {
     const ex: BuilderExercise = {
       exercise_id: 'ex_2',
       exercise_name: 'Squat',
+      section: 'primary',
       sets: 4,
       planned_reps: '8-12',
     };
@@ -31,8 +33,8 @@ describe('WorkoutBuilder — set prepopulation logic', () => {
   // AC3: sets are pre-populated with one row per configured set count
   it('generates correct number of set rows from builder exercises', () => {
     const exercises: BuilderExercise[] = [
-      { exercise_id: 'ex_1', exercise_name: 'Bench Press', sets: 3, planned_reps: '8-12' },
-      { exercise_id: 'ex_2', exercise_name: 'Squat', sets: 5, planned_reps: '5' },
+      { exercise_id: 'ex_1', exercise_name: 'Bench Press', section: 'primary', sets: 3, planned_reps: '8-12' },
+      { exercise_id: 'ex_2', exercise_name: 'Squat', section: 'primary', sets: 5, planned_reps: '5' },
     ];
 
     const sets = exercises.flatMap((ex, index) =>
@@ -54,7 +56,7 @@ describe('WorkoutBuilder — set prepopulation logic', () => {
   // AC3: section defaults to 'primary'
   it('all generated sets have section "primary"', () => {
     const exercises: BuilderExercise[] = [
-      { exercise_id: 'ex_1', exercise_name: 'Deadlift', sets: 4, planned_reps: '3-5' },
+      { exercise_id: 'ex_1', exercise_name: 'Deadlift', section: 'primary', sets: 4, planned_reps: '3-5' },
     ];
 
     const sets = exercises.flatMap((ex, index) =>
@@ -72,9 +74,9 @@ describe('WorkoutBuilder — set prepopulation logic', () => {
   // AC3: exercise_order follows list position
   it('exercise_order follows builder list position (1-based)', () => {
     const exercises: BuilderExercise[] = [
-      { exercise_id: 'ex_1', exercise_name: 'Bench', sets: 2, planned_reps: '' },
-      { exercise_id: 'ex_2', exercise_name: 'Row', sets: 2, planned_reps: '' },
-      { exercise_id: 'ex_3', exercise_name: 'Curl', sets: 2, planned_reps: '' },
+      { exercise_id: 'ex_1', exercise_name: 'Bench', section: 'primary', sets: 2, planned_reps: '' },
+      { exercise_id: 'ex_2', exercise_name: 'Row', section: 'primary', sets: 2, planned_reps: '' },
+      { exercise_id: 'ex_3', exercise_name: 'Curl', section: 'primary', sets: 2, planned_reps: '' },
     ];
 
     const sets = exercises.flatMap((ex, index) =>
@@ -92,7 +94,7 @@ describe('WorkoutBuilder — set prepopulation logic', () => {
   // AC3: planned_reps from builder is carried through
   it('planned_reps from builder is carried into each set row', () => {
     const exercises: BuilderExercise[] = [
-      { exercise_id: 'ex_1', exercise_name: 'Press', sets: 3, planned_reps: '10-15' },
+      { exercise_id: 'ex_1', exercise_name: 'Press', section: 'primary', sets: 3, planned_reps: '10-15' },
     ];
 
     const sets = exercises.flatMap((ex) =>
@@ -121,7 +123,7 @@ describe('WorkoutBuilder — exercise list management', () => {
   // AC2: duplicate exercises are skipped
   it('duplicate exercise_id should be detectable for skip logic', () => {
     const exercises: BuilderExercise[] = [
-      { exercise_id: 'ex_1', exercise_name: 'Bench', sets: 3, planned_reps: '' },
+      { exercise_id: 'ex_1', exercise_name: 'Bench', section: 'primary', sets: 3, planned_reps: '' },
     ];
     const newExId = 'ex_1';
     const isDuplicate = exercises.some((e) => e.exercise_id === newExId);
@@ -131,9 +133,9 @@ describe('WorkoutBuilder — exercise list management', () => {
   // AC2: removal filters by exercise_id
   it('remove filters out the target exercise', () => {
     const exercises: BuilderExercise[] = [
-      { exercise_id: 'ex_1', exercise_name: 'Bench', sets: 3, planned_reps: '' },
-      { exercise_id: 'ex_2', exercise_name: 'Squat', sets: 4, planned_reps: '5' },
-      { exercise_id: 'ex_3', exercise_name: 'Row', sets: 3, planned_reps: '8-12' },
+      { exercise_id: 'ex_1', exercise_name: 'Bench', section: 'primary', sets: 3, planned_reps: '' },
+      { exercise_id: 'ex_2', exercise_name: 'Squat', section: 'primary', sets: 4, planned_reps: '5' },
+      { exercise_id: 'ex_3', exercise_name: 'Row', section: 'primary', sets: 3, planned_reps: '8-12' },
     ];
     const afterRemove = exercises.filter((e) => e.exercise_id !== 'ex_2');
     expect(afterRemove).toHaveLength(2);

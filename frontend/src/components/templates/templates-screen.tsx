@@ -2,6 +2,7 @@ import { templates } from '../../state/store';
 import { navigate } from '../../router/router';
 import { currentRoute } from '../../router/router';
 import { TemplateEditor } from './template-editor';
+import { TemplateDetail } from './template-detail';
 
 function sectionSummary(tpl: { exercises: Array<{ section: string }> }): string {
   const sections = new Set(tpl.exercises.map((e) => e.section));
@@ -64,6 +65,8 @@ export function TemplatesScreen() {
       return <TemplateEditor />;
     case 'template-edit':
       return <TemplateEditor templateId={route.params.id} />;
+    case 'template-detail':
+      return <TemplateDetail templateId={route.params.id} />;
     default:
       return <TemplateList />;
   }

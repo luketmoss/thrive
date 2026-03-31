@@ -52,7 +52,10 @@ export function SimpleWorkout({ workoutType, onBack }: Props) {
       <div class="template-editor-header">
         <button
           class="template-editor-back"
-          onClick={onBack}
+          onClick={() => {
+            if ((notes || duration) && !confirm('Discard changes? Your edits will not be saved.')) return;
+            onBack();
+          }}
           aria-label="Back"
         >
           ← Back

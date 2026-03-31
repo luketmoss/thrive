@@ -1,14 +1,10 @@
-import { useState, useEffect, useRef } from 'preact/hooks';
-import { templates } from '../../state/store';
-import { addTemplate, editTemplate, removeTemplate } from '../../state/actions';
-import { useAuth } from '../../auth/auth-context';
-import { navigate } from '../../router/router';
+import { useState, useRef } from 'preact/hooks';
 import { AddExerciseModal } from '../exercises/add-exercise-modal';
 import { ExerciseCompactCard } from '../shared/exercise-compact-card';
 import { SectionPicker } from '../shared/section-picker';
 import type { ExerciseWithRow } from '../../api/types';
 
-export interface TemplateExerciseSlot {
+export interface PlannerExercise {
   exercise_id: string;
   exercise_name: string;
   section: string;
@@ -17,43 +13,30 @@ export interface TemplateExerciseSlot {
 }
 
 interface Props {
-  templateId?: string;
+  initialName?: string;
+  initialExercises?: PlannerExercise[];
+  onSave: (name: string, exercises: PlannerExercise[]) => Promise<void>;
+  onDiscard: () => void;
+  saving: boolean;
 }
 
-export function TemplateEditor({ templateId }: Props) {
-  const { token } = useAuth();
-  const [name, setName] = useState('');
-  const [exercises, setExercises] = useState<TemplateExerciseSlot[]>([]);
+export function WorkoutPlanner({ initialName = '', initialExercises = [], onSave, onDiscard, saving }: Props) {
+  const startName = initialName || 'Custom Workout';
+  const [name, setName] = useState(startName);
+  const [exercises, setExercises] = useState<PlannerExercise[]>(initialExercises);
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [editingIndex, setEditingIndex] = useState(-1);
-  const [saving, setSaving] = useState(false);
 
-  // Track initial state for dirty checking
-  const initialState = useRef({ name: '', exercises: '' });
+  const initialSnapshot = useRef({ name: startName, exercises: JSON.stringify(initialExercises) });
 
-  // Populate state in edit mode
-  useEffect(() => {
-    if (!templateId) {
-      initialState.current = { name: '', exercises: '' };
-      return;
-    }
-    const tpl = templates.value.find((t) => t.id === templateId);
-    if (tpl) {
-      const mapped = tpl.exercises.map((r) => ({
-        exercise_id: r.exercise_id,
-        exercise_name: r.exercise_name,
-        section: r.section as string,
-        sets: r.sets,
-        reps: r.reps,
-      }));
-      setName(tpl.name);
-      setExercises(mapped);
-      initialState.current = { name: tpl.name, exercises: JSON.stringify(mapped) };
-    }
-  }, [templateId]);
+  const isDirty = () => {
+    if (name !== initialSnapshot.current.name) return true;
+    if (JSON.stringify(exercises) !== initialSnapshot.current.exercises) return true;
+    return false;
+  };
 
   const handleExerciseSelected = (ex: ExerciseWithRow) => {
-    const slot: TemplateExerciseSlot = {
+    const slot: PlannerExercise = {
       exercise_id: ex.id,
       exercise_name: ex.name,
       section: 'primary',
@@ -62,10 +45,10 @@ export function TemplateEditor({ templateId }: Props) {
     };
     setExercises((prev) => [...prev, slot]);
     setShowExercisePicker(false);
-    setEditingIndex(exercises.length); // open config for newly added
+    setEditingIndex(exercises.length);
   };
 
-  const updateExercise = (index: number, updated: Partial<TemplateExerciseSlot>) => {
+  const updateExercise = (index: number, updated: Partial<PlannerExercise>) => {
     setExercises((prev) =>
       prev.map((ex, i) => (i === index ? { ...ex, ...updated } : ex)),
     );
@@ -100,62 +83,8 @@ export function TemplateEditor({ templateId }: Props) {
   };
 
   const handleSave = async () => {
-    if (!token || !name.trim() || exercises.length === 0) return;
-    setSaving(true);
-    try {
-      const inputs = exercises.map((ex) => ({
-        exercise_id: ex.exercise_id,
-        exercise_name: ex.exercise_name,
-        section: ex.section,
-        sets: ex.sets || '1',
-        reps: ex.reps,
-      }));
-
-      if (templateId) {
-        const tpl = templates.value.find((t) => t.id === templateId);
-        const existingRows = tpl?.exercises ?? [];
-        await editTemplate(templateId, name.trim(), inputs, existingRows, token);
-        navigate(`/templates/${templateId}`);
-      } else {
-        await addTemplate(name.trim(), inputs, token);
-        navigate('/templates');
-      }
-    } catch {
-      // Error toast shown by action
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!token || !templateId) return;
-    if (!confirm('Delete this template? This cannot be undone.')) return;
-    const tpl = templates.value.find((t) => t.id === templateId);
-    if (!tpl) return;
-    setSaving(true);
-    try {
-      await removeTemplate(templateId, tpl.exercises, token);
-      navigate('/templates');
-    } catch {
-      // Error toast shown by action
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const isDirty = () => {
-    if (name !== initialState.current.name) return true;
-    if (JSON.stringify(exercises) !== initialState.current.exercises) return true;
-    return false;
-  };
-
-  const handleDiscard = () => {
-    if (isDirty() && !confirm('Discard changes? Your edits will not be saved.')) return;
-    if (templateId) {
-      navigate(`/templates/${templateId}`);
-    } else {
-      navigate('/templates');
-    }
+    if (exercises.length === 0) return;
+    await onSave(name.trim() || 'Custom Workout', exercises);
   };
 
   return (
@@ -163,7 +92,10 @@ export function TemplateEditor({ templateId }: Props) {
       <div class="template-editor-header">
         <button
           class="template-editor-back"
-          onClick={handleDiscard}
+          onClick={() => {
+            if (isDirty() && !confirm('Discard changes? Your edits will not be saved.')) return;
+            onDiscard();
+          }}
           aria-label="Back"
         >
           ← Back
@@ -171,14 +103,14 @@ export function TemplateEditor({ templateId }: Props) {
         <button
           class="btn btn-primary"
           onClick={handleSave}
-          disabled={saving || !name.trim() || exercises.length === 0}
+          disabled={saving || exercises.length === 0}
         >
-          {saving ? 'Saving...' : 'Save Template'}
+          {saving ? 'Saving...' : 'Save Workout'}
         </button>
       </div>
 
       <div class="form-group">
-        <label class="form-label">Template Name</label>
+        <label class="form-label">Workout Name</label>
         <input
           class="form-input"
           type="text"
@@ -192,7 +124,7 @@ export function TemplateEditor({ templateId }: Props) {
         {exercises.length === 0 && (
           <div class="empty-state">
             <p>No exercises yet</p>
-            <p>Add exercises to build your template</p>
+            <p>Add exercises to plan your workout</p>
           </div>
         )}
 
@@ -262,25 +194,16 @@ export function TemplateEditor({ templateId }: Props) {
         + Add Exercise
       </button>
 
-      {templateId && (
-        <>
-          <button
-            class="btn btn-ghost"
-            style={{ width: '100%', marginTop: 'var(--space-md)' }}
-            onClick={handleDiscard}
-          >
-            Discard Changes
-          </button>
-          <button
-            class="btn btn-danger"
-            style={{ width: '100%', marginTop: 'var(--space-sm)' }}
-            onClick={handleDelete}
-            disabled={saving}
-          >
-            Delete Template
-          </button>
-        </>
-      )}
+      <button
+        class="btn btn-ghost"
+        style={{ width: '100%', marginTop: 'var(--space-md)' }}
+        onClick={() => {
+          if (isDirty() && !confirm('Discard changes? Your edits will not be saved.')) return;
+          onDiscard();
+        }}
+      >
+        Discard
+      </button>
 
       {showExercisePicker && (
         <AddExerciseModal

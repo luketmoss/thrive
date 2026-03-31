@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 import { navigate } from '../../router/router';
-import { filteredWorkouts, plannedWorkouts, completedWorkouts, sets, exercises } from '../../state/store';
+import { filteredWorkouts, activeWorkouts, plannedWorkouts, completedWorkouts, sets, exercises } from '../../state/store';
 import { ActivitiesFilters } from './activities-filters';
 import {
   groupWorkoutsByDate,
@@ -104,6 +104,26 @@ export function ActivitiesScreen() {
       </div>
 
       {showFilters && <ActivitiesFilters />}
+
+      {/* In Progress section — tap to resume active workout */}
+      {activeWorkouts.value.length > 0 && (
+        <div class="planned-section">
+          <div class="date-group-header first">In Progress</div>
+          {activeWorkouts.value.map((w) => (
+            <div
+              key={w.id}
+              class="workout-card workout-card-active"
+              onClick={() => navigate(`/workout/${w.id}`)}
+            >
+              <div class="workout-card-center">
+                <span class="workout-name">{w.name || w.type}</span>
+                <span class="workout-meta">Tap to resume</span>
+              </div>
+              <span class="type-badge badge-active">Active</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Planned workouts section — between streak bar and history */}
       {planned.length > 0 && (

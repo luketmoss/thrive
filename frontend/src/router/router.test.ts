@@ -87,9 +87,18 @@ describe('router', () => {
     expect(currentRoute.value.params).toEqual({});
   });
 
-  it('parses /templates/:id as template-edit with params', async () => {
+  it('parses /templates/:id as template-detail with params', async () => {
     const { currentRoute } = await import('./router');
     window.location.hash = '/templates/tpl_demo001';
+    window.dispatchEvent(new Event('hashchange'));
+
+    expect(currentRoute.value.name).toBe('template-detail');
+    expect(currentRoute.value.params).toEqual({ id: 'tpl_demo001' });
+  });
+
+  it('parses /templates/:id/edit as template-edit with params', async () => {
+    const { currentRoute } = await import('./router');
+    window.location.hash = '/templates/tpl_demo001/edit';
     window.dispatchEvent(new Event('hashchange'));
 
     expect(currentRoute.value.name).toBe('template-edit');
