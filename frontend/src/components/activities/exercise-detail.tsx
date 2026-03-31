@@ -1,4 +1,5 @@
 import type { SetWithRow } from '../../api/types';
+import { sectionBadgeClass } from '../shared/section-utils';
 
 interface ExerciseGroup {
   exercise_id: string;
@@ -12,11 +13,6 @@ interface Props {
   group: ExerciseGroup;
   expanded: boolean;
   onToggle: () => void;
-}
-
-function sectionBadgeClass(section: string): string {
-  if (section.startsWith('SS')) return 'section-badge section-ss';
-  return `section-badge section-${section}`;
 }
 
 function effortClass(effort: string): string {

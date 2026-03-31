@@ -35,17 +35,7 @@ interface Props {
   totalExercises: number;
 }
 
-function sectionBadgeClass(section: string): string {
-  if (section.startsWith('SS')) return 'section-badge section-ss';
-  return `section-badge section-${section}`;
-}
-
-function sectionPillClass(section: string, active: boolean): string {
-  const base = 'section-picker-pill';
-  if (!active) return base;
-  if (section.startsWith('SS')) return `${base} section-picker-pill-active section-ss`;
-  return `${base} section-picker-pill-active section-${section}`;
-}
+import { sectionBadgeClass, sectionPillClass } from '../shared/section-utils';
 
 export function ExerciseRow({
   exercise,

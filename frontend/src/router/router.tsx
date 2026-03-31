@@ -28,9 +28,13 @@ function parseHash(hash: string): ParsedRoute {
   // /templates/new
   if (path === '/templates/new') return { name: 'template-new', params: {}, hash: path };
 
+  // /templates/:id/edit
+  match = path.match(/^\/templates\/([^/]+)\/edit$/);
+  if (match) return { name: 'template-edit', params: { id: match[1] }, hash: path };
+
   // /templates/:id
   match = path.match(/^\/templates\/([^/]+)$/);
-  if (match) return { name: 'template-edit', params: { id: match[1] }, hash: path };
+  if (match) return { name: 'template-detail', params: { id: match[1] }, hash: path };
 
   // /templates
   if (path === '/templates') return { name: 'templates', params: {}, hash: path };

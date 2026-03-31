@@ -4,14 +4,16 @@ import { startWorkout, saveWorkoutForLater } from '../../state/actions';
 import { useAuth } from '../../auth/auth-context';
 import { navigate } from '../../router/router';
 import { TypeSelector } from './type-selector';
+import { IntentSelector } from './intent-selector';
 import { TemplatePicker } from './template-picker';
 import { WorkoutTracker } from './workout-tracker';
 import { SimpleWorkout } from './simple-workout';
-import { PlanActionSheet } from './plan-action-sheet';
-import { WorkoutBuilder } from './workout-builder';
+import { WorkoutPlanner } from './workout-planner';
 import type { WorkoutType, BuilderExercise } from '../../api/types';
+import type { PlannerExercise } from './workout-planner';
 
-type FlowStep = 'type' | 'template' | 'builder' | 'tracker' | 'simple';
+type FlowStep = 'type' | 'intent' | 'template' | 'planner' | 'tracker' | 'simple';
+type Intent = 'track' | 'plan';
 
 interface Props {
   workoutId?: string;
@@ -23,12 +25,13 @@ export function WorkoutFlow({ workoutId }: Props) {
   const [selectedType, setSelectedType] = useState<WorkoutType>('weight');
   const [activeId, setActiveId] = useState<string | null>(workoutId || null);
   const [workoutName, setWorkoutName] = useState('');
+  const [intent, setIntent] = useState<Intent>('track');
   const [starting, setStarting] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Action sheet state (for template path only)
-  const [showActionSheet, setShowActionSheet] = useState(false);
-  const [pendingTemplateId, setPendingTemplateId] = useState<string | null>(null);
+  // Planner state: exercises to pre-populate when user picks a template for "plan for later"
+  const [plannerName, setPlannerName] = useState('');
+  const [plannerExercises, setPlannerExercises] = useState<PlannerExercise[]>([]);
 
   // If resuming an existing workout, jump to the correct step
   useEffect(() => {
@@ -75,58 +78,93 @@ export function WorkoutFlow({ workoutId }: Props) {
   const handleTypeSelect = (type: WorkoutType) => {
     setSelectedType(type);
     if (type === 'weight') {
-      setStep('template');
+      setStep('intent');
     } else {
       setStep('simple');
     }
   };
 
-  // Called when the user taps a template card — show the action sheet
-  const handleTemplateCardTap = (templateId: string) => {
-    setPendingTemplateId(templateId);
-    setShowActionSheet(true);
+  const handleIntentSelect = (selectedIntent: Intent) => {
+    setIntent(selectedIntent);
+    setStep('template');
   };
 
-  // Called when the user taps "Build Custom" — navigate to builder screen
-  const handleBuildCustomTap = () => {
-    setStep('builder');
-  };
+  // Called when the user taps a template card
+  const handleTemplateCardTap = async (templateId: string) => {
+    const tpl = templates.value.find((t) => t.id === templateId);
+    if (!tpl) return;
 
-  const handleCancelActionSheet = () => {
-    setShowActionSheet(false);
-    setPendingTemplateId(null);
-  };
-
-  // "Start Now" path (template action sheet)
-  const handleStartNow = async () => {
-    if (!token || starting || !pendingTemplateId) return;
-    setStarting(true);
-    try {
-      const tpl = templates.value.find((t) => t.id === pendingTemplateId);
-      const name = tpl?.name || 'Workout';
-      const id = await startWorkout({ type: 'weight', name, template_id: pendingTemplateId }, token);
-
-      setShowActionSheet(false);
-      setActiveId(id);
-      setWorkoutName(name);
-      setStep('tracker');
-      window.location.hash = `#/workout/${id}`;
-    } catch {
-      // Error toast shown by action
-    } finally {
-      setStarting(false);
+    if (intent === 'track') {
+      // Track Now: go straight to tracker with template exercises
+      if (!token || starting) return;
+      setStarting(true);
+      try {
+        const name = tpl.name;
+        const id = await startWorkout({ type: 'weight', name, template_id: templateId }, token);
+        setActiveId(id);
+        setWorkoutName(name);
+        setStep('tracker');
+        window.location.hash = `#/workout/${id}`;
+      } catch {
+        // Error toast shown by action
+      } finally {
+        setStarting(false);
+      }
+    } else {
+      // Plan for Later: populate planner with template exercises
+      setPlannerName(tpl.name);
+      setPlannerExercises(
+        tpl.exercises.map((ex) => ({
+          exercise_id: ex.exercise_id,
+          exercise_name: ex.exercise_name,
+          section: ex.section as string,
+          sets: ex.section === 'warmup' ? '' : (ex.sets || '1'),
+          reps: ex.reps,
+        })),
+      );
+      setStep('planner');
     }
   };
 
-  // "Save for Later" path (template action sheet)
-  const handleSaveForLater = async () => {
-    if (!token || saving || !pendingTemplateId) return;
+  // Called when the user taps "Build Custom"
+  const handleBuildCustomTap = async () => {
+    if (intent === 'track') {
+      // Track Now + Build Custom: go straight to tracker with empty workout
+      if (!token) return;
+      setStarting(true);
+      try {
+        const name = 'Custom Workout';
+        const id = await startWorkout({ type: 'weight', name }, token);
+        setActiveId(id);
+        setWorkoutName(name);
+        setStep('tracker');
+        window.location.hash = `#/workout/${id}`;
+      } catch {
+        // Error toast shown by action
+      } finally {
+        setStarting(false);
+      }
+    } else {
+      // Plan for Later + Build Custom: go to empty planner
+      setPlannerName('');
+      setPlannerExercises([]);
+      setStep('planner');
+    }
+  };
+
+  // Planner: "Save Workout" handler
+  const handlePlannerSave = async (name: string, exercises: PlannerExercise[]) => {
+    if (!token) return;
     setSaving(true);
     try {
-      const tpl = templates.value.find((t) => t.id === pendingTemplateId);
-      const name = tpl?.name || 'Workout';
-      await saveWorkoutForLater({ type: 'weight', name, template_id: pendingTemplateId }, token);
-      setShowActionSheet(false);
+      const builderExercises: BuilderExercise[] = exercises.map((ex) => ({
+        exercise_id: ex.exercise_id,
+        exercise_name: ex.exercise_name,
+        section: ex.section,
+        sets: Number(ex.sets) || 1,
+        planned_reps: ex.reps,
+      }));
+      await saveWorkoutForLater({ type: 'weight', name, exercises: builderExercises }, token);
       navigate('/');
     } catch {
       // Error toast shown by action
@@ -135,52 +173,11 @@ export function WorkoutFlow({ workoutId }: Props) {
     }
   };
 
-  // Builder: "Start Workout" handler
-  const handleBuilderStart = async (exercises: BuilderExercise[]) => {
-    if (!token) return;
-    setStarting(true);
-    try {
-      const name = 'Custom Workout';
-      const id = await startWorkout({ type: 'weight', name, exercises }, token);
-      setActiveId(id);
-      setWorkoutName(name);
-      setStep('tracker');
-      window.location.hash = `#/workout/${id}`;
-    } catch {
-      // Error toast shown by action
-    } finally {
-      setStarting(false);
-    }
-  };
-
-  // Builder: "Save as Planned" handler
-  const handleBuilderSave = async (exercises: BuilderExercise[]) => {
-    if (!token) return;
-    setSaving(true);
-    try {
-      await saveWorkoutForLater({ type: 'weight', name: 'Custom Workout', exercises }, token);
-      navigate('/');
-    } catch {
-      // Error toast shown by action
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // Pending workout name for the action sheet title
-  const getPendingName = () => {
-    if (pendingTemplateId) {
-      const tpl = templates.value.find((t) => t.id === pendingTemplateId);
-      return tpl?.name || 'Workout';
-    }
-    return 'Workout';
-  };
-
-  if ((starting || saving) && step !== 'builder') {
+  if (starting && step !== 'planner') {
     return (
       <div class="loading-screen">
         <div class="spinner" />
-        <p>{saving ? 'Saving…' : 'Starting workout…'}</p>
+        <p>Starting workout…</p>
       </div>
     );
   }
@@ -188,33 +185,29 @@ export function WorkoutFlow({ workoutId }: Props) {
   switch (step) {
     case 'type':
       return <TypeSelector onSelect={handleTypeSelect} />;
+    case 'intent':
+      return (
+        <IntentSelector
+          onTrackNow={() => handleIntentSelect('track')}
+          onPlanForLater={() => handleIntentSelect('plan')}
+          onBack={() => setStep('type')}
+        />
+      );
     case 'template':
       return (
-        <>
-          <TemplatePicker
-            onSelectTemplate={handleTemplateCardTap}
-            onBuildCustom={handleBuildCustomTap}
-            onBack={() => setStep('type')}
-          />
-          {showActionSheet && (
-            <PlanActionSheet
-              workoutName={getPendingName()}
-              starting={starting}
-              saving={saving}
-              onStartNow={handleStartNow}
-              onSaveForLater={handleSaveForLater}
-              onCancel={handleCancelActionSheet}
-            />
-          )}
-        </>
+        <TemplatePicker
+          onSelectTemplate={handleTemplateCardTap}
+          onBuildCustom={handleBuildCustomTap}
+          onBack={() => setStep('intent')}
+        />
       );
-    case 'builder':
+    case 'planner':
       return (
-        <WorkoutBuilder
-          onBack={() => setStep('template')}
-          onStartWorkout={handleBuilderStart}
-          onSaveAsPlanned={handleBuilderSave}
-          starting={starting}
+        <WorkoutPlanner
+          initialName={plannerName}
+          initialExercises={plannerExercises}
+          onSave={handlePlannerSave}
+          onDiscard={() => setStep('template')}
           saving={saving}
         />
       );

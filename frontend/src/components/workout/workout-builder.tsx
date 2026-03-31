@@ -25,6 +25,7 @@ export function WorkoutBuilder({ onBack, onStartWorkout, onSaveAsPlanned, starti
     setExercises((prev) => [...prev, {
       exercise_id: ex.id,
       exercise_name: ex.name,
+      section: 'primary',
       sets: 3,
       planned_reps: '',
     }]);

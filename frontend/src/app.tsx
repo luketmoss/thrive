@@ -32,6 +32,7 @@ function Router() {
       return <WorkoutEdit workoutId={route.params.id} />;
     case 'templates':
     case 'template-new':
+    case 'template-detail':
     case 'template-edit':
       return <TemplatesScreen />;
     case 'exercises':

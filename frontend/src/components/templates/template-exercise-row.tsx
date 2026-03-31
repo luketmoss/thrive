@@ -1,4 +1,4 @@
-import type { Section } from '../../api/types';
+import { sectionBadgeClass } from '../shared/section-utils';
 
 export interface TemplateExerciseSlot {
   exercise_id: string;
@@ -6,8 +6,6 @@ export interface TemplateExerciseSlot {
   section: string;
   sets: string;
   reps: string;
-  rest_seconds: string;
-  group_rest_seconds: string;
 }
 
 interface Props {
@@ -20,15 +18,6 @@ interface Props {
   onRemove: () => void;
 }
 
-function sectionBadgeClass(section: string): string {
-  if (section === 'warmup') return 'section-badge section-warmup';
-  if (section === 'primary') return 'section-badge section-primary';
-  if (section.startsWith('SS')) return 'section-badge section-ss';
-  if (section === 'burnout') return 'section-badge section-burnout';
-  if (section === 'cooldown') return 'section-badge section-cooldown';
-  return 'section-badge';
-}
-
 export function TemplateExerciseRow({ exercise, index, total, onMoveUp, onMoveDown, onEdit, onRemove }: Props) {
   const setsReps = exercise.sets && exercise.reps
     ? `${exercise.sets} × ${exercise.reps}`
@@ -37,14 +26,6 @@ export function TemplateExerciseRow({ exercise, index, total, onMoveUp, onMoveDo
       : exercise.reps
         ? `${exercise.reps} reps`
         : '';
-
-  const restInfo = exercise.rest_seconds
-    ? `${exercise.rest_seconds}s rest`
-    : '';
-
-  const groupRest = exercise.group_rest_seconds
-    ? `${exercise.group_rest_seconds}s group`
-    : '';
 
   return (
     <div class="template-exercise-row">
@@ -72,11 +53,9 @@ export function TemplateExerciseRow({ exercise, index, total, onMoveUp, onMoveDo
           <span class={sectionBadgeClass(exercise.section)}>{exercise.section}</span>
           <span class="template-exercise-row-name">{exercise.exercise_name}</span>
         </div>
-        {(setsReps || restInfo || groupRest) && (
+        {setsReps && (
           <div class="template-exercise-row-meta">
-            {setsReps && <span>{setsReps}</span>}
-            {restInfo && <span>{restInfo}</span>}
-            {groupRest && <span>{groupRest}</span>}
+            <span>{setsReps}</span>
           </div>
         )}
       </div>

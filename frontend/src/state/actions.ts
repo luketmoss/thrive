@@ -48,6 +48,13 @@ export async function loadInitialData(token: string): Promise<void> {
       labels.value = labelData;
     }
 
+    // Restore active workout if one exists (survives page refresh)
+    const active = workoutData.find((w) => w.status === 'active');
+    if (active) {
+      activeWorkoutId.value = active.id;
+      activeWorkoutSets.value = setData.filter((s) => s.workout_id === active.id);
+    }
+
     initPendingCount();
     loading.value = false;
   } catch (err) {
@@ -297,7 +304,7 @@ export async function startPlannedWorkout(
     const date = toLocalDateStr(now);
     const time = now.toTimeString().slice(0, 5);
 
-    const updated = { ...workout, status: '', date, time };
+    const updated = { ...workout, status: 'active', date, time };
 
     await updateWorkoutApi(workout.sheetRow, updated, token);
     workouts.value = workouts.value.map((w) =>
@@ -345,6 +352,7 @@ export async function startWorkout(
       name: data.name,
       template_id: data.template_id,
       copied_from: data.copied_from,
+      status: 'active',
     }, token);
 
     const withRow = { ...workout, sheetRow: workouts.value.length + 2 };
@@ -384,12 +392,25 @@ async function prepopulateSetsFromTemplate(
   const warmups: { exercise_id: string; exercise_name: string; exercise_order: number }[] = [];
 
   for (const ex of tpl.exercises) {
-    // Warmup exercises are list-only — no set rows generated
     if (ex.section === 'warmup') {
       warmups.push({
         exercise_id: ex.exercise_id,
         exercise_name: ex.exercise_name,
         exercise_order: ex.order,
+      });
+      // Persist a single set row so warmup exercises survive across sessions
+      newSets.push({
+        workout_id: workoutId,
+        exercise_id: ex.exercise_id,
+        exercise_name: ex.exercise_name,
+        section: 'warmup',
+        exercise_order: ex.order,
+        set_number: 1,
+        planned_reps: '',
+        weight: '',
+        reps: '',
+        effort: '',
+        notes: '',
       });
       continue;
     }
@@ -443,14 +464,37 @@ async function prepopulateSetsFromBuilder(
   token: string,
 ): Promise<void> {
   const newSets: WorkoutSet[] = [];
+  const warmups: { exercise_id: string; exercise_name: string; exercise_order: number }[] = [];
 
   builderExercises.forEach((ex, index) => {
+    if (ex.section === 'warmup') {
+      warmups.push({
+        exercise_id: ex.exercise_id,
+        exercise_name: ex.exercise_name,
+        exercise_order: index + 1,
+      });
+      // Persist a single set row so warmup exercises survive across sessions
+      newSets.push({
+        workout_id: workoutId,
+        exercise_id: ex.exercise_id,
+        exercise_name: ex.exercise_name,
+        section: 'warmup',
+        exercise_order: index + 1,
+        set_number: 1,
+        planned_reps: '',
+        weight: '',
+        reps: '',
+        effort: '',
+        notes: '',
+      });
+      return;
+    }
     for (let s = 1; s <= ex.sets; s++) {
       newSets.push({
         workout_id: workoutId,
         exercise_id: ex.exercise_id,
         exercise_name: ex.exercise_name,
-        section: 'primary',
+        section: ex.section || 'primary',
         exercise_order: index + 1,
         set_number: s,
         planned_reps: ex.planned_reps,
@@ -462,7 +506,7 @@ async function prepopulateSetsFromBuilder(
     }
   });
 
-  activeWarmupExercises.value = [];
+  activeWarmupExercises.value = warmups;
 
   if (isDemo()) {
     const baseRow = sets.value.length + 2;
@@ -585,6 +629,7 @@ export async function finishWorkout(
     const updated = {
       ...workout,
       notes,
+      status: '',
       duration_min: String(durationMin > 0 ? durationMin : ''),
     };
 
@@ -664,8 +709,6 @@ export async function saveWorkoutAsTemplate(
         section: s.section || 'primary',
         sets: String(setCount),
         reps: s.planned_reps || '',
-        rest_seconds: '',
-        group_rest_seconds: '',
       });
     }
 
@@ -765,8 +808,29 @@ export function enterEditMode(workoutId: string): void {
 
   activeWorkoutId.value = workoutId;
   activeWorkoutSets.value = sets.value.filter((s) => s.workout_id === workoutId);
-  activeWarmupExercises.value = [];
   isEditMode.value = true;
+
+  // Restore warmup exercises from template (warmups are list-only, not stored as set rows)
+  if (workout.template_id) {
+    const tpl = templates.value.find((t) => t.id === workout.template_id);
+    if (tpl) {
+      const existingExerciseIds = new Set(
+        activeWorkoutSets.value.map((s) => s.exercise_id),
+      );
+      activeWarmupExercises.value = tpl.exercises
+        .filter((ex) => ex.section === 'warmup')
+        .filter((ex) => !existingExerciseIds.has(ex.exercise_id))
+        .map((ex) => ({
+          exercise_id: ex.exercise_id,
+          exercise_name: ex.exercise_name,
+          exercise_order: ex.order,
+        }));
+    } else {
+      activeWarmupExercises.value = [];
+    }
+  } else {
+    activeWarmupExercises.value = [];
+  }
 }
 
 export function exitEditMode(): void {

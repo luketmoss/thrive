@@ -4,21 +4,28 @@ import type { TemplateRowWithRow, Template, Section } from './types';
 import { sheetsGet, sheetsAppend, sheetsUpdate, sheetsDeleteRow, getSheetId, withReauth } from './sheets';
 import { isDemo, DEMO_TEMPLATE_ROWS } from './demo-data';
 
+/** Convert a range string like "4-5" to its max value "5". Single values pass through. */
+export function normalizeRangeToMax(val: string): string {
+  const trimmed = val.trim();
+  if (!trimmed) return trimmed;
+  const parts = trimmed.split('-').map((s) => Number(s.trim())).filter((n) => !isNaN(n));
+  if (parts.length === 0) return trimmed;
+  return String(Math.max(...parts));
+}
+
 export interface TemplateExerciseInput {
   exercise_id: string;
   exercise_name: string;
   section: string;
   sets: string;
   reps: string;
-  rest_seconds: string;
-  group_rest_seconds: string;
 }
 
 export async function fetchTemplateRows(token: string): Promise<TemplateRowWithRow[]> {
   if (isDemo()) return [...DEMO_TEMPLATE_ROWS];
 
   return withReauth(token, async (t) => {
-    const rows = await sheetsGet('Templates!A2:L', t);
+    const rows = await sheetsGet('Templates!A2:J', t);
     return rows.map((row, i) => ({
       template_id: row[0] || '',
       template_name: row[1] || '',
@@ -26,12 +33,10 @@ export async function fetchTemplateRows(token: string): Promise<TemplateRowWithR
       exercise_id: row[3] || '',
       exercise_name: row[4] || '',
       section: (row[5] || '') as Section | string,
-      sets: row[6] || '',
-      reps: row[7] || '',
-      rest_seconds: row[8] || '',
-      group_rest_seconds: row[9] || '',
-      created: row[10] || '',
-      updated: row[11] || '',
+      sets: normalizeRangeToMax(row[6] || ''),
+      reps: normalizeRangeToMax(row[7] || ''),
+      created: row[8] || '',
+      updated: row[9] || '',
       sheetRow: i + 2,
     }));
   });
@@ -70,8 +75,6 @@ export async function createTemplate(
     section: ex.section,
     sets: ex.sets,
     reps: ex.reps,
-    rest_seconds: ex.rest_seconds,
-    group_rest_seconds: ex.group_rest_seconds,
     created: now,
     updated: now,
     sheetRow: -1, // placeholder; corrected on re-fetch
@@ -87,12 +90,10 @@ export async function createTemplate(
       r.section,
       r.sets,
       r.reps,
-      r.rest_seconds,
-      r.group_rest_seconds,
       r.created,
       r.updated,
     ]);
-    await withReauth(token, (t) => sheetsAppend('Templates!A:L', sheetValues, t));
+    await withReauth(token, (t) => sheetsAppend('Templates!A:J', sheetValues, t));
   }
 
   return { id: templateId, name, exercises: templateRows };
@@ -129,13 +130,11 @@ export async function updateTemplate(
       ex.section,
       ex.sets,
       ex.reps,
-      ex.rest_seconds,
-      ex.group_rest_seconds,
       now,
       now,
     ]);
     if (sheetValues.length > 0) {
-      await sheetsAppend('Templates!A:L', sheetValues, t);
+      await sheetsAppend('Templates!A:J', sheetValues, t);
     }
   });
 }

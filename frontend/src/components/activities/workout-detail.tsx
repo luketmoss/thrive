@@ -1,9 +1,10 @@
 import { useState } from 'preact/hooks';
-import { workouts, sets, activeWorkoutId, showToast } from '../../state/store';
+import { workouts, sets, templates, activeWorkoutId, showToast } from '../../state/store';
 import { deleteWorkout, copyWorkout, saveWorkoutAsTemplate, startPlannedWorkout } from '../../state/actions';
 import { useAuth } from '../../auth/auth-context';
 import { navigate } from '../../router/router';
 import { ExerciseDetail, groupSetsIntoExercises } from './exercise-detail';
+import { ExerciseCompactCard } from '../shared/exercise-compact-card';
 
 interface Props {
   workoutId: string;
@@ -129,26 +130,24 @@ export function WorkoutDetail({ workoutId }: Props) {
         >
           ← Back
         </button>
-        {!isPlanned && (
-          <div class="detail-header-actions">
-            {workout.type === 'weight' && exerciseGroups.length > 0 && (
-              <button class="btn btn-secondary btn-sm" onClick={handleSaveAsTemplate}>
-                Save Template
-              </button>
-            )}
-            {workout.type === 'weight' && (
-              <button class="btn btn-secondary btn-sm" onClick={handleCopy}>
-                Copy
-              </button>
-            )}
-            <button
-              class="btn btn-primary btn-sm"
-              onClick={() => navigate(`/history/${workoutId}/edit`)}
-            >
-              Edit
+        <div class="detail-header-actions">
+          {!isPlanned && workout.type === 'weight' && exerciseGroups.length > 0 && (
+            <button class="btn btn-secondary btn-sm" onClick={handleSaveAsTemplate}>
+              Save Template
             </button>
-          </div>
-        )}
+          )}
+          {!isPlanned && workout.type === 'weight' && (
+            <button class="btn btn-secondary btn-sm" onClick={handleCopy}>
+              Copy
+            </button>
+          )}
+          <button
+            class="btn btn-primary btn-sm"
+            onClick={() => navigate(`/history/${workoutId}/edit`)}
+          >
+            Edit
+          </button>
+        </div>
       </div>
 
       <div class="detail-meta">
@@ -172,21 +171,64 @@ export function WorkoutDetail({ workoutId }: Props) {
         )}
       </div>
 
-      {/* Planned workout: Start Workout as the primary CTA */}
-      {isPlanned && (
-        <div class="planned-detail-start">
-          <button
-            class="btn btn-primary planned-start-btn"
-            onClick={handleStartPlanned}
-            disabled={startingPlanned}
-          >
-            {startingPlanned ? 'Starting…' : 'Start Workout'}
-          </button>
-        </div>
-      )}
+      {/* Planned workout: compact card view + footer actions */}
+      {isPlanned && workout.type === 'weight' && (() => {
+        // Build planned exercise list from sets or template
+        const plannedExercises: { id: string; name: string; section: string; order: number; sets: string; reps: string }[] = [];
+        const seen = new Set<string>();
 
-      {/* Exercise breakdown for weight workouts */}
-      {exerciseGroups.length > 0 && (
+        // Build from workout sets
+        for (const s of workoutSets) {
+          const key = `${s.exercise_id}__${s.exercise_order}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+
+          // Warmup exercises are list-only — show without sets/reps
+          if (s.section === 'warmup') {
+            plannedExercises.push({
+              id: s.exercise_id,
+              name: s.exercise_name,
+              section: 'warmup',
+              order: s.exercise_order,
+              sets: '',
+              reps: '',
+            });
+            continue;
+          }
+
+          const setCount = workoutSets.filter(
+            (ws) => ws.exercise_id === s.exercise_id && ws.exercise_order === s.exercise_order,
+          ).length;
+          plannedExercises.push({
+            id: s.exercise_id,
+            name: s.exercise_name,
+            section: s.section,
+            order: s.exercise_order,
+            sets: String(setCount),
+            reps: s.planned_reps || '',
+          });
+        }
+
+        plannedExercises.sort((a, b) => a.order - b.order);
+
+        return plannedExercises.length > 0 ? (
+          <div class="compact-card-list" style={{ marginTop: 'var(--space-md)' }}>
+            {plannedExercises.map((ex, i) => (
+              <div key={`${ex.id}-${i}`}>
+                <ExerciseCompactCard
+                  section={ex.section}
+                  exerciseName={ex.name}
+                  sets={ex.sets}
+                  reps={ex.reps}
+                />
+              </div>
+            ))}
+          </div>
+        ) : null;
+      })()}
+
+      {/* Exercise breakdown for completed weight workouts */}
+      {!isPlanned && exerciseGroups.length > 0 && (
         <div class="detail-exercises">
           <div class="detail-section-header">
             <h3>Exercises</h3>
@@ -239,9 +281,19 @@ export function WorkoutDetail({ workoutId }: Props) {
       )}
 
       <div class="detail-actions">
+        {isPlanned && (
+          <button
+            class="btn btn-primary"
+            style={{ width: '100%' }}
+            onClick={handleStartPlanned}
+            disabled={startingPlanned || deleting}
+          >
+            {startingPlanned ? 'Starting...' : 'Start Workout'}
+          </button>
+        )}
         <button
           class="btn btn-danger"
-          style={{ width: '100%' }}
+          style={{ width: '100%', marginTop: isPlanned ? 'var(--space-md)' : '0' }}
           onClick={handleDelete}
           disabled={deleting}
         >

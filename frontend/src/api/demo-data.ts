@@ -57,22 +57,22 @@ const now = '2025-01-15T00:00:00.000Z';
 
 export const DEMO_TEMPLATE_ROWS: TemplateRowWithRow[] = [
   // Upper Push A
-  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 1, exercise_id: 'ex_demo_pushup', exercise_name: 'Push Ups', section: 'warmup', sets: '', reps: '', rest_seconds: '', group_rest_seconds: '', created: now, updated: now, sheetRow: 2 },
-  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 2, exercise_id: 'ex_demo001', exercise_name: 'Bench Press BB', section: 'warmup', sets: '', reps: '', rest_seconds: '', group_rest_seconds: '', created: now, updated: now, sheetRow: 3 },
-  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 3, exercise_id: 'ex_demo001', exercise_name: 'Bench Press BB', section: 'primary', sets: '4-5', reps: '4-6', rest_seconds: '90-120', group_rest_seconds: '', created: now, updated: now, sheetRow: 4 },
-  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 4, exercise_id: 'ex_demo002', exercise_name: 'Incline Press DB', section: 'SS1', sets: '3', reps: '10-12', rest_seconds: '', group_rest_seconds: '60', created: now, updated: now, sheetRow: 5 },
-  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 5, exercise_id: 'ex_demo003', exercise_name: 'Cable Fly FT', section: 'SS1', sets: '3', reps: '12-15', rest_seconds: '', group_rest_seconds: '60', created: now, updated: now, sheetRow: 6 },
-  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 6, exercise_id: 'ex_demo009', exercise_name: 'Lateral Raise DB', section: 'SS2', sets: '3', reps: '12-15', rest_seconds: '', group_rest_seconds: '60', created: now, updated: now, sheetRow: 7 },
-  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 7, exercise_id: 'ex_demo010', exercise_name: 'Rope Tricep Pushdown FT', section: 'SS2', sets: '3', reps: '12-15', rest_seconds: '', group_rest_seconds: '60', created: now, updated: now, sheetRow: 8 },
-  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 8, exercise_id: 'ex_demo012', exercise_name: 'Ab Wheel', section: 'burnout', sets: '2-3', reps: '6-10', rest_seconds: '', group_rest_seconds: '', created: now, updated: now, sheetRow: 9 },
+  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 1, exercise_id: 'ex_demo_pushup', exercise_name: 'Push Ups', section: 'warmup', sets: '', reps: '', created: now, updated: now, sheetRow: 2 },
+  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 2, exercise_id: 'ex_demo001', exercise_name: 'Bench Press BB', section: 'warmup', sets: '', reps: '', created: now, updated: now, sheetRow: 3 },
+  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 3, exercise_id: 'ex_demo001', exercise_name: 'Bench Press BB', section: 'primary', sets: '5', reps: '6', created: now, updated: now, sheetRow: 4 },
+  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 4, exercise_id: 'ex_demo002', exercise_name: 'Incline Press DB', section: 'SS1', sets: '3', reps: '12', created: now, updated: now, sheetRow: 5 },
+  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 5, exercise_id: 'ex_demo003', exercise_name: 'Cable Fly FT', section: 'SS1', sets: '3', reps: '15', created: now, updated: now, sheetRow: 6 },
+  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 6, exercise_id: 'ex_demo009', exercise_name: 'Lateral Raise DB', section: 'SS2', sets: '3', reps: '15', created: now, updated: now, sheetRow: 7 },
+  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 7, exercise_id: 'ex_demo010', exercise_name: 'Rope Tricep Pushdown FT', section: 'SS2', sets: '3', reps: '15', created: now, updated: now, sheetRow: 8 },
+  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 8, exercise_id: 'ex_demo012', exercise_name: 'Ab Wheel', section: 'burnout', sets: '3', reps: '10', created: now, updated: now, sheetRow: 9 },
 
   // Upper Pull A
-  { template_id: 'tpl_demo002', template_name: 'Upper Pull A', order: 1, exercise_id: 'ex_demo008', exercise_name: 'Row BB', section: 'warmup', sets: '', reps: '', rest_seconds: '', group_rest_seconds: '', created: now, updated: now, sheetRow: 10 },
-  { template_id: 'tpl_demo002', template_name: 'Upper Pull A', order: 2, exercise_id: 'ex_demo008', exercise_name: 'Row BB', section: 'primary', sets: '4-5', reps: '4-6', rest_seconds: '90-120', group_rest_seconds: '', created: now, updated: now, sheetRow: 11 },
-  { template_id: 'tpl_demo002', template_name: 'Upper Pull A', order: 3, exercise_id: 'ex_demo007', exercise_name: 'Pullups', section: 'SS1', sets: '3', reps: '8-10', rest_seconds: '', group_rest_seconds: '60', created: now, updated: now, sheetRow: 12 },
-  { template_id: 'tpl_demo002', template_name: 'Upper Pull A', order: 4, exercise_id: 'ex_demo014', exercise_name: 'Face Pulls FT', section: 'SS1', sets: '3', reps: '12-15', rest_seconds: '', group_rest_seconds: '60', created: now, updated: now, sheetRow: 13 },
-  { template_id: 'tpl_demo002', template_name: 'Upper Pull A', order: 5, exercise_id: 'ex_demo011', exercise_name: 'Hammer Curls DB', section: 'SS2', sets: '3', reps: '10-12', rest_seconds: '', group_rest_seconds: '60', created: now, updated: now, sheetRow: 14 },
-  { template_id: 'tpl_demo002', template_name: 'Upper Pull A', order: 6, exercise_id: 'ex_demo013', exercise_name: 'Crunch FT', section: 'burnout', sets: '2-3', reps: '10-15', rest_seconds: '', group_rest_seconds: '', created: now, updated: now, sheetRow: 15 },
+  { template_id: 'tpl_demo002', template_name: 'Upper Pull A', order: 1, exercise_id: 'ex_demo008', exercise_name: 'Row BB', section: 'warmup', sets: '', reps: '', created: now, updated: now, sheetRow: 10 },
+  { template_id: 'tpl_demo002', template_name: 'Upper Pull A', order: 2, exercise_id: 'ex_demo008', exercise_name: 'Row BB', section: 'primary', sets: '5', reps: '6', created: now, updated: now, sheetRow: 11 },
+  { template_id: 'tpl_demo002', template_name: 'Upper Pull A', order: 3, exercise_id: 'ex_demo007', exercise_name: 'Pullups', section: 'SS1', sets: '3', reps: '10', created: now, updated: now, sheetRow: 12 },
+  { template_id: 'tpl_demo002', template_name: 'Upper Pull A', order: 4, exercise_id: 'ex_demo014', exercise_name: 'Face Pulls FT', section: 'SS1', sets: '3', reps: '15', created: now, updated: now, sheetRow: 13 },
+  { template_id: 'tpl_demo002', template_name: 'Upper Pull A', order: 5, exercise_id: 'ex_demo011', exercise_name: 'Hammer Curls DB', section: 'SS2', sets: '3', reps: '12', created: now, updated: now, sheetRow: 14 },
+  { template_id: 'tpl_demo002', template_name: 'Upper Pull A', order: 6, exercise_id: 'ex_demo013', exercise_name: 'Crunch FT', section: 'burnout', sets: '3', reps: '15', created: now, updated: now, sheetRow: 15 },
 ];
 
 /** Group flat template rows into Template objects. */
@@ -144,4 +144,23 @@ export const DEMO_SETS: SetWithRow[] = [
   { workout_id: 'w_demo004', exercise_id: 'ex_demo002', exercise_name: 'Incline Press DB', section: 'SS1', exercise_order: 4, set_number: 1, planned_reps: '10-12', weight: '50', reps: '12', effort: 'Easy', notes: '', sheetRow: 25 },
   { workout_id: 'w_demo004', exercise_id: 'ex_demo002', exercise_name: 'Incline Press DB', section: 'SS1', exercise_order: 4, set_number: 2, planned_reps: '10-12', weight: '50', reps: '11', effort: 'Medium', notes: '', sheetRow: 26 },
   { workout_id: 'w_demo004', exercise_id: 'ex_demo002', exercise_name: 'Incline Press DB', section: 'SS1', exercise_order: 4, set_number: 3, planned_reps: '10-12', weight: '50', reps: '10', effort: 'Medium', notes: '', sheetRow: 27 },
+
+  // ── Planned workout (w_demo005 — Upper Pull A) — prepopulated set structure ──
+  { workout_id: 'w_demo005', exercise_id: 'ex_demo008', exercise_name: 'Row BB', section: 'primary', exercise_order: 2, set_number: 1, planned_reps: '6', weight: '', reps: '', effort: '', notes: '', sheetRow: 28 },
+  { workout_id: 'w_demo005', exercise_id: 'ex_demo008', exercise_name: 'Row BB', section: 'primary', exercise_order: 2, set_number: 2, planned_reps: '6', weight: '', reps: '', effort: '', notes: '', sheetRow: 29 },
+  { workout_id: 'w_demo005', exercise_id: 'ex_demo008', exercise_name: 'Row BB', section: 'primary', exercise_order: 2, set_number: 3, planned_reps: '6', weight: '', reps: '', effort: '', notes: '', sheetRow: 30 },
+  { workout_id: 'w_demo005', exercise_id: 'ex_demo008', exercise_name: 'Row BB', section: 'primary', exercise_order: 2, set_number: 4, planned_reps: '6', weight: '', reps: '', effort: '', notes: '', sheetRow: 31 },
+  { workout_id: 'w_demo005', exercise_id: 'ex_demo008', exercise_name: 'Row BB', section: 'primary', exercise_order: 2, set_number: 5, planned_reps: '6', weight: '', reps: '', effort: '', notes: '', sheetRow: 32 },
+  { workout_id: 'w_demo005', exercise_id: 'ex_demo007', exercise_name: 'Pullups', section: 'SS1', exercise_order: 3, set_number: 1, planned_reps: '10', weight: '', reps: '', effort: '', notes: '', sheetRow: 33 },
+  { workout_id: 'w_demo005', exercise_id: 'ex_demo007', exercise_name: 'Pullups', section: 'SS1', exercise_order: 3, set_number: 2, planned_reps: '10', weight: '', reps: '', effort: '', notes: '', sheetRow: 34 },
+  { workout_id: 'w_demo005', exercise_id: 'ex_demo007', exercise_name: 'Pullups', section: 'SS1', exercise_order: 3, set_number: 3, planned_reps: '10', weight: '', reps: '', effort: '', notes: '', sheetRow: 35 },
+  { workout_id: 'w_demo005', exercise_id: 'ex_demo014', exercise_name: 'Face Pulls FT', section: 'SS1', exercise_order: 4, set_number: 1, planned_reps: '15', weight: '', reps: '', effort: '', notes: '', sheetRow: 36 },
+  { workout_id: 'w_demo005', exercise_id: 'ex_demo014', exercise_name: 'Face Pulls FT', section: 'SS1', exercise_order: 4, set_number: 2, planned_reps: '15', weight: '', reps: '', effort: '', notes: '', sheetRow: 37 },
+  { workout_id: 'w_demo005', exercise_id: 'ex_demo014', exercise_name: 'Face Pulls FT', section: 'SS1', exercise_order: 4, set_number: 3, planned_reps: '15', weight: '', reps: '', effort: '', notes: '', sheetRow: 38 },
+  { workout_id: 'w_demo005', exercise_id: 'ex_demo011', exercise_name: 'Hammer Curls DB', section: 'SS2', exercise_order: 5, set_number: 1, planned_reps: '12', weight: '', reps: '', effort: '', notes: '', sheetRow: 39 },
+  { workout_id: 'w_demo005', exercise_id: 'ex_demo011', exercise_name: 'Hammer Curls DB', section: 'SS2', exercise_order: 5, set_number: 2, planned_reps: '12', weight: '', reps: '', effort: '', notes: '', sheetRow: 40 },
+  { workout_id: 'w_demo005', exercise_id: 'ex_demo011', exercise_name: 'Hammer Curls DB', section: 'SS2', exercise_order: 5, set_number: 3, planned_reps: '12', weight: '', reps: '', effort: '', notes: '', sheetRow: 41 },
+  { workout_id: 'w_demo005', exercise_id: 'ex_demo013', exercise_name: 'Crunch FT', section: 'burnout', exercise_order: 6, set_number: 1, planned_reps: '15', weight: '', reps: '', effort: '', notes: '', sheetRow: 42 },
+  { workout_id: 'w_demo005', exercise_id: 'ex_demo013', exercise_name: 'Crunch FT', section: 'burnout', exercise_order: 6, set_number: 2, planned_reps: '15', weight: '', reps: '', effort: '', notes: '', sheetRow: 43 },
+  { workout_id: 'w_demo005', exercise_id: 'ex_demo013', exercise_name: 'Crunch FT', section: 'burnout', exercise_order: 6, set_number: 3, planned_reps: '15', weight: '', reps: '', effort: '', notes: '', sheetRow: 44 },
 ];
