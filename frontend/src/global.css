@@ -1647,10 +1647,6 @@ input, select, textarea {
   min-width: 24px;
 }
 
-.quick-fill-planned-spacer {
-  min-width: 32px;
-}
-
 .quick-fill-end-spacer {
   /* set-saved (16px) + gap (4px) + set-remove-btn (24px) */
   min-width: 44px;
