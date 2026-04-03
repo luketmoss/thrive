@@ -15,51 +15,11 @@ import { applyQuickFillWeight, applyQuickFillReps, applyQuickFillEffort } from '
 import { applyCopyDown } from './copy-down';
 import { isWarmupExercise } from './warmup';
 import { applyChangeSection, applyMoveUp, applyMoveDown } from './section-management';
+import { buildExerciseList, mergeWarmups } from './build-exercise-list';
 
 interface Props {
   workoutId: string;
   workoutName: string;
-}
-
-/** Build TrackerExercise list from flat set rows. */
-function buildExerciseList(setRows: typeof activeWorkoutSets.value): TrackerExercise[] {
-  const map = new Map<string, TrackerExercise>();
-
-  for (const s of setRows) {
-    // Key by exercise_id + exercise_order to distinguish same exercise in different sections
-    const key = `${s.exercise_id}__${s.exercise_order}`;
-    let ex = map.get(key);
-    if (!ex) {
-      ex = {
-        exercise_id: s.exercise_id,
-        exercise_name: s.exercise_name,
-        section: s.section,
-        exercise_order: s.exercise_order,
-        sets: [],
-        quickFillWeight: '',
-        quickFillReps: '',
-        quickFillEffort: '',
-      };
-      map.set(key, ex);
-    }
-    ex.sets.push({
-      set_number: s.set_number,
-      planned_reps: s.planned_reps,
-      weight: s.weight,
-      reps: s.reps,
-      effort: s.effort as Effort | '',
-      notes: s.notes,
-      saved: s.sheetRow > 0,
-      sheetRow: s.sheetRow,
-    });
-  }
-
-  // Sort exercises by order, sets by set_number
-  const list = Array.from(map.values()).sort((a, b) => a.exercise_order - b.exercise_order);
-  for (const ex of list) {
-    ex.sets.sort((a, b) => a.set_number - b.set_number);
-  }
-  return list;
 }
 
 export function WorkoutTracker({ workoutId, workoutName }: Props) {
@@ -97,21 +57,12 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
     return () => window.removeEventListener('online', handleOnline);
   }, [token]);
 
-  // Initialize from signal, merging warmup exercises (list-only, no sets)
+  // Initialize from signal, merging warmup exercises (list-only, no sets).
+  // Warmups already present in activeWorkoutSets (as persisted set rows) are
+  // skipped from activeWarmupExercises to avoid duplication.
   useEffect(() => {
     const tracked = buildExerciseList(activeWorkoutSets.value);
-    const warmups: TrackerExercise[] = activeWarmupExercises.value.map((w) => ({
-      exercise_id: w.exercise_id,
-      exercise_name: w.exercise_name,
-      section: 'warmup',
-      exercise_order: w.exercise_order,
-      sets: [],
-      quickFillWeight: '',
-      quickFillReps: '',
-      quickFillEffort: '',
-    }));
-    const merged = [...warmups, ...tracked].sort((a, b) => a.exercise_order - b.exercise_order);
-    setExerciseList(merged);
+    setExerciseList(mergeWarmups(tracked, activeWarmupExercises.value));
   }, []);
 
   // Debounced save for a specific set (disabled in edit mode)
