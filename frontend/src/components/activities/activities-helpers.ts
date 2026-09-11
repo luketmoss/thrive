@@ -1,4 +1,5 @@
-import type { WorkoutWithRow, SetWithRow, ExerciseWithRow } from '../../api/types';
+import type { WorkoutWithRow, SetWithRow, ExerciseWithRow, Effort } from '../../api/types';
+import { formatDuration } from '../../api/duration';
 
 // ── Equipment / non-muscle tags to exclude from card pills ───────────
 export const EQUIPMENT_TAGS = new Set(['BB', 'DB', 'FT', 'Warmup']);
@@ -422,4 +423,48 @@ export function getWeekCardioAscent(
 ): CoveredTotal {
   // Counted independently of distance — a ride may have one and not the other.
   return sumCovered(getWeekCardioWorkouts(allWorkouts, todayStr), (w) => w.ascent_m);
+}
+
+// ── Card effort indicator (#113) ─────────────────────────────────────
+
+/** `"5 exercises"` / `"1 exercise"`. */
+export function pluralExercise(n: number): string {
+  return `${n} exercise${n !== 1 ? 's' : ''}`;
+}
+
+/**
+ * The spoken form of a workout's session effort, or `''` when nobody said.
+ *
+ * `''` is a legitimate permanent state (#101), so an unrated workout adds
+ * nothing to its label rather than announcing "no effort" — which would be a
+ * claim the data does not make.
+ */
+export function effortForSpeech(effort: Effort | ''): string {
+  return effort ? `${effort.toLowerCase()} effort` : '';
+}
+
+/**
+ * The full `aria-label` for a completed workout card.
+ *
+ * Lives here, and is the single source for the label, because the visible card
+ * and its label are assembled from the same parts. When they were two separate
+ * expressions in the screen, adding one optional part meant getting the
+ * separator right twice.
+ *
+ * Effort is appended last so the opening of the label stays stable — screen
+ * reader users scan these by their first words, and an unrated card's label is
+ * unchanged from what it has always been.
+ */
+export function workoutCardAriaLabel(
+  w: WorkoutWithRow,
+  exerciseCount: number,
+): string {
+  return [
+    w.name || w.type,
+    w.type,
+    w.date,
+    formatDuration(w.elapsed_seconds),
+    exerciseCount > 0 ? pluralExercise(exerciseCount) : '',
+    effortForSpeech(w.effort),
+  ].filter(Boolean).join(', ');
 }
