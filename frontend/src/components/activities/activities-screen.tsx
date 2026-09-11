@@ -15,7 +15,6 @@ import {
   getWeekCardioWorkouts,
   getWeekCardioDistance,
   getWeekCardioAscent,
-  getWeeklyTargetProgress,
   coverageSuffix,
   cardioNoun,
   toLocalDateStr,
@@ -72,7 +71,6 @@ export function ActivitiesScreen() {
   const cardioUnit = cardioNoun(weekCardio);
   const weekDistance = getWeekCardioDistance(completed, todayStr);
   const weekAscent = getWeekCardioAscent(completed, todayStr);
-  const targets = getWeeklyTargetProgress(completed, todayStr);
 
   // AC5: the visual cells are aria-hidden and the bar carries one label, so
   // anything added to the markup alone is silently invisible to screen
@@ -87,7 +85,6 @@ export function ActivitiesScreen() {
     cardioCount > 0 && weekAscent.total > 0
       ? `${metersToFeet(String(weekAscent.total))?.toLocaleString('en-US')} feet of ascent across ${weekAscent.withData} of ${weekAscent.of} ${cardioUnit}.`
       : '',
-    `This week's target: ${targets.map((t) => `${t.done} of ${t.target} ${t.label}`).join(', ')}.`,
   ].filter(Boolean).join(' ');
 
   return (
@@ -142,7 +139,7 @@ export function ActivitiesScreen() {
           </div>
         </div>
 
-        {/* #105 — full-width rows: each stats-bar cell gets only ~103px at
+        {/* #105 — full-width row: each stats-bar cell gets only ~103px at
             375px, and the existing value string already needs ~120px. */}
         {cardioCount > 0 && (weekDistance.total > 0 || weekAscent.total > 0) && (
           <div class="stats-row" aria-hidden="true">
@@ -157,19 +154,6 @@ export function ActivitiesScreen() {
             </span>
           </div>
         )}
-
-        {/* Rendered every week, including quiet ones — progress against a
-            target is useful precisely when nothing has happened. */}
-        <div class="stats-row" aria-hidden="true">
-          <span class="stats-bar-label">Target</span>
-          <span class="stats-row-value">
-            {targets.map((t) => (
-              <span key={t.label} class={t.done >= t.target ? 'target-met' : undefined}>
-                {t.done}/{t.target} {t.label}
-              </span>
-            ))}
-          </span>
-        </div>
       </div>
 
       {showFilters && <ActivitiesFilters />}

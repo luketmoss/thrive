@@ -423,39 +423,3 @@ export function getWeekCardioAscent(
   // Counted independently of distance — a ride may have one and not the other.
   return sumCovered(getWeekCardioWorkouts(allWorkouts, todayStr), (w) => w.ascent_m);
 }
-
-// ── Weekly session target (#105) ─────────────────────────────────────
-
-/**
- * Hardcoded on purpose. #100 removed the `Config` tab as dead, so there is
- * nowhere to persist a per-user target; making it configurable needs its own
- * issue with somewhere to store it.
- */
-export const WEEKLY_TARGET = { weight: 3, bike: 2, stretch: 1 } as const;
-
-export interface TargetProgress {
-  label: string;
-  done: number;
-  target: number;
-}
-
-/**
- * Progress against the weekly target, rendered every week including quiet
- * ones — progress against a target is useful precisely when nothing has
- * happened yet. Exceeding a target reports as-is (`4/3`); an over-target week
- * is information, not an error.
- */
-export function getWeeklyTargetProgress(
-  allWorkouts: WorkoutWithRow[],
-  todayStr: string,
-): TargetProgress[] {
-  const weekDates = new Set(getWeekStreak(allWorkouts, todayStr).map((d) => d.date));
-  const inWeek = allWorkouts.filter((w) => weekDates.has(w.date));
-  const count = (type: string) => inWeek.filter((w) => w.type === type).length;
-
-  return [
-    { label: 'lifts', done: count('weight'), target: WEEKLY_TARGET.weight },
-    { label: 'rides', done: count('bike'), target: WEEKLY_TARGET.bike },
-    { label: 'stretch', done: count('stretch'), target: WEEKLY_TARGET.stretch },
-  ];
-}
