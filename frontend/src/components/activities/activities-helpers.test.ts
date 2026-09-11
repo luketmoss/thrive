@@ -10,7 +10,6 @@ import {
   getMonthTotalMinutes,
   getWeekCardioDistance,
   getWeekCardioAscent,
-  getWeeklyTargetProgress,
   coverageSuffix,
   cardioNoun,
   getWorkoutTags,
@@ -748,49 +747,6 @@ describe('cardio aggregation (#105)', () => {
 
     it('reports an empty period as zero of zero', () => {
       expect(getWeekCardioAscent([], TODAY)).toEqual({ total: 0, withData: 0, of: 0 });
-    });
-  });
-
-  describe('getWeeklyTargetProgress', () => {
-    // AC3: the exact example from the acceptance criteria
-    it('reads 2/3 lifts, 1/2 rides, 0/1 stretch', () => {
-      const result = getWeeklyTargetProgress([
-        makeWorkout({ id: 'w1', type: 'weight', date: '2026-03-09' }),
-        makeWorkout({ id: 'w2', type: 'weight', date: '2026-03-10' }),
-        makeWorkout({ id: 'w3', type: 'bike', date: '2026-03-11' }),
-      ], TODAY);
-      expect(result).toEqual([
-        { label: 'lifts', done: 2, target: 3 },
-        { label: 'rides', done: 1, target: 2 },
-        { label: 'stretch', done: 0, target: 1 },
-      ]);
-    });
-
-    // AC3: rendered every week, including quiet ones
-    it('still reports progress in a week with no activity at all', () => {
-      expect(getWeeklyTargetProgress([], TODAY)).toEqual([
-        { label: 'lifts', done: 0, target: 3 },
-        { label: 'rides', done: 0, target: 2 },
-        { label: 'stretch', done: 0, target: 1 },
-      ]);
-    });
-
-    // AC3: over-target is information, not an error
-    it('reports an over-target week as-is rather than clamping', () => {
-      const result = getWeeklyTargetProgress([
-        makeWorkout({ id: 'w1', type: 'weight', date: '2026-03-09' }),
-        makeWorkout({ id: 'w2', type: 'weight', date: '2026-03-10' }),
-        makeWorkout({ id: 'w3', type: 'weight', date: '2026-03-11' }),
-        makeWorkout({ id: 'w4', type: 'weight', date: '2026-03-12' }),
-      ], TODAY);
-      expect(result[0]).toEqual({ label: 'lifts', done: 4, target: 3 });
-    });
-
-    it('does not count hikes towards the ride target', () => {
-      const result = getWeeklyTargetProgress([
-        makeWorkout({ id: 'w1', type: 'hike', date: '2026-03-11' }),
-      ], TODAY);
-      expect(result[1]).toEqual({ label: 'rides', done: 0, target: 2 });
     });
   });
 });

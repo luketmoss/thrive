@@ -2067,11 +2067,6 @@ input, select, textarea {
   font-variant-numeric: tabular-nums;
 }
 
-.stats-row-value .target-met {
-  color: var(--color-success);
-  font-weight: 600;
-}
-
 /* ===== Workout Card Enhancements ===== */
 /* Cards are <button> elements for keyboard/SR access (issue #99) — reset the
    UA button styling so they keep their card appearance. */
