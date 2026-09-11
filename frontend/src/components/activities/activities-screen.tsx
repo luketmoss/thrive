@@ -20,6 +20,8 @@ import {
   toLocalDateStr,
   formatPlannedDate,
   isOverdue,
+  pluralExercise,
+  workoutCardAriaLabel,
 } from './activities-helpers';
 import { LabelBadge } from '../shared/label-badge';
 import { formatDuration } from '../../api/duration';
@@ -35,10 +37,6 @@ const TYPE_COLORS: Record<string, { light: string; dark: string }> = {
 
 function pluralWorkout(n: number): string {
   return `${n} ${n === 1 ? 'workout' : 'workouts'}`;
-}
-
-function pluralExercise(n: number): string {
-  return `${n} exercise${n !== 1 ? 's' : ''}`;
 }
 
 /**
@@ -251,11 +249,6 @@ export function ActivitiesScreen() {
                   const typeColor = TYPE_COLORS[w.type];
                   const tags = w.type === 'weight' ? getWorkoutTags(workoutSets, exercises.value) : [];
 
-                  const metaParts = [
-                    formatDuration(w.elapsed_seconds),
-                    exerciseCount > 0 ? pluralExercise(exerciseCount) : '',
-                  ].filter(Boolean);
-
                   return (
                     <button
                       type="button"
@@ -263,7 +256,7 @@ export function ActivitiesScreen() {
                       class={`workout-card workout-card-${w.type}`}
                       style={typeColor ? { '--type-accent': typeColor.light, '--type-accent-dark': typeColor.dark } as any : undefined}
                       onClick={() => navigate(`/history/${w.id}`)}
-                      aria-label={[w.name || w.type, w.type, w.date, ...metaParts].join(', ')}
+                      aria-label={workoutCardAriaLabel(w, exerciseCount)}
                     >
                       <div class="workout-card-left">
                         <span class="workout-date">{w.date}</span>
@@ -284,7 +277,20 @@ export function ActivitiesScreen() {
                           </div>
                         )}
                       </div>
-                      <span class={`type-badge badge-${w.type}`}>{w.type}</span>
+                      {/* #113: the pill stacks under the badge. aria-hidden
+                          because workoutCardAriaLabel already speaks the
+                          effort — the card is one button with one label. */}
+                      <span class="workout-card-badges">
+                        <span class={`type-badge badge-${w.type}`}>{w.type}</span>
+                        {w.effort && (
+                          <span
+                            class={`workout-effort workout-effort-${w.effort.toLowerCase()}`}
+                            aria-hidden="true"
+                          >
+                            {w.effort}
+                          </span>
+                        )}
+                      </span>
                     </button>
                   );
                 })}

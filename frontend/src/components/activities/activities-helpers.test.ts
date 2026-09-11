@@ -18,6 +18,9 @@ import {
   formatPlannedDate,
   isOverdue,
   sortPlannedWorkouts,
+  effortForSpeech,
+  workoutCardAriaLabel,
+  pluralExercise,
 } from './activities-helpers';
 import type { WorkoutWithRow, SetWithRow, ExerciseWithRow } from '../../api/types';
 
@@ -786,5 +789,88 @@ describe('cardioNoun (#105)', () => {
 
   it('falls back to a neutral noun for a mixed week', () => {
     expect(cardioNoun([bike('w1'), hike('w2')])).toBe('activities');
+  });
+});
+
+describe('effortForSpeech (#113 AC5)', () => {
+  it('speaks each level in lower case with the word "effort"', () => {
+    expect(effortForSpeech('Easy')).toBe('easy effort');
+    expect(effortForSpeech('Medium')).toBe('medium effort');
+    expect(effortForSpeech('Hard')).toBe('hard effort');
+  });
+
+  // AC5 / #101: '' means nobody said. Announcing "no effort" would be a claim
+  // the data does not make.
+  it('says nothing at all when the workout is unrated', () => {
+    expect(effortForSpeech('')).toBe('');
+  });
+});
+
+describe('workoutCardAriaLabel (#113 AC5)', () => {
+  const rated = makeWorkout({
+    name: 'Pull Day',
+    type: 'weight',
+    date: '2026-09-11',
+    elapsed_seconds: '2820',
+    effort: 'Hard',
+  });
+
+  // AC5: effort goes last, so the opening of the label is unchanged.
+  it('appends the effort after the existing parts', () => {
+    expect(workoutCardAriaLabel(rated, 5)).toBe(
+      'Pull Day, weight, 2026-09-11, 47 min, 5 exercises, hard effort',
+    );
+  });
+
+  // AC5: an unrated card's label is exactly what it has always been.
+  it('leaves an unrated workout label untouched', () => {
+    expect(workoutCardAriaLabel({ ...rated, effort: '' }, 5)).toBe(
+      'Pull Day, weight, 2026-09-11, 47 min, 5 exercises',
+    );
+  });
+
+  // AC1: effort is session-level for every type, not just weight training.
+  it('speaks effort on a cardio activity with no exercises', () => {
+    const ride = makeWorkout({
+      name: 'Evening Ride',
+      type: 'bike',
+      date: '2026-09-08',
+      elapsed_seconds: '4080',
+      effort: 'Medium',
+    });
+    expect(workoutCardAriaLabel(ride, 0)).toBe(
+      'Evening Ride, bike, 2026-09-08, 68 min, medium effort',
+    );
+  });
+
+  // AC3: no combination of absent parts may leave a stray separator.
+  it('joins cleanly when duration and exercises are both absent', () => {
+    const bare = makeWorkout({
+      name: '',
+      type: 'stretch',
+      date: '2026-09-09',
+      elapsed_seconds: '',
+      effort: 'Easy',
+    });
+    expect(workoutCardAriaLabel(bare, 0)).toBe(
+      'stretch, stretch, 2026-09-09, easy effort',
+    );
+  });
+
+  it('falls back to the type when the workout has no name', () => {
+    const unnamed = makeWorkout({ name: '', type: 'hike', date: '2026-09-05',
+      elapsed_seconds: '', effort: '' });
+    expect(workoutCardAriaLabel(unnamed, 0)).toBe('hike, hike, 2026-09-05');
+  });
+});
+
+describe('pluralExercise (#113)', () => {
+  it('singularises exactly one', () => {
+    expect(pluralExercise(1)).toBe('1 exercise');
+  });
+
+  it('pluralises everything else', () => {
+    expect(pluralExercise(0)).toBe('0 exercises');
+    expect(pluralExercise(5)).toBe('5 exercises');
   });
 });
