@@ -108,6 +108,7 @@ The spreadsheet id is the long segment in the sheet URL:
 |------|-------------|
 | `thrive_update_workout` | Fix date, name, type, notes, duration (`duration_min`, whole minutes), session effort, cardio attributes, or planned/completed status |
 | `thrive_update_set` | Correct one logged set's weight, reps, planned reps or effort (pass `section` when a lift appears twice) |
+| `thrive_update_sets` | Correct many sets of one workout in one call. All entries are validated first (any problem writes nothing), rows are re-checked before a single batch write, and each updated set's resulting state is echoed |
 | `thrive_update_exercise` | Rename or retag an exercise |
 | `thrive_update_template` | Replace a template's exercise list wholesale |
 | `thrive_delete_workout` | Delete a workout and cascade to its sets |

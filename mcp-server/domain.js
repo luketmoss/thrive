@@ -4,7 +4,9 @@
 // gains a column there, widen the range and the mappers here too.
 
 import { randomUUID } from 'node:crypto';
-import { sheetsGet, sheetsAppend, sheetsUpdate, deleteRows } from './sheets.js';
+import {
+  sheetsGet, sheetsAppend, sheetsUpdate, sheetsBatchGetRows, sheetsBatchUpdate, deleteRows,
+} from './sheets.js';
 
 const RANGES = {
   exercises: 'Exercises!A2:E',
@@ -433,12 +435,146 @@ export function findSetSlots(sets, { workout_id, exercise_id, section, exercise_
   return slots;
 }
 
+/** Describe repeated slots of one exercise so an agent can pick one. */
+export function describeSlots(slots) {
+  return slots
+    .map((g) => `[${g.section || 'no section'}] exercise_order ${g.exercise_order}, ${g.sets.length} sets`)
+    .join('; ');
+}
+
+/**
+ * The one set row an update means, or a thrown error that says how to narrow
+ * it. Shared by thrive_update_set and thrive_update_sets so both refuse to
+ * guess in exactly the same words.
+ */
+export function resolveSetTarget(sets, ex, { workout_id, set_number, section, exercise_order }) {
+  const slots = findSetSlots(sets, { workout_id, exercise_id: ex.id, section, exercise_order });
+
+  if (!slots.length) {
+    const all = findSetSlots(sets, { workout_id, exercise_id: ex.id });
+    throw new Error(
+      `No ${ex.name}${section ? ` in section ${section}` : ''}` +
+      `${exercise_order ? ` at exercise_order ${exercise_order}` : ''} in workout ${workout_id}` +
+      (all.length ? ` — it appears as ${describeSlots(all)}.` : '.'),
+    );
+  }
+  if (slots.length > 1) {
+    throw new Error(
+      `${ex.name} appears ${slots.length} times in workout ${workout_id} — ${describeSlots(slots)}. ` +
+      `Pass section or exercise_order to say which set ${set_number} you mean.`,
+    );
+  }
+
+  const slot = slots[0];
+  const target = slot.sets.find((s) => s.set_number === Number(set_number));
+  if (!target) {
+    throw new Error(
+      `No set ${set_number} of ${ex.name} [${slot.section || 'no section'}] in workout ` +
+      `${workout_id} — that slot has sets 1..${slot.sets.length}.`,
+    );
+  }
+  return { slot, target };
+}
+
+export const SET_UPDATE_FIELDS = ['weight', 'reps', 'planned_reps', 'effort'];
+const SET_UPDATE_KEYS = ['exercise', 'set_number', 'section', 'exercise_order', ...SET_UPDATE_FIELDS];
+
+/**
+ * Resolve a batch of set corrections against one workout without writing.
+ * Every entry is checked and every problem collected (#119): a half-applied
+ * batch is worse than a rejected one, because the caller can't tell which
+ * sets are live without re-reading.
+ *
+ * `resolve(ref)` returns a library exercise or throws.
+ */
+export function planSetUpdates(sets, workoutId, updates, resolve) {
+  const changes = [];
+  const errors = [];
+  const claimed = new Map(); // sheetRow -> index of the entry that took it
+
+  updates.forEach((u, i) => {
+    const fail = (msg) => errors.push(`updates[${i}] "${u.exercise}" set ${u.set_number}: ${msg}`);
+
+    const unknown = findUnknownFields(u, SET_UPDATE_KEYS);
+    if (unknown.length) {
+      return fail(`unknown field ${unknown.map((k) => `"${k}"`).join(', ')} — accepted: ${SET_UPDATE_KEYS.join(', ')}`);
+    }
+    if (!SET_UPDATE_FIELDS.some((f) => u[f] !== undefined)) {
+      return fail(`nothing to change — pass at least one of ${SET_UPDATE_FIELDS.join(', ')}`);
+    }
+
+    let ex;
+    let resolved;
+    try {
+      ex = resolve(u.exercise);
+      resolved = resolveSetTarget(sets, ex, {
+        workout_id: workoutId, set_number: u.set_number, section: u.section, exercise_order: u.exercise_order,
+      });
+    } catch (err) {
+      return fail(err.message);
+    }
+
+    const row = resolved.target.sheetRow;
+    if (claimed.has(row)) {
+      return fail(`targets the same set as updates[${claimed.get(row)}] — combine them into one entry`);
+    }
+    claimed.set(row, i);
+
+    const after = { ...resolved.target };
+    for (const f of SET_UPDATE_FIELDS) if (u[f] !== undefined) after[f] = u[f];
+    changes.push({ index: i, exercise: ex, slot: resolved.slot, before: resolved.target, after });
+  });
+
+  return { changes, errors };
+}
+
+/** "weight 115 lbs · reps 6 · planned 8 · effort Hard", with — for blanks. */
+export function describeSetState(s) {
+  return [
+    `weight ${formatWeight(s.weight) || '—'}`,
+    `reps ${s.reps || '—'}`,
+    `planned ${s.planned_reps || '—'}`,
+    `effort ${s.effort || '—'}`,
+  ].join(' · ');
+}
+
+/**
+ * Rows whose freshly read A..F cells no longer hold the workout, exercise and
+ * set number they were read with — a row above was deleted and the cached
+ * sheetRow now points at a different set (cf. #95).
+ */
+export function findStaleSetRows(rows, freshRows) {
+  return rows.filter((s, i) => {
+    const r = freshRows[i] || [];
+    return r[0] !== s.workout_id || r[1] !== s.exercise_id || Number(r[5]) !== s.set_number;
+  });
+}
+
 export async function appendSets(sets) {
   await sheetsAppend('Sets!A:J', sets.map(setRowValues));
 }
 
 export async function writeSetRow(set) {
   await sheetsUpdate(`Sets!A${set.sheetRow}:J${set.sheetRow}`, [setRowValues(set)]);
+}
+
+/**
+ * Overwrite many set rows in one request, after re-reading each target to
+ * confirm it still holds the same set. Any mismatch writes nothing.
+ */
+export async function writeSetRowsChecked(sets) {
+  const fresh = await sheetsBatchGetRows(sets.map((s) => `Sets!A${s.sheetRow}:F${s.sheetRow}`));
+  const stale = findStaleSetRows(sets, fresh);
+  if (stale.length) {
+    throw new Error(
+      `${stale.length} set row${stale.length > 1 ? 's' : ''} moved since ${stale.length > 1 ? 'they were' : 'it was'} ` +
+      `read (sheet rows ${stale.map((s) => s.sheetRow).join(', ')}) — the sheet changed underneath this call. ` +
+      'Nothing was written; re-read the workout and retry.',
+    );
+  }
+  await sheetsBatchUpdate(
+    sets.map((s) => ({ range: `Sets!A${s.sheetRow}:J${s.sheetRow}`, values: [setRowValues(s)] })),
+  );
 }
 
 export { deleteRows };

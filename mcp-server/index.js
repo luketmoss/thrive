@@ -20,7 +20,8 @@ import {
   fetchExercises, createExercise, writeExerciseRow,
   fetchTemplateRows, groupTemplateRows, createTemplate, replaceTemplateRows, findStaleExerciseNames,
   fetchWorkouts, createWorkout, writeWorkoutRow, newWorkoutId,
-  fetchSets, appendSets, writeSetRow, slotKey, groupSetsByExercise, findSetSlots,
+  fetchSets, appendSets, writeSetRow, slotKey, groupSetsByExercise,
+  resolveSetTarget, planSetUpdates, describeSetState, writeSetRowsChecked,
   deleteRows,
 } from './domain.js';
 
@@ -63,13 +64,6 @@ function tool(name, description, shape, handler) {
       }
     },
   );
-}
-
-/** Describe repeated slots of one exercise so an agent can pick one. */
-function describeSlots(slots) {
-  return slots
-    .map((g) => `[${g.section || 'no section'}] exercise_order ${g.exercise_order}, ${g.sets.length} sets`)
-    .join('; ');
 }
 
 /** Write a single cell — used by the exercise rename cascade. */
@@ -666,31 +660,7 @@ tool(
   }) => {
     const [exercises, sets] = await Promise.all([fetchExercises(), fetchSets()]);
     const ex = resolveExercise(exercise, exercises);
-    const slots = findSetSlots(sets, { workout_id, exercise_id: ex.id, section, exercise_order });
-
-    if (!slots.length) {
-      const all = findSetSlots(sets, { workout_id, exercise_id: ex.id });
-      throw new Error(
-        `No ${ex.name}${section ? ` in section ${section}` : ''}` +
-        `${exercise_order ? ` at exercise_order ${exercise_order}` : ''} in workout ${workout_id}` +
-        (all.length ? ` — it appears as ${describeSlots(all)}.` : '.'),
-      );
-    }
-    if (slots.length > 1) {
-      throw new Error(
-        `${ex.name} appears ${slots.length} times in workout ${workout_id} — ${describeSlots(slots)}. ` +
-        `Pass section or exercise_order to say which set ${set_number} you mean.`,
-      );
-    }
-
-    const slot = slots[0];
-    const target = slot.sets.find((s) => s.set_number === set_number);
-    if (!target) {
-      throw new Error(
-        `No set ${set_number} of ${ex.name} [${slot.section || 'no section'}] in workout ` +
-        `${workout_id} — that slot has sets 1..${slot.sets.length}.`,
-      );
-    }
+    const { slot, target } = resolveSetTarget(sets, ex, { workout_id, set_number, section, exercise_order });
 
     const updated = { ...target };
     if (weight !== undefined) updated.weight = weight;
@@ -701,6 +671,56 @@ tool(
     await writeSetRow(updated);
     return text(
       `Updated ${ex.name} [${slot.section || 'no section'}] in ${workout_id} — ${setLine(updated)}`,
+    );
+  },
+);
+
+tool(
+  'thrive_update_sets',
+  'Correct many sets of one workout in a single call — the bulk form of thrive_update_set, for post-session ' +
+    'logging. Every entry is validated first: if any entry fails to resolve, nothing is written and every ' +
+    'problem is listed. Returns the resulting state of each updated set, so no follow-up read is needed.',
+  {
+    workout_id: z.string().describe('Workout id'),
+    updates: z
+      .array(
+        z
+          .object({
+            exercise: z.string().describe('Exercise name or id within that workout'),
+            set_number: z.coerce.number().describe('Which set (1-based, within the section)'),
+            section: z.enum(SECTIONS).optional().describe('Which section, when the exercise appears in several'),
+            exercise_order: z.coerce.number().optional().describe('Position of the exercise, as an alternative to section'),
+            weight: z.string().optional().describe('Weight in lbs ("0" = bodyweight)'),
+            reps: z.string().optional().describe('Reps actually performed'),
+            planned_reps: z.string().optional().describe('Planned reps'),
+            effort: z.enum(EFFORTS).optional().describe('Effort level'),
+          })
+          // Passthrough so a misnamed field is reported per entry rather than silently stripped.
+          .passthrough(),
+      )
+      .min(1)
+      .describe('One entry per set. Only the fields you pass change.'),
+  },
+  async ({ workout_id, updates }) => {
+    const [exercises, workouts, sets] = await Promise.all([fetchExercises(), fetchWorkouts(), fetchSets()]);
+    resolveWorkout(workout_id, workouts);
+
+    const { changes, errors } = planSetUpdates(sets, workout_id, updates, (ref) => resolveExercise(ref, exercises));
+    if (errors.length) {
+      throw new Error(
+        `Nothing was written — ${errors.length} of ${updates.length} entries can't be applied:\n` +
+        errors.map((e) => `  - ${e}`).join('\n'),
+      );
+    }
+
+    await writeSetRowsChecked(changes.map((c) => c.after));
+    return text(
+      [
+        `Updated ${changes.length} set${changes.length > 1 ? 's' : ''} in ${workout_id}:`,
+        ...changes.map(
+          (c) => `- ${c.exercise.name} [${c.slot.section || 'no section'}] set ${c.after.set_number}: ${describeSetState(c.after)}`,
+        ),
+      ].join('\n'),
     );
   },
 );

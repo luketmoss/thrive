@@ -93,6 +93,24 @@ export async function sheetsAppend(range, values) {
   );
 }
 
+/** First row of each range, in order, from one values:batchGet request. */
+export async function sheetsBatchGetRows(ranges) {
+  if (!ranges.length) return [];
+  const qs = ranges.map((r) => `ranges=${encodeURIComponent(r)}`).join('&');
+  const data = await request(`${BASE}/${SPREADSHEET_ID}/values:batchGet?${qs}`);
+  return (data.valueRanges || []).map((vr) => vr.values?.[0] ?? []);
+}
+
+/** Write many ranges in a single values:batchUpdate request. */
+export async function sheetsBatchUpdate(data) {
+  if (!data.length) return;
+  await request(`${BASE}/${SPREADSHEET_ID}/values:batchUpdate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ valueInputOption: 'RAW', data }),
+  });
+}
+
 const sheetIdCache = new Map();
 export async function getSheetId(sheetName) {
   if (sheetIdCache.has(sheetName)) return sheetIdCache.get(sheetName);
