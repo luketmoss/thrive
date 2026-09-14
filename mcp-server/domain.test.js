@@ -10,6 +10,7 @@ import {
   parseDurationMinutes, findUnknownFields, findStaleExerciseNames,
   formatWeight, describeLoad, isSetLogged, buildSchedulePlan,
   resolveSetTarget, planSetUpdates, describeSetState, findStaleSetRows,
+  prepareSchedule,
 } from './domain.js';
 
 test('normalizeDate passes ISO dates through', () => {
@@ -445,4 +446,80 @@ test('describeSetState echoes the resulting row', () => {
     describeSetState({ weight: '0', reps: '', planned_reps: '', effort: '' }),
     'weight bodyweight · reps — · planned — · effort —',
   );
+});
+
+// --- #121: one validation path for a session and a week --------------
+
+const pushTemplate = {
+  id: 'tpl_push', name: '1 - Upper Push A',
+  exercises: [
+    { order: 1, exercise_id: 'ex_bench', exercise_name: 'Bench Press BB', section: 'primary', sets: '3', reps: '5' },
+    { order: 2, exercise_id: 'ex_cgpu', exercise_name: 'Close Grip Push Ups', section: 'SS1', sets: '2', reps: '12' },
+  ],
+};
+const scheduleCtx = (templates = [pushTemplate]) => ({
+  library: schedLib,
+  resolveExercise: resolveFrom(schedLib),
+  resolveTemplate: (ref) => {
+    const t = templates.find((x) => x.id === ref || x.name === ref);
+    if (!t) throw new Error(`No template matching "${ref}".`);
+    return t;
+  },
+});
+
+test('prepareSchedule builds a planned workout and its set rows without writing', () => {
+  const p = prepareSchedule({
+    date: '2026-09-14', name: 'Push',
+    exercises: [
+      { exercise: 'Bench Press BB', section: 'primary', sets: 2, reps: '8', set_weights: ['95', '115'] },
+      { exercise: 'Side Plank', section: 'burnout', sets: 1, reps: '45 sec' },
+    ],
+  }, scheduleCtx());
+  assert.deepEqual(p.errors, []);
+  assert.equal(p.workout.status, 'planned');
+  assert.equal(p.workout.date, '2026-09-14');
+  assert.match(p.workout.id, /^w_[0-9a-f]{8}$/);
+  assert.equal(p.rows.length, 3);
+  assert.ok(p.rows.every((r) => r.workout_id === p.workout.id), 'rows point at the minted id');
+  assert.deepEqual(p.rows.map((r) => [r.exercise_order, r.set_number, r.weight, r.planned_reps]), [
+    [1, 1, '95', '8'], [1, 2, '115', '8'], [2, 1, '', '45 sec'],
+  ]);
+});
+
+test('prepareSchedule expands a template with library names', () => {
+  const p = prepareSchedule({ date: '2026-09-14', name: 'Push', template: '1 - Upper Push A' }, scheduleCtx());
+  assert.deepEqual(p.errors, []);
+  assert.equal(p.workout.template_id, 'tpl_push');
+  assert.equal(p.rows.length, 5);
+  assert.ok(p.rows.some((r) => r.exercise_name === 'Push Ups - Close Grip'), 'cached name replaced');
+  assert.ok(p.rows.every((r) => r.weight === ''));
+});
+
+test('prepareSchedule collects a bad date and a bad exercise together (#121 AC2)', () => {
+  const p = prepareSchedule({
+    date: 'next tuesday-ish', name: 'Legs',
+    exercises: [{ exercise: 'Nope', section: 'primary', sets: 3, reps: '5' }],
+  }, scheduleCtx());
+  assert.equal(p.errors.length, 2);
+  assert.match(p.errors[0], /could not read "next tuesday-ish" as a date/);
+  assert.match(p.errors[1], /exercises\[0\] "Nope": No exercise matching/);
+  assert.equal(p.workout, undefined, 'nothing built to write');
+});
+
+test('prepareSchedule refuses orphaned template rows and unknown templates', () => {
+  const broken = { ...pushTemplate, exercises: [{ ...pushTemplate.exercises[0], exercise_id: 'ex_gone', order: 1 }] };
+  assert.match(
+    prepareSchedule({ date: 'today', name: 'x', template: broken.name }, scheduleCtx([broken])).errors[0],
+    /row 1: "Bench Press BB" \(ex_gone\)/,
+  );
+  assert.match(
+    prepareSchedule({ date: 'today', name: 'x', template: 'Nope' }, scheduleCtx()).errors[0],
+    /No template matching "Nope"/,
+  );
+});
+
+test('prepareSchedule needs exercises for weight workouts only', () => {
+  assert.match(prepareSchedule({ date: 'today', name: 'x' }, scheduleCtx()).errors[0], /needs either a template or an exercises list/);
+  const hike = prepareSchedule({ date: 'today', name: 'Hike', type: 'hike' }, scheduleCtx());
+  assert.deepEqual([hike.errors.length, hike.rows.length, hike.workout.type], [0, 0, 'hike']);
 });

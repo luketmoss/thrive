@@ -16,10 +16,10 @@ import {
   WORKOUT_TYPES, EFFORTS, SECTIONS,
   normalizeDate, normalizeRangeToMax, secondsToMinutes, metersToMiles, metersToFeet,
   parseDurationMinutes, findUnknownFields,
-  formatWeight, describeLoad, isSetLogged, buildSchedulePlan,
+  formatWeight, describeLoad, isSetLogged, prepareSchedule,
   fetchExercises, createExercise, writeExerciseRow,
-  fetchTemplateRows, groupTemplateRows, createTemplate, replaceTemplateRows, findStaleExerciseNames,
-  fetchWorkouts, createWorkout, writeWorkoutRow, newWorkoutId,
+  fetchTemplateRows, groupTemplateRows, createTemplate, replaceTemplateRows,
+  fetchWorkouts, appendWorkouts, writeWorkoutRow,
   fetchSets, appendSets, writeSetRow, slotKey, groupSetsByExercise,
   resolveSetTarget, planSetUpdates, describeSetState, writeSetRowsChecked,
   deleteRows,
@@ -352,21 +352,41 @@ const scheduleExerciseSpec = exerciseSpec.extend({
   ),
 });
 
+// One scheduled session. thrive_schedule_week takes an array of exactly this.
+const scheduleShape = {
+  date: z.string().describe("Date to schedule (YYYY-MM-DD, 'today', 'tomorrow', '+3d')"),
+  name: z.string().describe('Workout name, e.g. "Push A"'),
+  type: z.enum(WORKOUT_TYPES).optional().describe('Workout type (default: weight)'),
+  template: z.string().optional().describe('Template name or id to expand into planned sets'),
+  exercises: z.array(scheduleExerciseSpec).optional().describe(
+    'Explicit exercise list, with optional prescribed loads (ignored if template is given). ' +
+    'Validated as a whole before anything is written: any problem rejects the call and lists every problem.',
+  ),
+  notes: z.string().optional().describe('Workout notes'),
+  status: z
+    .enum(['planned', 'completed'])
+    .optional()
+    .describe("Default 'planned'. Use 'completed' only to backfill a workout that already happened."),
+};
+
+/** Library and templates, read once, plus resolvers for prepareSchedule. */
+async function scheduleContext() {
+  const [library, templateRows] = await Promise.all([fetchExercises(), fetchTemplateRows()]);
+  const templates = groupTemplateRows(templateRows);
+  return {
+    library,
+    resolveExercise: (ref) => resolveExercise(ref, library),
+    resolveTemplate: (ref) => resolveTemplate(ref, templates),
+  };
+}
+
 tool(
   'thrive_schedule_workout',
   'Schedule a workout for a future date. Creates it with status "planned" so it shows as upcoming in the app. ' +
     'Supply either a template to expand, or an explicit exercise list. Weight-type workouts get one planned ' +
     'set row per set, ready for the user to fill in.',
   {
-    date: z.string().describe("Date to schedule (YYYY-MM-DD, 'today', 'tomorrow', '+3d')"),
-    name: z.string().describe('Workout name, e.g. "Push A"'),
-    type: z.enum(WORKOUT_TYPES).optional().describe('Workout type (default: weight)'),
-    template: z.string().optional().describe('Template name or id to expand into planned sets'),
-    exercises: z.array(scheduleExerciseSpec).optional().describe(
-      'Explicit exercise list, with optional prescribed loads (ignored if template is given). ' +
-      'Validated as a whole before anything is written: any problem rejects the call and lists every problem.',
-    ),
-    notes: z.string().optional().describe('Workout notes'),
+    ...scheduleShape,
     distance_m: z.string().optional().describe(
       'Distance in METERS (canonical storage unit). 12.4 miles is "19956". Pass "" to clear.',
     ),
@@ -377,102 +397,91 @@ tool(
       'Elevation loss in METERS. Recorded for hikes only. Pass "" to clear.',
     ),
     avg_hr: z.string().optional().describe('Average heart rate in bpm. Pass "" to clear.'),
-    status: z
-      .enum(['planned', 'completed'])
-      .optional()
-      .describe("Default 'planned'. Use 'completed' only to backfill a workout that already happened."),
   },
-  async ({ date, name, type = 'weight', template, exercises, notes, status = 'planned' }) => {
-    const when = normalizeDate(date);
-    if (!when) throw new Error(`Could not read "${date}" as a date. Use YYYY-MM-DD.`);
-
-    let plan = [];
-    let templateId = '';
-
-    if (template) {
-      const [templateRows, library] = await Promise.all([fetchTemplateRows(), fetchExercises()]);
-      const tpl = resolveTemplate(template, groupTemplateRows(templateRows));
-      // Template rows key on exercise_id but cache the name, which goes stale
-      // when the library is edited by hand. Write the library's name, and
-      // refuse rows whose id no longer exists rather than scheduling them (#120).
-      const { orphans } = findStaleExerciseNames(tpl.exercises, library);
-      if (orphans.length) {
-        throw new Error(
-          `Template "${tpl.name}" has ${orphans.length} row${orphans.length > 1 ? 's' : ''} whose ` +
-          'exercise is not in the library — nothing was scheduled:\n' +
-          orphans.map((r) => `  - row ${r.order}: "${r.exercise_name}" (${r.exercise_id || 'no id'})`).join('\n') +
-          '\nRepair the template with thrive_update_template, or pass an explicit exercises list.',
-        );
-      }
-      const currentName = new Map(library.map((e) => [e.id, e.name]));
-      templateId = tpl.id;
-      plan = tpl.exercises.map((e) => ({
-        exercise_id: e.exercise_id,
-        exercise_name: currentName.get(e.exercise_id),
-        section: e.section,
-        sets: Number(e.sets) || 1,
-        reps: e.reps,
-      }));
-    } else if (exercises?.length) {
-      const library = await fetchExercises();
-      const built = buildSchedulePlan(exercises, (ref) => resolveExercise(ref, library));
-      if (built.errors.length) {
-        throw new Error(
-          `Nothing was scheduled — ${built.errors.length} problem${built.errors.length > 1 ? 's' : ''} ` +
-          `to fix:\n${built.errors.map((e) => `  - ${e}`).join('\n')}`,
-        );
-      }
-      plan = built.plan;
-    } else if (type === 'weight') {
-      throw new Error('A weight workout needs either a template or an exercises list.');
+  async (input) => {
+    const p = prepareSchedule(input, await scheduleContext());
+    if (p.errors.length) {
+      throw new Error(
+        `Nothing was scheduled — ${p.errors.length} problem${p.errors.length > 1 ? 's' : ''} ` +
+        `to fix:\n${p.errors.map((e) => `  - ${e}`).join('\n')}`,
+      );
     }
-
-    const workoutId = newWorkoutId();
-    const rows = [];
-    plan.forEach((ex, i) => {
-      for (let n = 1; n <= ex.sets; n++) {
-        rows.push({
-          workout_id: workoutId,
-          exercise_id: ex.exercise_id,
-          exercise_name: ex.exercise_name,
-          section: ex.section,
-          exercise_order: i + 1,
-          set_number: n,
-          planned_reps: ex.reps,
-          // Prescription only: performed reps and effort stay blank (#118).
-          weight: ex.weights?.[n - 1] ?? '',
-          reps: '',
-          effort: '',
-        });
-      }
-    });
 
     // Sets before the workout row: if the second append fails, the set rows
     // are invisible orphans, whereas a workout row without its sets would show
     // up as an empty session.
-    await appendSets(rows);
-    const workout = await createWorkout({
-      id: workoutId,
-      date: when,
-      time: '',
-      type,
-      name,
-      template_id: templateId,
-      notes,
-      status: status === 'planned' ? 'planned' : '',
-    });
+    await appendSets(p.rows);
+    await appendWorkouts([p.workout]);
 
+    const { workout, rows, plan } = p;
     const detail = plan.map(
       (e, i) => `  ${i + 1}. ${e.exercise_name} [${e.section}] — ${e.sets} x ${e.reps}${describeLoad(e.weights)}`,
     );
     return text(
       [
-        `Scheduled **${workout.name}** for ${workout.date} [${workout.type}]${status === 'planned' ? ' (planned)' : ''}`,
+        `Scheduled **${workout.name}** for ${workout.date} [${workout.type}]${workout.status === 'planned' ? ' (planned)' : ''}`,
         `- id: ${workout.id}`,
-        templateId ? `- From template: ${template} (${templateId})` : null,
+        workout.template_id ? `- From template: ${input.template} (${workout.template_id})` : null,
         rows.length ? `- ${plan.length} exercises, ${rows.length} planned sets:` : '- No exercises attached.',
         ...detail,
       ].filter(Boolean).join('\n'),
+    );
+  },
+);
+
+tool(
+  'thrive_schedule_week',
+  'Schedule several workouts in one call — typically a training week. Each entry takes exactly the fields of ' +
+    'thrive_schedule_workout (template or exercises, with prescribed loads). Every workout is validated before ' +
+    'anything is written: if any has a problem, none are scheduled and every problem is listed by index.',
+  {
+    workouts: z
+      .array(
+        z
+          .object(scheduleShape)
+          // Passthrough so a misnamed field is reported per workout rather than silently stripped.
+          .passthrough(),
+      )
+      .min(1)
+      .describe('The sessions to schedule, in any order.'),
+  },
+  async ({ workouts }) => {
+    const ctx = await scheduleContext();
+    const accepted = Object.keys(scheduleShape);
+    const errors = [];
+    const prepared = [];
+
+    workouts.forEach((input, i) => {
+      const where = `workouts[${i}] "${input.name}"`;
+      const unknown = findUnknownFields(input, accepted);
+      if (unknown.length) {
+        errors.push(`${where}: unknown field ${unknown.map((k) => `"${k}"`).join(', ')} — accepted: ${accepted.join(', ')}`);
+        return;
+      }
+      const p = prepareSchedule(input, ctx);
+      if (p.errors.length) errors.push(...p.errors.map((e) => `${where}: ${e}`));
+      else prepared.push(p);
+    });
+
+    if (errors.length) {
+      throw new Error(
+        `Nothing was scheduled — ${errors.length} problem${errors.length > 1 ? 's' : ''} across ` +
+        `${workouts.length} workouts:\n${errors.map((e) => `  - ${e}`).join('\n')}`,
+      );
+    }
+
+    // Two appends for the whole week, sets first for the reason given in
+    // thrive_schedule_workout.
+    await appendSets(prepared.flatMap((p) => p.rows));
+    await appendWorkouts(prepared.map((p) => p.workout));
+
+    return text(
+      [
+        `Scheduled ${prepared.length} workout${prepared.length > 1 ? 's' : ''}:`,
+        ...prepared.map(({ workout: w, rows }) =>
+          `- ${w.date} **${w.name}** [${w.type}]${w.status === 'planned' ? ' (planned)' : ''} — ` +
+          `${rows.length} planned sets (id: ${w.id})`),
+      ].join('\n'),
     );
   },
 );

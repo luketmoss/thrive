@@ -20,8 +20,7 @@ export const EFFORTS = ['Easy', 'Medium', 'Hard'];
 export const SECTIONS = ['warmup', 'primary', 'SS1', 'SS2', 'SS3', 'burnout', 'cooldown'];
 
 const newId = (prefix) => `${prefix}_${randomUUID().slice(0, 8)}`;
-/** Minted before any write so a workout's sets can be appended ahead of its row (#118). */
-export const newWorkoutId = () => newId('w');
+const newWorkoutId = () => newId('w');
 const nowIso = () => new Date().toISOString();
 
 /** Local calendar date, not UTC — a 7pm workout must not land on tomorrow. */
@@ -129,6 +128,90 @@ export function buildSchedulePlan(specs, resolve) {
     });
   });
   return { plan, errors };
+}
+
+/**
+ * Everything needed to write one scheduled session — the workout record, its
+ * set rows, and the expanded plan for the response — checked and built
+ * without writing. Returns `{ errors }` instead when anything is wrong, with
+ * every problem found. thrive_schedule_workout and thrive_schedule_week both
+ * go through here, so a week is validated exactly like a single session (#121).
+ *
+ * `resolveExercise(ref)` and `resolveTemplate(ref)` return a match or throw.
+ */
+export function prepareSchedule(input, { library, resolveExercise, resolveTemplate }) {
+  const { date, name, type = 'weight', template, exercises, notes, status = 'planned' } = input;
+  const errors = [];
+
+  const when = normalizeDate(date);
+  if (!when) errors.push(`could not read "${date}" as a date — use YYYY-MM-DD, 'today', 'tomorrow' or '+3d'`);
+
+  let plan = [];
+  let templateId = '';
+  if (template) {
+    let tpl;
+    try {
+      tpl = resolveTemplate(template);
+    } catch (err) {
+      errors.push(err.message);
+    }
+    if (tpl) {
+      // Template rows key on exercise_id but cache the name, which goes stale
+      // when the library is edited by hand: write the library's name, and
+      // refuse rows whose id no longer exists (#120).
+      const { orphans } = findStaleExerciseNames(tpl.exercises, library);
+      if (orphans.length) {
+        errors.push(
+          `template "${tpl.name}" has ${orphans.length} row${orphans.length > 1 ? 's' : ''} whose exercise ` +
+          `is not in the library (${orphans.map((r) => `row ${r.order}: "${r.exercise_name}" (${r.exercise_id || 'no id'})`).join('; ')}) ` +
+          '— repair it with thrive_update_template, or pass an explicit exercises list',
+        );
+      } else {
+        const currentName = new Map(library.map((e) => [e.id, e.name]));
+        templateId = tpl.id;
+        plan = tpl.exercises.map((e) => ({
+          exercise_id: e.exercise_id,
+          exercise_name: currentName.get(e.exercise_id),
+          section: e.section,
+          sets: Number(e.sets) || 1,
+          reps: e.reps,
+          weights: [],
+        }));
+      }
+    }
+  } else if (exercises?.length) {
+    const built = buildSchedulePlan(exercises, resolveExercise);
+    errors.push(...built.errors);
+    plan = built.plan;
+  } else if (type === 'weight') {
+    errors.push('a weight workout needs either a template or an exercises list');
+  }
+
+  if (errors.length) return { errors };
+
+  const workout = buildWorkout({
+    date: when,
+    time: '',
+    type,
+    name,
+    template_id: templateId,
+    notes,
+    status: status === 'planned' ? 'planned' : '',
+  });
+  const rows = plan.flatMap((ex, i) => Array.from({ length: ex.sets }, (_, k) => ({
+    workout_id: workout.id,
+    exercise_id: ex.exercise_id,
+    exercise_name: ex.exercise_name,
+    section: ex.section,
+    exercise_order: i + 1,
+    set_number: k + 1,
+    planned_reps: ex.reps,
+    // Prescription only: performed reps and effort stay blank (#118).
+    weight: ex.weights[k] ?? '',
+    reps: '',
+    effort: '',
+  })));
+  return { workout, rows, plan, errors: [] };
 }
 
 // --- Exercises (A:E) ------------------------------------------------
@@ -317,7 +400,8 @@ export async function fetchWorkouts() {
   }));
 }
 
-export async function createWorkout(data) {
+/** A new workout record, not yet written. Append it with appendWorkouts. */
+export function buildWorkout(data) {
   const now = new Date();
   const workout = {
     id: data.id || newWorkoutId(),
@@ -340,8 +424,12 @@ export async function createWorkout(data) {
     descent_m: '',
     avg_hr: '',
   };
-  await sheetsAppend('Workouts!A:Q', [workoutRowValues(workout)]);
   return workout;
+}
+
+/** Append workout rows in a single request. */
+export async function appendWorkouts(list) {
+  await sheetsAppend('Workouts!A:Q', list.map((w) => workoutRowValues(w)));
 }
 
 /**
