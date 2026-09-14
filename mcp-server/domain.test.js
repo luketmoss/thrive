@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import {
   normalizeDate, normalizeRangeToMax, groupTemplateRows, todayStr,
   slotKey, groupSetsByExercise, findSetSlots, secondsToMinutes, workoutRowValues, metersToMiles, metersToFeet,
-  parseDurationMinutes, findUnknownFields,
+  parseDurationMinutes, findUnknownFields, findStaleExerciseNames,
 } from './domain.js';
 
 test('normalizeDate passes ISO dates through', () => {
@@ -225,4 +225,37 @@ test('findUnknownFields names keys the schema does not declare', () => {
   assert.deepEqual(findUnknownFields({ workout_id: 'w1', duration_sec: 60 }, allowed), ['duration_sec']);
   assert.deepEqual(findUnknownFields({ workout_id: 'w1', duration_min: 63 }, allowed), []);
   assert.deepEqual(findUnknownFields(undefined, allowed), []);
+});
+
+// --- #120: cached exercise names drift from the library --------------
+
+const library = [
+  { id: 'ex_032', name: 'Cable Tricep Pushdown Rope' },
+  { id: 'ex_012', name: 'Bench Press BB' },
+];
+
+test('findStaleExerciseNames reports a cached name that differs from the library', () => {
+  const rows = [{ exercise_id: 'ex_032', exercise_name: 'Rope Tricep Pushdown FT' }];
+  const { stale, orphans } = findStaleExerciseNames(rows, library);
+  assert.equal(stale.length, 1);
+  assert.equal(stale[0].name, 'Cable Tricep Pushdown Rope');
+  assert.equal(stale[0].row, rows[0], 'the original row comes back so callers keep its location');
+  assert.equal(orphans.length, 0);
+});
+
+test('findStaleExerciseNames leaves matching names alone', () => {
+  const { stale, orphans } = findStaleExerciseNames(
+    [{ exercise_id: 'ex_012', exercise_name: 'Bench Press BB' }], library,
+  );
+  assert.deepEqual([stale.length, orphans.length], [0, 0]);
+});
+
+test('findStaleExerciseNames separates rows whose id is not in the library', () => {
+  const rows = [
+    { exercise_id: 'ex_gone', exercise_name: 'Kettlebell Swings KB' },
+    { exercise_id: '', exercise_name: 'No id at all' },
+  ];
+  const { stale, orphans } = findStaleExerciseNames(rows, library);
+  assert.equal(stale.length, 0, 'an orphan has no correct name to refresh to');
+  assert.deepEqual(orphans, rows);
 });

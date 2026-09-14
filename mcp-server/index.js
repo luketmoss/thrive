@@ -17,7 +17,7 @@ import {
   normalizeDate, normalizeRangeToMax, secondsToMinutes, metersToMiles, metersToFeet,
   parseDurationMinutes, findUnknownFields,
   fetchExercises, createExercise, writeExerciseRow,
-  fetchTemplateRows, groupTemplateRows, createTemplate, replaceTemplateRows,
+  fetchTemplateRows, groupTemplateRows, createTemplate, replaceTemplateRows, findStaleExerciseNames,
   fetchWorkouts, createWorkout, writeWorkoutRow,
   fetchSets, appendSets, writeSetRow, slotKey, groupSetsByExercise, findSetSlots,
   deleteRows,
@@ -380,11 +380,25 @@ tool(
     let templateId = '';
 
     if (template) {
-      const tpl = resolveTemplate(template, groupTemplateRows(await fetchTemplateRows()));
+      const [templateRows, library] = await Promise.all([fetchTemplateRows(), fetchExercises()]);
+      const tpl = resolveTemplate(template, groupTemplateRows(templateRows));
+      // Template rows key on exercise_id but cache the name, which goes stale
+      // when the library is edited by hand. Write the library's name, and
+      // refuse rows whose id no longer exists rather than scheduling them (#120).
+      const { orphans } = findStaleExerciseNames(tpl.exercises, library);
+      if (orphans.length) {
+        throw new Error(
+          `Template "${tpl.name}" has ${orphans.length} row${orphans.length > 1 ? 's' : ''} whose ` +
+          'exercise is not in the library — nothing was scheduled:\n' +
+          orphans.map((r) => `  - row ${r.order}: "${r.exercise_name}" (${r.exercise_id || 'no id'})`).join('\n') +
+          '\nRepair the template with thrive_update_template, or pass an explicit exercises list.',
+        );
+      }
+      const currentName = new Map(library.map((e) => [e.id, e.name]));
       templateId = tpl.id;
       plan = tpl.exercises.map((e) => ({
         exercise_id: e.exercise_id,
-        exercise_name: e.exercise_name,
+        exercise_name: currentName.get(e.exercise_id),
         section: e.section,
         sets: Number(e.sets) || 1,
         reps: e.reps,
