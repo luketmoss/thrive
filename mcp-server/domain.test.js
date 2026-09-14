@@ -8,6 +8,7 @@ import {
   normalizeDate, normalizeRangeToMax, groupTemplateRows, todayStr,
   slotKey, groupSetsByExercise, findSetSlots, secondsToMinutes, workoutRowValues, metersToMiles, metersToFeet,
   parseDurationMinutes, findUnknownFields, findStaleExerciseNames,
+  formatWeight, describeLoad, isSetLogged, buildSchedulePlan,
 } from './domain.js';
 
 test('normalizeDate passes ISO dates through', () => {
@@ -258,4 +259,91 @@ test('findStaleExerciseNames separates rows whose id is not in the library', () 
   const { stale, orphans } = findStaleExerciseNames(rows, library);
   assert.equal(stale.length, 0, 'an orphan has no correct name to refresh to');
   assert.deepEqual(orphans, rows);
+});
+
+// --- #118: prescribed load at schedule time --------------------------
+
+const resolveFrom = (lib) => (ref) => {
+  const ex = lib.find((e) => e.id === ref || e.name === ref);
+  if (!ex) throw new Error(`No exercise matching "${ref}".`);
+  return ex;
+};
+const schedLib = [
+  { id: 'ex_bench', name: 'Bench Press BB' },
+  { id: 'ex_squat', name: 'Squat BB' },
+  { id: 'ex_cars', name: 'Shoulder CARs' },
+  { id: 'ex_cgpu', name: 'Push Ups - Close Grip' },
+  { id: 'ex_plank', name: 'Side Plank' },
+];
+
+test('buildSchedulePlan applies weight to every set (AC1)', () => {
+  const { plan, errors } = buildSchedulePlan(
+    [{ exercise: 'Bench Press BB', section: 'primary', sets: 4, reps: '8', weight: '115' }],
+    resolveFrom(schedLib),
+  );
+  assert.deepEqual(errors, []);
+  assert.deepEqual(plan[0].weights, ['115', '115', '115', '115']);
+  assert.equal(plan[0].reps, '8');
+});
+
+test('buildSchedulePlan lets set_weights ramp and win over weight (AC2)', () => {
+  const { plan } = buildSchedulePlan(
+    [{ exercise: 'Squat BB', section: 'primary', sets: 3, reps: '5', weight: '999', set_weights: ['95', '115', '135'] }],
+    resolveFrom(schedLib),
+  );
+  assert.deepEqual(plan[0].weights, ['95', '115', '135']);
+});
+
+test('buildSchedulePlan keeps blank, bodyweight and timed values intact (AC3)', () => {
+  const { plan } = buildSchedulePlan([
+    { exercise: 'Shoulder CARs', section: 'warmup', sets: 1, reps: '' },
+    { exercise: 'Push Ups - Close Grip', section: 'SS2', sets: 3, reps: '12', weight: '0' },
+    { exercise: 'Side Plank', section: 'burnout', sets: 3, reps: '45 sec' },
+  ], resolveFrom(schedLib));
+  assert.deepEqual(plan[0].weights, [''], 'omitted weight stays blank');
+  assert.equal(plan[0].reps, '', 'blank warmup reps stay blank');
+  assert.deepEqual(plan[1].weights, ['0', '0', '0'], 'bodyweight is "0", not blank');
+  assert.equal(plan[2].reps, '45 sec');
+});
+
+test('buildSchedulePlan reports every problem at once, with its index (AC4)', () => {
+  const { plan, errors } = buildSchedulePlan([
+    { exercise: 'Bench Press BB', section: 'primary', sets: 4, reps: '8', weight: '115' },
+    { exercise: 'Benchpress', section: 'primary', sets: 3, reps: '8' },
+    { exercise: 'Squat BB', section: 'primary', sets: 3, reps: '5', set_weights: ['95', '115'] },
+  ], resolveFrom(schedLib));
+  assert.equal(errors.length, 2);
+  assert.match(errors[0], /^exercises\[1\] "Benchpress": No exercise matching/);
+  assert.match(errors[1], /^exercises\[2\] "Squat BB": set_weights has 2 values but sets is 3/);
+  assert.equal(plan.length, 1, 'callers must check errors before writing anything');
+});
+
+test('buildSchedulePlan rejects a set count that is not a positive whole number', () => {
+  const { errors } = buildSchedulePlan(
+    [{ exercise: 'Bench Press BB', section: 'primary', sets: 0, reps: '8' }],
+    resolveFrom(schedLib),
+  );
+  assert.match(errors[0], /sets must be a whole number of at least 1/);
+});
+
+test('formatWeight renders bodyweight distinctly from blank (AC3)', () => {
+  assert.equal(formatWeight('115'), '115 lbs');
+  assert.equal(formatWeight('0'), 'bodyweight');
+  assert.equal(formatWeight(''), '');
+});
+
+test('describeLoad summarises single, ramped and missing loads', () => {
+  assert.equal(describeLoad(['115', '115']), ' @ 115 lbs');
+  assert.equal(describeLoad(['0', '0']), ' @ bodyweight');
+  assert.equal(describeLoad(['95', '115', '135']), ' @ 95 / 115 / 135');
+  assert.equal(describeLoad(['', '']), '');
+  assert.equal(describeLoad(undefined), '');
+});
+
+test('isSetLogged ignores a prescribed weight on a planned workout (AC1)', () => {
+  const prescribed = { weight: '115', reps: '', effort: '' };
+  assert.equal(isSetLogged(prescribed, true), false);
+  assert.equal(isSetLogged({ ...prescribed, reps: '8' }, true), true);
+  assert.equal(isSetLogged({ ...prescribed, effort: 'Hard' }, true), true);
+  assert.equal(isSetLogged(prescribed, false), true, 'completed workouts keep counting weight-only sets');
 });

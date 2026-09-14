@@ -74,6 +74,8 @@ export interface BuilderExercise {
   section: string;
   sets: number;
   planned_reps: string;
+  /** Prescribed load per set (index 0 = set 1); omitted or short means blank. */
+  weights?: string[];
 }
 
 export interface Label {

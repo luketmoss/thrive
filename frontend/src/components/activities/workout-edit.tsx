@@ -9,6 +9,7 @@ import { WorkoutPlanner } from '../workout/workout-planner';
 import type { PlannerExercise } from '../workout/workout-planner';
 import type { BuilderExercise } from '../../api/types';
 import { saveWorkoutForLater } from '../../state/actions';
+import { plannedWeightsFor } from './planned-weights';
 
 interface Props {
   workoutId: string;
@@ -124,12 +125,16 @@ function PlannedWorkoutEditor({ workoutId }: { workoutId: string }) {
       // `template_id` is deliberately NOT forwarded: saveWorkoutForLater
       // re-expands from the template when it is set, which would discard the
       // edits the user just made.
+      //
+      // Prescribed weights aren't shown in the planner, so they are carried
+      // over from the existing sets or the re-create would wipe them (#118).
       const builderExercises: BuilderExercise[] = exercises.map((ex) => ({
         exercise_id: ex.exercise_id,
         exercise_name: ex.exercise_name,
         section: ex.section,
         sets: Number(ex.sets) || 1,
         planned_reps: ex.reps,
+        weights: plannedWeightsFor(workoutSets, ex.exercise_id, ex.section, Number(ex.sets) || 1),
       }));
 
       await deleteWorkout(workoutId, token);
