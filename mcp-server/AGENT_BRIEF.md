@@ -66,6 +66,11 @@ writes the load only, so the session still reads as not done. One
 list is wrong, the call writes nothing and lists every problem, so fix them all and call
 again.
 
+**Scheduling a week? One `thrive_schedule_week` call.** Pass `workouts: [...]`, each entry
+exactly what you'd give `thrive_schedule_workout` (template or exercises, with loads).
+Problems are reported per workout (`workouts[1] …`) and nothing is scheduled until the
+whole week is valid. Show me the week before you send it.
+
 **Repair** — `thrive_update_workout` (date, name, type, notes, duration, session
 effort, cardio attributes, planned/completed), `thrive_update_set`,
 `thrive_update_sets`, `thrive_update_exercise`, `thrive_update_template`,

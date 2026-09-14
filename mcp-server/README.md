@@ -99,6 +99,7 @@ The spreadsheet id is the long segment in the sheet URL:
 | Tool | Description |
 |------|-------------|
 | `thrive_schedule_workout` | Create a workout with status `planned` for a future date, expanded from a template or an explicit exercise list. Exercise entries can prescribe a `weight` (every set) or `set_weights` (per set); the whole list is validated before anything is written |
+| `thrive_schedule_week` | Schedule several workouts in one call, each shaped like a `thrive_schedule_workout` call. All of them are validated first (any problem schedules none), then written in two appends |
 | `thrive_create_exercise` | Add to the exercise library (refuses duplicate names unless overridden) |
 | `thrive_create_template` | Create a reusable template from an ordered exercise list |
 
