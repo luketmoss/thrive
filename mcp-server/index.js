@@ -15,6 +15,7 @@ import { SPREADSHEET_ID, sheetsUpdate } from './sheets.js';
 import {
   WORKOUT_TYPES, EFFORTS, SECTIONS,
   normalizeDate, normalizeRangeToMax, secondsToMinutes, metersToMiles, metersToFeet,
+  parseDurationMinutes, findUnknownFields,
   fetchExercises, createExercise, writeExerciseRow,
   fetchTemplateRows, groupTemplateRows, createTemplate, replaceTemplateRows,
   fetchWorkouts, createWorkout, writeWorkoutRow,
@@ -34,15 +35,33 @@ const fail = (t) => ({ content: [{ type: 'text', text: t }], isError: true });
 
 const server = new McpServer({ name: 'thrive', version: '1.0.0' });
 
-/** Register a tool whose thrown errors surface as tool errors, not crashes. */
+/**
+ * Register a tool whose thrown errors surface as tool errors, not crashes.
+ *
+ * The schema is passthrough so undeclared fields reach us and can be refused
+ * by name — the SDK's default object strips them, which turned a misnamed
+ * field into "No changes provided" (#117).
+ */
 function tool(name, description, shape, handler) {
-  server.tool(name, description, shape, async (args) => {
-    try {
-      return await handler(args);
-    } catch (err) {
-      return fail(`Error: ${err.message}`);
-    }
-  });
+  const accepted = Object.keys(shape);
+  server.registerTool(
+    name,
+    { description, inputSchema: z.object(shape).passthrough() },
+    async (args) => {
+      const unknown = findUnknownFields(args, accepted);
+      if (unknown.length) {
+        return fail(
+          `Unknown field${unknown.length > 1 ? 's' : ''} ${unknown.map((k) => `"${k}"`).join(', ')} — ` +
+          `nothing was written. Accepted: ${accepted.join(', ') || '(none)'}.`,
+        );
+      }
+      try {
+        return await handler(args);
+      } catch (err) {
+        return fail(`Error: ${err.message}`);
+      }
+    },
+  );
 }
 
 /** Describe repeated slots of one exercise so an agent can pick one. */
@@ -506,9 +525,23 @@ tool(
     name: z.string().optional().describe('New name'),
     type: z.enum(WORKOUT_TYPES).optional().describe('New type'),
     notes: z.string().optional().describe('New notes (replaces existing)'),
+    duration_min: z.union([z.number(), z.string()]).optional().describe(
+      'New duration in whole MINUTES, e.g. 63. Stored as seconds. Pass "" to clear. ' +
+      'Use this or elapsed_seconds, not both.',
+    ),
     elapsed_seconds: z.string().optional().describe(
       'New elapsed time, in SECONDS (the unit the sheet stores). 45 minutes is "2700".',
     ),
+    distance_m: z.string().optional().describe(
+      'Distance in METERS (canonical storage unit). 12.4 miles is "19956". Pass "" to clear.',
+    ),
+    ascent_m: z.string().optional().describe(
+      'Elevation gain in METERS. 1500 feet is "457". Pass "" to clear.',
+    ),
+    descent_m: z.string().optional().describe(
+      'Elevation loss in METERS. Recorded for hikes only. Pass "" to clear.',
+    ),
+    avg_hr: z.string().optional().describe('Average heart rate in bpm. Pass "" to clear.'),
     effort: z
       .enum([...EFFORTS, ''])
       .optional()
@@ -521,8 +554,13 @@ tool(
       .optional()
       .describe("'planned' marks it upcoming; 'completed' marks it done"),
   },
-  async ({ workout_id, date, name, type, notes, elapsed_seconds, effort,
+  async ({ workout_id, date, name, type, notes, duration_min, elapsed_seconds, effort,
            distance_m, ascent_m, descent_m, avg_hr, status }) => {
+    if (duration_min !== undefined && elapsed_seconds !== undefined) {
+      throw new Error('Pass duration_min (whole minutes) or elapsed_seconds (seconds), not both.');
+    }
+    const seconds = duration_min !== undefined ? parseDurationMinutes(duration_min) : elapsed_seconds;
+
     const workouts = await fetchWorkouts();
     const w = resolveWorkout(workout_id, workouts);
 
@@ -537,9 +575,10 @@ tool(
     if (name !== undefined) { changes.push(`name "${w.name}" -> "${name}"`); updated.name = name; }
     if (type !== undefined) { changes.push(`type ${w.type} -> ${type}`); updated.type = type; }
     if (notes !== undefined) { changes.push('notes updated'); updated.notes = notes; }
-    if (elapsed_seconds !== undefined) {
-      changes.push(`duration -> ${secondsToMinutes(elapsed_seconds) ?? '(unset)'} min`);
-      updated.elapsed_seconds = elapsed_seconds;
+    if (seconds !== undefined) {
+      const mins = secondsToMinutes(seconds);
+      changes.push(mins === null ? 'duration cleared' : `duration -> ${mins} min`);
+      updated.elapsed_seconds = seconds;
     }
     if (effort !== undefined) {
       changes.push(`effort ${w.effort || '(unset)'} -> ${effort || '(unset)'}`);
@@ -564,7 +603,7 @@ tool(
 
 tool(
   'thrive_update_set',
-  'Correct a single logged set — weight, reps, effort, planned reps or notes. ' +
+  'Correct a single logged set — weight, reps, effort or planned reps. ' +
     'Identify it by workout, exercise and set number. If the exercise appears in more than one ' +
     'section of that workout (say a warmup and a primary of the same lift), add section or ' +
     'exercise_order to say which one — each has its own set numbering.',
@@ -587,7 +626,7 @@ tool(
   },
   async ({
     workout_id, exercise, set_number, section, exercise_order,
-    weight, reps, planned_reps, effort, notes,
+    weight, reps, planned_reps, effort,
   }) => {
     const [exercises, sets] = await Promise.all([fetchExercises(), fetchSets()]);
     const ex = resolveExercise(exercise, exercises);
@@ -622,7 +661,6 @@ tool(
     if (reps !== undefined) updated.reps = reps;
     if (planned_reps !== undefined) updated.planned_reps = planned_reps;
     if (effort !== undefined) updated.effort = effort;
-    if (notes !== undefined) updated.notes = notes;
 
     await writeSetRow(updated);
     return text(

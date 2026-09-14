@@ -170,6 +170,35 @@ export function secondsToMinutes(elapsedSeconds) {
   return isNaN(seconds) ? null : Math.round(seconds / 60);
 }
 
+/**
+ * Whole minutes (as an agent passes them) -> seconds for storage, or '' to
+ * clear. Mirrors minutesToSeconds in frontend/src/api/duration.ts but refuses
+ * to guess: the app's input only holds digits, whereas an agent can send
+ * "63 min" or a seconds count, and silently coercing either is how the unit
+ * drifted before #101.
+ */
+export function parseDurationMinutes(value) {
+  const v = String(value ?? '').trim();
+  if (v === '') return '';
+  if (!/^\d+$/.test(v)) {
+    throw new Error(
+      `duration_min must be whole minutes as a plain number, e.g. 63 — got "${value}". ` +
+      'It is stored as seconds; pass elapsed_seconds instead if you already have seconds.',
+    );
+  }
+  return String(Number(v) * 60);
+}
+
+/**
+ * Argument keys a tool's schema doesn't declare. The MCP SDK strips these
+ * before the handler runs, so without this check a misnamed field is a silent
+ * no-op (#117).
+ */
+export function findUnknownFields(args, allowedKeys) {
+  const allowed = new Set(allowedKeys);
+  return Object.keys(args ?? {}).filter((k) => !allowed.has(k));
+}
+
 export async function fetchWorkouts() {
   const rows = await sheetsGet(RANGES.workouts);
   return rows.map((row, i) => ({

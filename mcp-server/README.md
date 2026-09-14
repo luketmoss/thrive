@@ -106,8 +106,8 @@ The spreadsheet id is the long segment in the sheet URL:
 
 | Tool | Description |
 |------|-------------|
-| `thrive_update_workout` | Fix date, name, type, notes, duration, or planned/completed status |
-| `thrive_update_set` | Correct one logged set's weight, reps, effort or notes (pass `section` when a lift appears twice) |
+| `thrive_update_workout` | Fix date, name, type, notes, duration (`duration_min`, whole minutes), session effort, cardio attributes, or planned/completed status |
+| `thrive_update_set` | Correct one logged set's weight, reps, planned reps or effort (pass `section` when a lift appears twice) |
 | `thrive_update_exercise` | Rename or retag an exercise |
 | `thrive_update_template` | Replace a template's exercise list wholesale |
 | `thrive_delete_workout` | Delete a workout and cascade to its sets |
@@ -134,7 +134,11 @@ A second call with `confirm: true` performs the write. `thrive_delete_exercise` 
 further gate: an exercise still referenced by sets or templates needs
 `force_when_in_use: true`, since deleting it orphans that history.
 
-Two more guardrails worth knowing:
+More guardrails worth knowing:
+
+- **Unknown fields are refused.** Every tool rejects a field its schema doesn't declare,
+  naming it and listing the accepted ones, and writes nothing. Without this the SDK
+  strips the field and a misnamed parameter becomes a silent no-op (#117).
 
 - **Rename cascade.** Renaming an exercise rewrites the cached exercise name in every
   Sets and Templates row, so history doesn't fragment across old and new names.
