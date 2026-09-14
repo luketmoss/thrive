@@ -18,6 +18,8 @@ export const EFFORTS = ['Easy', 'Medium', 'Hard'];
 export const SECTIONS = ['warmup', 'primary', 'SS1', 'SS2', 'SS3', 'burnout', 'cooldown'];
 
 const newId = (prefix) => `${prefix}_${randomUUID().slice(0, 8)}`;
+/** Minted before any write so a workout's sets can be appended ahead of its row (#118). */
+export const newWorkoutId = () => newId('w');
 const nowIso = () => new Date().toISOString();
 
 /** Local calendar date, not UTC — a 7pm workout must not land on tomorrow. */
@@ -54,6 +56,77 @@ export function normalizeRangeToMax(val) {
   if (!trimmed) return trimmed;
   const parts = trimmed.split('-').map((s) => Number(s.trim())).filter((n) => !isNaN(n));
   return parts.length ? String(Math.max(...parts)) : trimmed;
+}
+
+// --- Prescribed load (#118) -----------------------------------------
+
+/** "115" -> "115 lbs", "0" -> "bodyweight", "" -> "". Bodyweight is not blank. */
+export function formatWeight(weight) {
+  const w = String(weight ?? '').trim();
+  if (w === '') return '';
+  return Number(w) === 0 ? 'bodyweight' : `${w} lbs`;
+}
+
+/** " @ 115 lbs" for one load, " @ 95 / 115 / 135" for a ramp, "" when none. */
+export function describeLoad(weights = []) {
+  if (!weights.some((w) => w !== '')) return '';
+  if (weights.every((w) => w === weights[0])) return ` @ ${formatWeight(weights[0])}`;
+  return ` @ ${weights.map((w) => (w === '' ? '—' : Number(w) === 0 ? 'bw' : w)).join(' / ')}`;
+}
+
+/**
+ * Whether a set has been performed. A planned workout's weight may be a load
+ * prescribed at schedule time, so there only reps or effort count; completed
+ * workouts keep their existing reps-or-weight rule.
+ */
+export function isSetLogged(set, planned) {
+  return Boolean(planned ? set.reps || set.effort : set.reps || set.weight);
+}
+
+/**
+ * Validate and expand a thrive_schedule_workout exercise list in one pass,
+ * before anything is written. Every problem is collected — an agent fixing a
+ * week of programming should see them all at once, not one per round trip.
+ *
+ * `resolve(ref)` returns a library exercise or throws with a useful message.
+ */
+export function buildSchedulePlan(specs, resolve) {
+  const plan = [];
+  const errors = [];
+  specs.forEach((spec, i) => {
+    const where = `exercises[${i}] "${spec.exercise}"`;
+    const problems = [];
+
+    let ex;
+    try {
+      ex = resolve(spec.exercise);
+    } catch (err) {
+      problems.push(err.message);
+    }
+
+    const sets = Number(spec.sets);
+    if (!Number.isInteger(sets) || sets < 1) {
+      problems.push(`sets must be a whole number of at least 1, got ${JSON.stringify(spec.sets)}`);
+    } else if (spec.set_weights && spec.set_weights.length !== sets) {
+      problems.push(`set_weights has ${spec.set_weights.length} values but sets is ${sets}`);
+    }
+
+    if (problems.length) {
+      errors.push(...problems.map((p) => `${where}: ${p}`));
+      return;
+    }
+
+    const load = (n) => String((spec.set_weights ? spec.set_weights[n] : spec.weight) ?? '').trim();
+    plan.push({
+      exercise_id: ex.id,
+      exercise_name: ex.name,
+      section: spec.section,
+      sets,
+      reps: normalizeRangeToMax(spec.reps),
+      weights: Array.from({ length: sets }, (_, n) => load(n)),
+    });
+  });
+  return { plan, errors };
 }
 
 // --- Exercises (A:E) ------------------------------------------------
@@ -245,7 +318,7 @@ export async function fetchWorkouts() {
 export async function createWorkout(data) {
   const now = new Date();
   const workout = {
-    id: newId('w'),
+    id: data.id || newWorkoutId(),
     date: data.date || todayStr(now),
     time: data.time ?? now.toTimeString().slice(0, 5),
     type: data.type,

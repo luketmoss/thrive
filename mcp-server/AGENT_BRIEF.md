@@ -58,6 +58,14 @@ set of a lift over time, newest first, with effort.
 template or an explicit exercise list), `thrive_create_exercise`,
 `thrive_create_template`.
 
+**Prescribe loads when you schedule, not afterwards.** Each explicit exercise entry takes
+`weight` (every set, `"0"` = bodyweight) or `set_weights` (one per set, for ramps). That
+writes the load only, so the session still reads as not done. One
+`thrive_schedule_workout` per session is the whole job; don't follow it with
+`thrive_update_set` calls to add weights. Leave `weight` off warmups. If anything in the
+list is wrong, the call writes nothing and lists every problem, so fix them all and call
+again.
+
 **Repair** — `thrive_update_workout` (date, name, type, notes, duration, session
 effort, cardio attributes, planned/completed), `thrive_update_set`,
 `thrive_update_exercise`, `thrive_update_template`, `thrive_delete_workout`,

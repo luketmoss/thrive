@@ -517,7 +517,7 @@ async function prepopulateSetsFromBuilder(
         exercise_order: index + 1,
         set_number: s,
         planned_reps: ex.planned_reps,
-        weight: '',
+        weight: ex.weights?.[s - 1] ?? '',
         reps: '',
         effort: '',
       });

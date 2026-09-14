@@ -16,9 +16,10 @@ import {
   WORKOUT_TYPES, EFFORTS, SECTIONS,
   normalizeDate, normalizeRangeToMax, secondsToMinutes, metersToMiles, metersToFeet,
   parseDurationMinutes, findUnknownFields,
+  formatWeight, describeLoad, isSetLogged, buildSchedulePlan,
   fetchExercises, createExercise, writeExerciseRow,
   fetchTemplateRows, groupTemplateRows, createTemplate, replaceTemplateRows, findStaleExerciseNames,
-  fetchWorkouts, createWorkout, writeWorkoutRow,
+  fetchWorkouts, createWorkout, writeWorkoutRow, newWorkoutId,
   fetchSets, appendSets, writeSetRow, slotKey, groupSetsByExercise, findSetSlots,
   deleteRows,
 } from './domain.js';
@@ -122,7 +123,7 @@ const isPlanned = (w) => w.status === 'planned';
 /** One-line summary of a set, used in listings. */
 function setLine(s) {
   const bits = [];
-  if (s.weight) bits.push(`${s.weight} lbs`);
+  if (s.weight) bits.push(formatWeight(s.weight));
   bits.push(`${s.reps || s.planned_reps || '?'} reps`);
   if (s.effort) bits.push(s.effort);
   return `set ${s.set_number}: ${bits.join(' x ')}`;
@@ -169,7 +170,7 @@ tool(
     const lines = list.map((w) => {
       const mine = sets.filter((s) => s.workout_id === w.id);
       const exercises = new Set(mine.map(slotKey)).size;
-      const logged = mine.filter((s) => s.reps || s.weight).length;
+      const logged = mine.filter((s) => isSetLogged(s, isPlanned(w))).length;
       const parts = [`- ${w.date} **${w.name || '(unnamed)'}** [${w.type}]`];
       if (isPlanned(w)) parts.push('(planned)');
       if (w.type === 'weight') parts.push(`— ${exercises} exercises, ${logged}/${mine.length} sets logged`);
@@ -345,6 +346,18 @@ const exerciseSpec = z.object({
   reps: z.string().describe("Planned reps, e.g. '8' or '8-10' (a range is stored as its max)"),
 });
 
+// Scheduling can prescribe a load; templates can't, so this stays separate
+// from the shape the template tools share (#118).
+const scheduleExerciseSpec = exerciseSpec.extend({
+  weight: z.string().optional().describe(
+    'Prescribed load in lbs for every set. "0" means bodyweight; omit to leave blank (e.g. warmups). ' +
+    'Writes the weight only — no performed reps, so the workout still reads as not done.',
+  ),
+  set_weights: z.array(z.string()).optional().describe(
+    'Per-set loads for ramping, e.g. ["95","115","135"]. Length must equal sets. Takes precedence over weight.',
+  ),
+});
+
 tool(
   'thrive_schedule_workout',
   'Schedule a workout for a future date. Creates it with status "planned" so it shows as upcoming in the app. ' +
@@ -355,7 +368,10 @@ tool(
     name: z.string().describe('Workout name, e.g. "Push A"'),
     type: z.enum(WORKOUT_TYPES).optional().describe('Workout type (default: weight)'),
     template: z.string().optional().describe('Template name or id to expand into planned sets'),
-    exercises: z.array(exerciseSpec).optional().describe('Explicit exercise list (ignored if template is given)'),
+    exercises: z.array(scheduleExerciseSpec).optional().describe(
+      'Explicit exercise list, with optional prescribed loads (ignored if template is given). ' +
+      'Validated as a whole before anything is written: any problem rejects the call and lists every problem.',
+    ),
     notes: z.string().optional().describe('Workout notes'),
     distance_m: z.string().optional().describe(
       'Distance in METERS (canonical storage unit). 12.4 miles is "19956". Pass "" to clear.',
@@ -405,21 +421,44 @@ tool(
       }));
     } else if (exercises?.length) {
       const library = await fetchExercises();
-      plan = exercises.map((spec) => {
-        const ex = resolveExercise(spec.exercise, library);
-        return {
-          exercise_id: ex.id,
-          exercise_name: ex.name,
-          section: spec.section,
-          sets: spec.sets,
-          reps: normalizeRangeToMax(spec.reps),
-        };
-      });
+      const built = buildSchedulePlan(exercises, (ref) => resolveExercise(ref, library));
+      if (built.errors.length) {
+        throw new Error(
+          `Nothing was scheduled — ${built.errors.length} problem${built.errors.length > 1 ? 's' : ''} ` +
+          `to fix:\n${built.errors.map((e) => `  - ${e}`).join('\n')}`,
+        );
+      }
+      plan = built.plan;
     } else if (type === 'weight') {
       throw new Error('A weight workout needs either a template or an exercises list.');
     }
 
+    const workoutId = newWorkoutId();
+    const rows = [];
+    plan.forEach((ex, i) => {
+      for (let n = 1; n <= ex.sets; n++) {
+        rows.push({
+          workout_id: workoutId,
+          exercise_id: ex.exercise_id,
+          exercise_name: ex.exercise_name,
+          section: ex.section,
+          exercise_order: i + 1,
+          set_number: n,
+          planned_reps: ex.reps,
+          // Prescription only: performed reps and effort stay blank (#118).
+          weight: ex.weights?.[n - 1] ?? '',
+          reps: '',
+          effort: '',
+        });
+      }
+    });
+
+    // Sets before the workout row: if the second append fails, the set rows
+    // are invisible orphans, whereas a workout row without its sets would show
+    // up as an empty session.
+    await appendSets(rows);
     const workout = await createWorkout({
+      id: workoutId,
       date: when,
       time: '',
       type,
@@ -429,26 +468,9 @@ tool(
       status: status === 'planned' ? 'planned' : '',
     });
 
-    const rows = [];
-    plan.forEach((ex, i) => {
-      for (let n = 1; n <= ex.sets; n++) {
-        rows.push({
-          workout_id: workout.id,
-          exercise_id: ex.exercise_id,
-          exercise_name: ex.exercise_name,
-          section: ex.section,
-          exercise_order: i + 1,
-          set_number: n,
-          planned_reps: ex.reps,
-          weight: '',
-          reps: '',
-          effort: '',
-        });
-      }
-    });
-    await appendSets(rows);
-
-    const detail = plan.map((e, i) => `  ${i + 1}. ${e.exercise_name} [${e.section}] — ${e.sets} x ${e.reps}`);
+    const detail = plan.map(
+      (e, i) => `  ${i + 1}. ${e.exercise_name} [${e.section}] — ${e.sets} x ${e.reps}${describeLoad(e.weights)}`,
+    );
     return text(
       [
         `Scheduled **${workout.name}** for ${workout.date} [${workout.type}]${status === 'planned' ? ' (planned)' : ''}`,
