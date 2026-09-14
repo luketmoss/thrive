@@ -111,6 +111,25 @@ export function groupTemplateRows(rows) {
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/**
+ * Templates and Sets rows cache the exercise name beside its id. Returns the
+ * rows whose cached name no longer matches the library entry for that id
+ * (`stale`, with the current `name`), and rows whose id isn't in the library
+ * at all (`orphans`) — a name refresh can fix the first, never the second
+ * (#120).
+ */
+export function findStaleExerciseNames(rows, exercises) {
+  const byId = new Map(exercises.map((e) => [e.id, e.name]));
+  const stale = [];
+  const orphans = [];
+  for (const row of rows) {
+    const name = byId.get(row.exercise_id);
+    if (name === undefined) orphans.push(row);
+    else if (name !== row.exercise_name) stale.push({ row, name });
+  }
+  return { stale, orphans };
+}
+
 function templateRowValues(templateId, name, ex, order) {
   return [
     templateId, name, order,

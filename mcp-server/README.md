@@ -142,6 +142,10 @@ More guardrails worth knowing:
 
 - **Rename cascade.** Renaming an exercise rewrites the cached exercise name in every
   Sets and Templates row, so history doesn't fragment across old and new names.
+  Template expansion writes the library's current name regardless of what the template
+  row cached, and refuses a template whose rows point at an exercise that no longer
+  exists (#120). `scripts/repair-120-cached-exercise-names.mjs` refreshes names that
+  went stale through hand edits to the Exercises tab.
 - **Stale row protection.** Workout updates re-check that the target row still holds
   that workout's id before overwriting it. A cached row index goes stale the moment an
   earlier row is deleted, and writing blind would clobber a different workout — the bug
