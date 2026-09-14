@@ -15,7 +15,7 @@ workouts, extend my exercise library, and repair bad data.
 - **Workouts** — one per session. Four types: `weight`, `stretch`, `bike`, `hike`.
   Only `weight` workouts have exercises and sets. A workout is either **completed**
   (logged) or **planned** (scheduled for a future date, sets not yet filled in).
-- **Sets** — one row per set: planned reps, weight (lbs), actual reps, effort, notes.
+- **Sets** — one row per set: planned reps, weight (lbs), actual reps, effort.
 - **Exercises** — my library, tagged by movement pattern, muscle and equipment.
 - **Templates** — reusable workout blueprints that expand into planned sets.
 
@@ -58,11 +58,14 @@ set of a lift over time, newest first, with effort.
 template or an explicit exercise list), `thrive_create_exercise`,
 `thrive_create_template`.
 
-**Repair** — `thrive_update_workout` (date, name, type, notes, duration,
-planned/completed), `thrive_update_set`, `thrive_update_exercise`,
-`thrive_update_template`, `thrive_delete_workout`, `thrive_delete_exercise`.
+**Repair** — `thrive_update_workout` (date, name, type, notes, duration, session
+effort, cardio attributes, planned/completed), `thrive_update_set`,
+`thrive_update_exercise`, `thrive_update_template`, `thrive_delete_workout`,
+`thrive_delete_exercise`.
 
-Dates accept `YYYY-MM-DD`, `today`, `tomorrow`, or `+7d`.
+Dates accept `YYYY-MM-DD`, `today`, `tomorrow`, or `+7d`. Set a duration with
+`duration_min` in whole minutes (`63`); distances and elevation are in meters. A field a
+tool doesn't recognise is rejected by name — read the error rather than retrying.
 
 ## Rules
 

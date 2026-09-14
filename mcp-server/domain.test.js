@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import {
   normalizeDate, normalizeRangeToMax, groupTemplateRows, todayStr,
   slotKey, groupSetsByExercise, findSetSlots, secondsToMinutes, workoutRowValues, metersToMiles, metersToFeet,
+  parseDurationMinutes, findUnknownFields,
 } from './domain.js';
 
 test('normalizeDate passes ISO dates through', () => {
@@ -198,4 +199,30 @@ test('a workout row carries cardio attributes in columns N-Q', () => {
   assert.equal(row[14], '457', 'ascent belongs in column O');
   assert.equal(row[15], '', 'descent stays empty');
   assert.equal(row[16], '136', 'avg HR belongs in column Q');
+});
+
+// --- #117: agent-supplied durations and undeclared fields ------------
+
+test('parseDurationMinutes stores 63 minutes as 3780 seconds', () => {
+  assert.equal(parseDurationMinutes(63), '3780');
+  assert.equal(parseDurationMinutes('63'), '3780');
+  assert.equal(parseDurationMinutes(' 63 '), '3780');
+});
+
+test('parseDurationMinutes clears on empty, never defaults to 0', () => {
+  assert.equal(parseDurationMinutes(''), '');
+  assert.equal(parseDurationMinutes('0'), '0', 'a deliberate zero stays zero');
+});
+
+test('parseDurationMinutes refuses anything that is not whole minutes', () => {
+  for (const bad of ['63 min', '-5', '63.5', 'abc', 63.5, -5]) {
+    assert.throws(() => parseDurationMinutes(bad), /whole minutes/, `should reject ${bad}`);
+  }
+});
+
+test('findUnknownFields names keys the schema does not declare', () => {
+  const allowed = ['workout_id', 'duration_min', 'elapsed_seconds'];
+  assert.deepEqual(findUnknownFields({ workout_id: 'w1', duration_sec: 60 }, allowed), ['duration_sec']);
+  assert.deepEqual(findUnknownFields({ workout_id: 'w1', duration_min: 63 }, allowed), []);
+  assert.deepEqual(findUnknownFields(undefined, allowed), []);
 });
