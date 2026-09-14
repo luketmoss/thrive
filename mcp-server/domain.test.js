@@ -9,6 +9,7 @@ import {
   slotKey, groupSetsByExercise, findSetSlots, secondsToMinutes, workoutRowValues, metersToMiles, metersToFeet,
   parseDurationMinutes, findUnknownFields, findStaleExerciseNames,
   formatWeight, describeLoad, isSetLogged, buildSchedulePlan,
+  resolveSetTarget, planSetUpdates, describeSetState, findStaleSetRows,
 } from './domain.js';
 
 test('normalizeDate passes ISO dates through', () => {
@@ -346,4 +347,102 @@ test('isSetLogged ignores a prescribed weight on a planned workout (AC1)', () =>
   assert.equal(isSetLogged({ ...prescribed, reps: '8' }, true), true);
   assert.equal(isSetLogged({ ...prescribed, effort: 'Hard' }, true), true);
   assert.equal(isSetLogged(prescribed, false), true, 'completed workouts keep counting weight-only sets');
+});
+
+// --- #119: bulk set updates ------------------------------------------
+
+const bench = { id: 'ex_bench', name: 'Bench Press BB' };
+const rope = { id: 'ex_rope', name: 'Cable Tricep Pushdown Rope' };
+const bulkLib = [bench, rope];
+const setRow = (o) => ({
+  workout_id: 'w1', planned_reps: '', weight: '', reps: '', effort: '', ...o,
+});
+const bulkSets = [
+  setRow({ exercise_id: 'ex_bench', exercise_name: bench.name, section: 'warmup', exercise_order: 1, set_number: 1, sheetRow: 10 }),
+  ...[1, 2, 3].map((n) => setRow({
+    exercise_id: 'ex_bench', exercise_name: bench.name, section: 'primary', exercise_order: 2,
+    set_number: n, planned_reps: '8', weight: '115', sheetRow: 10 + n,
+  })),
+  setRow({ exercise_id: 'ex_rope', exercise_name: rope.name, section: 'SS2', exercise_order: 3, set_number: 1, planned_reps: '12', weight: '40', sheetRow: 14 }),
+  setRow({ workout_id: 'w2', exercise_id: 'ex_bench', exercise_name: bench.name, section: 'primary', exercise_order: 1, set_number: 1, sheetRow: 20 }),
+];
+
+test('resolveSetTarget keeps thrive_update_set\'s exact wording (AC5)', () => {
+  assert.throws(
+    () => resolveSetTarget(bulkSets, bench, { workout_id: 'w1', set_number: 9, section: 'primary' }),
+    { message: 'No set 9 of Bench Press BB [primary] in workout w1 — that slot has sets 1..3.' },
+  );
+  assert.throws(
+    () => resolveSetTarget(bulkSets, bench, { workout_id: 'w1', set_number: 1 }),
+    /Bench Press BB appears 2 times in workout w1 — \[warmup\] exercise_order 1, 1 sets; \[primary\] exercise_order 2, 3 sets\. Pass section or exercise_order/,
+  );
+  const { target } = resolveSetTarget(bulkSets, bench, { workout_id: 'w1', set_number: '2', section: 'primary' });
+  assert.equal(target.sheetRow, 12, 'a string set number from the wire still matches');
+});
+
+test('planSetUpdates changes only the fields each entry passes (AC1)', () => {
+  const { changes, errors } = planSetUpdates(bulkSets, 'w1', [
+    { exercise: 'Bench Press BB', section: 'primary', set_number: 3, reps: '6', effort: 'Hard' },
+    { exercise: 'Cable Tricep Pushdown Rope', set_number: 1, reps: '10' },
+  ], resolveFrom(bulkLib));
+  assert.deepEqual(errors, []);
+  assert.equal(changes.length, 2);
+  assert.deepEqual(
+    [changes[0].after.weight, changes[0].after.reps, changes[0].after.effort, changes[0].after.planned_reps],
+    ['115', '6', 'Hard', '8'],
+  );
+  assert.equal(changes[0].before.reps, '', 'the fetched row is not mutated');
+  assert.equal(changes[1].after.sheetRow, 14);
+});
+
+test('planSetUpdates lists every bad entry by index (AC2)', () => {
+  const { errors } = planSetUpdates(bulkSets, 'w1', [
+    { exercise: 'Bench Press BB', section: 'primary', set_number: 1, reps: '8' },
+    { exercise: 'Bench Press BB', section: 'primary', set_number: 9, reps: '8' },
+    { exercise: 'Bench Press BB', set_number: 1, reps: '8' },
+    { exercise: 'Skull Crushers', set_number: 1, reps: '8' },
+  ], resolveFrom(bulkLib));
+  assert.equal(errors.length, 3);
+  assert.match(errors[0], /^updates\[1\] "Bench Press BB" set 9: No set 9 of Bench Press BB \[primary\]/);
+  assert.match(errors[1], /^updates\[2\] .*appears 2 times .*Pass section or exercise_order/);
+  assert.match(errors[2], /^updates\[3\] "Skull Crushers" set 1: No exercise matching/);
+});
+
+test('planSetUpdates rejects two entries aimed at the same set (AC3)', () => {
+  const { errors } = planSetUpdates(bulkSets, 'w1', [
+    { exercise: 'Bench Press BB', section: 'primary', set_number: 2, reps: '8' },
+    { exercise: 'ex_bench', exercise_order: 2, set_number: 2, effort: 'Hard' },
+  ], resolveFrom(bulkLib));
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /^updates\[1\] .*targets the same set as updates\[0\]/);
+});
+
+test('planSetUpdates refuses unknown fields and empty entries', () => {
+  const { errors } = planSetUpdates(bulkSets, 'w1', [
+    { exercise: 'Bench Press BB', section: 'primary', set_number: 1, reps: '6', notes: 'grinder' },
+    { exercise: 'Bench Press BB', section: 'primary', set_number: 2 },
+  ], resolveFrom(bulkLib));
+  assert.match(errors[0], /unknown field "notes"/);
+  assert.match(errors[1], /nothing to change/);
+});
+
+test('findStaleSetRows flags a row that now holds a different set (AC4)', () => {
+  const rows = bulkSets.slice(1, 3);
+  const fresh = rows.map((s) => [s.workout_id, s.exercise_id, s.exercise_name, s.section, String(s.exercise_order), String(s.set_number)]);
+  assert.deepEqual(findStaleSetRows(rows, fresh), []);
+
+  const shifted = [fresh[1], ['w9', 'ex_other', 'Row', 'primary', '1', '1']];
+  assert.deepEqual(findStaleSetRows(rows, shifted), rows);
+  assert.deepEqual(findStaleSetRows(rows, []), rows, 'a row that vanished is stale too');
+});
+
+test('describeSetState echoes the resulting row', () => {
+  assert.equal(
+    describeSetState({ weight: '115', reps: '6', planned_reps: '8', effort: 'Hard' }),
+    'weight 115 lbs · reps 6 · planned 8 · effort Hard',
+  );
+  assert.equal(
+    describeSetState({ weight: '0', reps: '', planned_reps: '', effort: '' }),
+    'weight bodyweight · reps — · planned — · effort —',
+  );
 });

@@ -68,8 +68,13 @@ again.
 
 **Repair** — `thrive_update_workout` (date, name, type, notes, duration, session
 effort, cardio attributes, planned/completed), `thrive_update_set`,
-`thrive_update_exercise`, `thrive_update_template`, `thrive_delete_workout`,
-`thrive_delete_exercise`.
+`thrive_update_sets`, `thrive_update_exercise`, `thrive_update_template`,
+`thrive_delete_workout`, `thrive_delete_exercise`.
+
+**Correcting several sets? Use `thrive_update_sets`**, one call per workout, rather than
+repeated `thrive_update_set` calls. If any entry is wrong it writes nothing and lists
+every problem by index, so fix them all and resend the batch. Its response shows each
+set's resulting state; there's no need to re-read the workout.
 
 Dates accept `YYYY-MM-DD`, `today`, `tomorrow`, or `+7d`. Set a duration with
 `duration_min` in whole minutes (`63`); distances and elevation are in meters. A field a
