@@ -235,20 +235,36 @@ management that already exists.
 
 ### Where the code lives
 
-**[DECIDE]** `mcp-server/` already contains both halves of what the sync
-needs: `sheets.js` (service-account REST wrapper) and `domain.js` (row
-mapping, which CLAUDE.md requires be kept in step with
-`frontend/src/api/*.ts`). A new top-level `sync/` workspace that copies
-either one creates a **third** mirror of the row mapping, and the two-mirror
-rule in CLAUDE.md is already a standing tax.
+`mcp-server/` already contains both halves of what the sync needs:
+`sheets.js` (service-account REST wrapper) and `domain.js` (row mapping,
+which CLAUDE.md requires be kept in step with `frontend/src/api/*.ts`). A
+top-level `sync/` workspace that copied either one would create a **third**
+mirror of the row mapping, and the two-mirror rule is already a standing tax.
 
-Recommended: `sync/` as a sibling workspace that **imports from
-`mcp-server/`** rather than duplicating it, with any newly shared code moved
-down into `mcp-server/` as the common module. Two mirrors stay two.
+**Decided: `sync/` is a sibling workspace that imports from `mcp-server/`.**
+It does not duplicate `sheets.js` or `domain.js`. Anything the two come to
+share moves *down* into `mcp-server/` as the common module rather than being
+copied sideways. Two mirrors stay two.
 
-The alternative — making the sync a subcommand of `mcp-server` itself — keeps
-the dependency graph trivial but muddies what that package is for. Worth a
-second opinion.
+Making the sync a subcommand of `mcp-server` was the alternative; it keeps
+the dependency graph trivial but muddies what that package is for — an MCP
+server for agents is a different thing from a nightly ETL job.
+
+Practical consequences, none of them blocking but all of them real:
+
+- **`mcp-server/` becomes a library as well as a binary.** Its `package.json`
+  has a single `main`; the modules `sync/` imports become a de facto public
+  surface. Adding an explicit `exports` map is the cheap way to say which
+  modules those are, so a future refactor inside `mcp-server` doesn't break
+  `sync/` silently.
+- **CI needs a third job.** `.github/workflows/ci.yml` runs `frontend` and
+  `mcp-server` and is deliberately not path-filtered, because `/ship`
+  refuses to merge a PR whose checks are absent. A `sync` job follows the
+  same pattern for the same reason.
+- **A change inside `mcp-server/domain.js` can now break `sync/`.** That is
+  the price of not having a third mirror, and it is the right trade — a
+  break surfaces as a failing test rather than as data drifting apart
+  silently, which is what the mirror rule exists to prevent.
 
 ### Token storage — a Phase 1 fork
 
@@ -602,15 +618,28 @@ sync-owned and always overwritten. They are not user-editable fields.
 
 ## 9. Scheduling
 
+**Local timezone is US Mountain.** MDT is UTC−6, MST is UTC−7.
+
 - **Run at ~03:00 local.** Late enough that the previous day is complete,
   early enough to be fresh by morning.
-- **GitHub Actions cron is UTC.** Express 03:00 local as UTC using the
-  offset currently in effect. **[DECIDE]** — the local timezone is not
-  recorded anywhere in the repo and needs stating before the workflow is
-  written.
-- **Handle DST.** A UTC-scheduled job drifts by an hour seasonally. The
-  rolling upsert window makes this a logging annoyance, not a correctness
-  problem. Do not attempt to chase DST.
+- **GitHub Actions cron is UTC, and has no timezone setting.** Anchoring
+  03:00 on the offset currently in effect (MDT, UTC−6) gives **`17 9 * * *`
+  — 09:17 UTC**.
+- **The odd minute is deliberate.** GitHub delays or drops scheduled runs
+  clustered on the hour; :17 avoids the crowd.
+- **DST drift is accepted, not chased.** That one expression fires at 03:17
+  local in summer and 02:17 local in winter. Both sit comfortably inside the
+  window between "yesterday is over" and "before I wake up", so the drift
+  costs nothing. Do not add a second cron line to correct it — two
+  expressions means two runs on the changeover days, and the only thing
+  that actually protects correctness is §6's rolling window, which makes a
+  double run harmless anyway.
+- **Local date is computed in `America/Denver`, not from the runner's
+  clock.** An Actions runner is UTC, so `today_local` at 09:17 UTC is
+  *yesterday* in Mountain Time. Every date boundary in §6 — the window
+  bounds, `DailyHealth`'s PK, the §7 strength match's "same local date" —
+  must be derived in the configured zone. Reading the runner's local date
+  would silently shift the whole window by a day.
 - **Actions schedules are best-effort.** GitHub delays or skips scheduled
   runs under load, particularly on the hour. Schedule at an odd minute, and
   rely on §6's window rather than on any given run firing.
@@ -802,23 +831,27 @@ prevent.
 Carried forward or newly raised; the ones Rev 2 asked and this revision has
 already answered are not repeated.
 
-1. **[DECIDE §4]** Does `sync/` live as a sibling importing from
-   `mcp-server/`, or as a subcommand of `mcp-server` itself?
-2. **[DECIDE §5]** Admit `calories` to the sheet now for §7's benefit, or
+1. **[DECIDE §5]** Admit `calories` to the sheet now for §7's benefit, or
    defer both?
-3. **[DECIDE §6]** Seven-day window or ten? Ten is recommended given
+2. **[DECIDE §6]** Seven-day window or ten? Ten is recommended given
    multi-day trips.
-4. **[DECIDE §7]** Strength match tolerance — calibrate at Phase 3 rather
+3. **[DECIDE §7]** Strength match tolerance — calibrate at Phase 3 rather
    than guessing ±30 minutes now?
-5. **[DECIDE §9]** What is the local timezone for the cron conversion?
-6. **[VERIFY §2.2]** Token rotation — answer before Phase 1.
-7. **[VERIFY §2.4]** Daily health payload shape — `DailyHealth`'s columns are
+4. **[VERIFY §2.2]** Token rotation — answer before Phase 1.
+5. **[VERIFY §2.4]** Daily health payload shape — `DailyHealth`'s columns are
    provisional until seen.
-8. **[VERIFY §2.5]** COROS sport type codes — needed for an exhaustive
+6. **[VERIFY §2.5]** COROS sport type codes — needed for an exhaustive
    normalization table.
-9. Does `run` get its own cardio field set, and does it get Descent?
-10. Should a mis-detected sport type be correctable in Thrive's UI, given §8
-    makes the row editable but `type` drives which cardio fields render?
+7. Does `run` get its own cardio field set, and does it get Descent?
+8. Should a mis-detected sport type be correctable in Thrive's UI, given §8
+   makes the row editable but `type` drives which cardio fields render?
+
+### Settled
+
+- **§4 — `sync/` imports from `mcp-server/`.** A sibling workspace, not a
+  subcommand, and not a third copy of the row mapping.
+- **§9 — Mountain Time.** Cron is `17 9 * * *`; local dates are computed in
+  `America/Denver`, never from the runner's clock.
 
 ---
 
