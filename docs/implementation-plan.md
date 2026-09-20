@@ -139,6 +139,16 @@ deliberately and do not fold it into the COROS effort.*
 Four small additions to a deployed, working Apps Script project. None
 changes Hive's write path or its UI behaviour, except C4.
 
+**Verified against `1ad93bb` (#238, 20 September 2026).** All four findings
+hold at current head, along with the claims they rest on: the SPA writes 25
+audit entries including `status_changed` on both the item and cascaded
+children (`actions.ts:620, 625, 671, 676`), matching Apps Script's
+`items.js:153, 197`, so the event stream has holes on neither path. `Items`
+is unchanged at A:N with `completed_at` at index 10.
+
+Worth noting for the Journal's sake: Hive moved roughly 200 commits without
+`Items` changing shape once.
+
 ### C1 — `getAuditLog` action
 A read action over the existing `Audit Log` tab, filtered by date range and
 optionally action type. The tab is already written by both paths — Apps
