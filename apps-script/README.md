@@ -24,11 +24,15 @@ added there too.
 | `src/types.js` | Column constants, valid enum values, timezone, payload limit |
 | `src/utils.js` | Sheet access, row ↔ object mapping, validation helpers |
 | `src/workouts.js` | `Workouts` reads, writes, and planned-by-date |
+| `src/exercises.js` | `Exercises`, plus the rename cascade |
+| `src/templates.js` | `Templates`, grouped reads and wholesale replace |
+| `src/sets.js` | `Sets`, slot resolution, atomic bulk update, history |
 | `src/main.js` | `doGet` dispatch, auth, response envelope |
 
-`Exercises`, `Templates`, `Sets` and `Labels` actions are #134. Tab actions
-travel with their tabs: `DailySummary`'s are in #131's scope, and `DailyHealth`
-and `SyncLog` arrive with the sync.
+`Labels` is deliberately absent: `domain.js` contains no Labels code and no
+`thrive_*` tool touches it. Tab actions travel with their tabs, so
+`DailySummary`'s are in #131's scope, and `DailyHealth` and `SyncLog` arrive
+with the sync.
 
 ## The transport, and its limit
 
@@ -85,6 +89,55 @@ wrong in the MCP server.
 **An omitted field on create is written empty, never defaulted.** Blank
 `source` is not missing information: it positively means the workout was logged
 by hand.
+
+### Exercises, Templates, Sets (#134)
+
+| Action | Parameters / payload |
+|---|---|
+| `getExercises` | `tag` (optional) |
+| `getExercise` | `ref` — id, exact name, or unique partial |
+| `createExercise` | `{"data":{"name":"...","tags":"...","notes":"..."}}` |
+| `updateExercise` | `{"id":"...","changes":{...}}` |
+| `getExerciseHistory` | `ref`, `limit` (optional) |
+| `getTemplates` / `getTemplate` | `ref` for the single |
+| `createTemplate` | `{"data":{"name":"...","exercises":[...]}}` |
+| `replaceTemplate` | `{"template_id":"...","data":{...}}` |
+| `getSets` | `workout_id`, `exercise_id` (optional) |
+| `getWorkoutSets` | `workout_id` — grouped into slots |
+| `appendSets` | `{"sets":[...]}` |
+| `previewSetUpdates` | `{"workout_id":"...","updates":[...]}` — **writes nothing** |
+| `updateSets` | same payload — **all-or-nothing** |
+
+## The shaping principle
+
+**The API accepts domain objects. It never accepts sheet rows or row
+indices.** A set is named by `workout_id`, exercise reference, `section`,
+`exercise_order` and `set_number`; the *server* works out which row that is.
+
+This is what decides whether the mirror actually goes away. An API of
+row-index CRUD would leave every caller still needing to know the sheet shape,
+and `mcp-server/` would keep its copy through the refactor.
+
+Two consequences worth knowing:
+
+- **Ambiguity is refused, never guessed.** The same lift as a warmup and as a
+  primary is two slots. Asking to change "Bench Press set 1" when both exist
+  returns an error naming both, with instructions to pass `section` or
+  `exercise_order`. A target matching nothing is refused rather than appended.
+- **`previewSetUpdates` is `updateSets` without the write** — literally the
+  same resolution function, not a parallel implementation, so a dry run and a
+  real write can never disagree about what a reference means.
+
+**A rename cascades.** `Templates!E` and `Sets!C` hold a denormalized copy of
+`exercise_name`. Renaming through `updateExercise` rewrites them in the same
+call, and reports how many of each it touched. #120 is the bug this prevents:
+a rename left the copies behind and a template expanded later wrote the *old*
+name into a fresh workout.
+
+**Narration stays client-side.** `describeSlots` is here because resolution
+errors need it, but `describeSetState` and `describeLoad` — which format MCP
+tool output for an agent to read — remain in `mcp-server/`. They are a
+presentation concern, not a data one.
 
 ## Setup
 

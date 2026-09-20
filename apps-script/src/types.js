@@ -95,3 +95,31 @@ var TIMEZONE = 'America/Denver';
  * will hit this, and they must batch rather than hope.
  */
 var MAX_PAYLOAD_CHARS = 6000;
+
+// --- Exercises (A:E), Templates (A:H), Sets (A:J) — #134 ------------
+
+var EXERCISE_FIELDS = ['id', 'name', 'tags', 'notes', 'created'];
+var EXERCISE_COLUMN_COUNT = 5;
+
+var TEMPLATE_FIELDS = [
+  'template_id', 'template_name', 'order',
+  'exercise_id', 'exercise_name', 'section', 'sets', 'reps',
+];
+var TEMPLATE_COLUMN_COUNT = 8;
+
+// Ten cells. #100 removed column K "Notes"; a row wider than ten would write
+// it back, because Sheets writes every value it is handed.
+var SET_FIELDS = [
+  'workout_id', 'exercise_id', 'exercise_name', 'section',
+  'exercise_order', 'set_number', 'planned_reps', 'weight', 'reps', 'effort',
+];
+var SET_COLUMN_COUNT = 10;
+
+/** Columns A..F of a Sets row — the identity a staleness check re-reads. */
+var SET_IDENTITY_COLUMN_COUNT = 6;
+
+var SECTIONS = ['warmup', 'primary', 'SS1', 'SS2', 'SS3', 'burnout', 'cooldown'];
+
+/** The fields a set correction may change. Mirrors SET_UPDATE_FIELDS. */
+var SET_UPDATE_FIELDS = ['weight', 'reps', 'planned_reps', 'effort'];
+

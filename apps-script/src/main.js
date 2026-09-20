@@ -14,6 +14,11 @@
 // Write examples:
 //   ?action=createWorkout&key=...&payload={"data":{"type":"bike","name":"Evening Ride"}}
 //   ?action=updateWorkout&key=...&payload={"id":"w_1a2b3c4d","changes":{"effort":"Hard"}}
+//
+// Sets are addressed by domain identifiers, never by row (#134):
+//   ?action=updateSets&key=...&payload={"workout_id":"w_1","updates":[
+//     {"exercise":"Bench Press","set_number":1,"weight":"185","reps":"6"}]}
+//   ?action=previewSetUpdates&key=...&payload={...}   — resolves, writes nothing
 
 /**
  * Every response uses this shape — success, rejection and thrown error alike
@@ -130,6 +135,134 @@ function doGet(e) {
           break;
         }
         result = { success: true, data: updateWorkout(payload.id, payload.changes) };
+        break;
+
+      // --- Exercises (#134) ---
+      case 'getExercises':
+        result = { success: true, data: getExercises({ tag: params.tag }) };
+        break;
+
+      case 'getExercise':
+        if (!params.ref) {
+          result = fail('ref parameter required');
+          break;
+        }
+        result = { success: true, data: resolveExercise(params.ref, getExercises()) };
+        break;
+
+      case 'createExercise':
+        if (!payload.data) {
+          result = fail('payload.data field required');
+          break;
+        }
+        result = { success: true, data: createExercise(payload.data) };
+        break;
+
+      // A rename cascades into Templates!E and Sets!C in the same call — #120.
+      case 'updateExercise':
+        if (!payload.id) {
+          result = fail('payload.id field required');
+          break;
+        }
+        if (!payload.changes) {
+          result = fail('payload.changes field required');
+          break;
+        }
+        result = { success: true, data: updateExercise(payload.id, payload.changes) };
+        break;
+
+      case 'getExerciseHistory':
+        if (!params.ref) {
+          result = fail('ref parameter required');
+          break;
+        }
+        result = { success: true, data: getExerciseHistory(params.ref, { limit: params.limit }) };
+        break;
+
+      // --- Templates (#134) ---
+      case 'getTemplates':
+        result = { success: true, data: getTemplates() };
+        break;
+
+      case 'getTemplate':
+        if (!params.ref) {
+          result = fail('ref parameter required');
+          break;
+        }
+        result = { success: true, data: resolveTemplate(params.ref, getTemplates()) };
+        break;
+
+      case 'createTemplate':
+        if (!payload.data) {
+          result = fail('payload.data field required');
+          break;
+        }
+        result = { success: true, data: createTemplate(payload.data) };
+        break;
+
+      case 'replaceTemplate':
+        if (!payload.template_id) {
+          result = fail('payload.template_id field required');
+          break;
+        }
+        if (!payload.data) {
+          result = fail('payload.data field required');
+          break;
+        }
+        result = { success: true, data: replaceTemplate(payload.template_id, payload.data) };
+        break;
+
+      // --- Sets (#134) ---
+      case 'getSets':
+        result = {
+          success: true,
+          data: getSets({ workout_id: params.workout_id, exercise_id: params.exercise_id }),
+        };
+        break;
+
+      case 'getWorkoutSets':
+        if (!params.workout_id) {
+          result = fail('workout_id parameter required');
+          break;
+        }
+        result = {
+          success: true,
+          data: groupSetsByExercise(getSets({ workout_id: params.workout_id })),
+        };
+        break;
+
+      case 'appendSets':
+        if (!payload.sets) {
+          result = fail('payload.sets field required');
+          break;
+        }
+        result = { success: true, data: appendSets(payload.sets) };
+        break;
+
+      // AC4: resolution without writing, for a destructive-by-default dry run.
+      case 'previewSetUpdates':
+        if (!payload.workout_id) {
+          result = fail('payload.workout_id field required');
+          break;
+        }
+        if (!payload.updates) {
+          result = fail('payload.updates field required');
+          break;
+        }
+        result = { success: true, data: previewSetUpdates(payload.workout_id, payload.updates) };
+        break;
+
+      // AC2: all-or-nothing. One bad target rejects the batch untouched.
+      case 'updateSets':
+        if (!payload.workout_id) {
+          result = fail('payload.workout_id field required');
+          break;
+        }
+        if (!payload.updates) {
+          result = fail('payload.updates field required');
+          break;
+        }
+        result = { success: true, data: applySetUpdates(payload.workout_id, payload.updates) };
         break;
 
       default:
