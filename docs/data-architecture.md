@@ -33,9 +33,19 @@ data. The Journal reads across them; it does not consolidate them.
 ### The asymmetry that matters
 
 Hive has an **Apps Script API** (`doGet()` with a `payload` query param, API
-key auth) that enforces business rules, writes an audit log, and already
-serves a ChatGPT custom GPT. Thrive has no equivalent — its non-browser
-access is the MCP server talking to Sheets with a service account.
+key auth) that enforces business rules and writes an audit log. **Hive's MCP
+server is a client of it** — `mcp-server/index.js` calls it over
+`HIVE_API_URL` + `HIVE_API_KEY` rather than touching Sheets directly. So the
+API is live and proven in daily use.
+
+Thrive has no equivalent. Its MCP server talks to Sheets directly with a
+service account, which means Thrive's business rules live in whichever
+client is running. The two projects have diverged on this, and the Journal
+is the first thing that makes the divergence cost something.
+
+*(A ChatGPT custom GPT is also documented against Hive's API in
+`chatgpt-gpt-setup.md`, but it is unused — MCP from Claude is the live
+consumer.)*
 
 So a Journal built today would call an API for Hive and hand-roll Sheets
 reads for Thrive. That asymmetry drives §6.
@@ -133,18 +143,60 @@ disappears from the historical record the pattern analysis runs on.
 (`timestamp, item_id, action, field, old_value, new_value, actor`) captures
 the transition. It is append-only and nothing clears it.
 
-**[DECIDE]** Two ways out:
+**Verified: the audit log has no holes.** Both write paths log it — the Apps
+Script API via `audit.js`, and the SPA via `appendAuditEntry` in
+`frontend/src/state/actions.ts`, which fires on create, on `status_changed`,
+and on cascaded child updates.
 
-- **Journal reads completions from `Audit Log`**, not from `Items`. Correct
-  by construction, needs no Hive change, but means reconstructing state from
-  an event stream and depends on the audit log being complete for every
-  write path (verify the SPA writes it, not just Apps Script).
-- **Hive stops clearing `completed_at`**, and adds `is_complete` derived
-  from status instead. Simpler to consume, but changes Hive's semantics and
-  needs care where `completed_at` is currently used as a proxy for "done."
+**Decided: the Journal reads completions from `Audit Log`, not from `Items`.**
 
-The first is recommended — a journal is a record of events, and an event log
-is the right shape for it.
+A journal is a record of events, and an event log is the right shape for
+one. The alternative — stop clearing `completed_at` — was simpler to consume
+and would have been roughly right, but it loses a completion permanently the
+moment a task is reopened and finished again. Complete on the 12th, reopen on
+the 15th, finish on the 20th: `completed_at` holds only the 20th, and the
+12th silently empties. That is precisely the kind of retroactive change that
+makes historical pattern analysis untrustworthy.
+
+### What this requires building in Hive
+
+Neither option was free — there is **no completion-date filter in Hive
+today**, on either field. `getItems` filters `status`, `owner`, `label`,
+`parent_id`, `board_id` and `roots_only`; the MCP server adds `due_after`
+and `due_before`. Nothing reads `completed_at`, and there is no
+`getAuditLog` action at all. The API's actions are `getItems`, `getItem`,
+`getOwners`, `getLabels`, `getBoards`, `getStatuses`, plus the write and
+status-management ones.
+
+So this decision adds to Hive:
+
+1. **A `getAuditLog` action**, filtered by date range and optionally action
+   type. It reads the existing tab; nothing about the write path changes.
+2. **An explicit `completed` audit action** — see below.
+3. **Denver-local date filtering**, per §2. `appendAuditEntry` stamps
+   `new Date().toISOString()`, so audit timestamps are UTC and carry the
+   same trap as `completed_at`.
+
+### Emit `completed`, don't infer it
+
+Audit rows record the status *name* (`status_changed`, `Doing` → `Done`),
+not whether that status was terminal at the time. `is_terminal` is a
+per-board flag on the status row and `updateStatus` can change it, so a
+consumer that infers "completed" by checking today's terminal set against a
+historical status name **reinterprets history whenever a column is
+reconfigured**. Rename or re-flag a column and last spring's journal changes.
+
+The fix is to make the event self-describing: when `applyStatusSideEffects`
+sees `isTerminal`, have Hive write an audit row with action `completed`
+(and `reopened` on the way out) alongside the existing `status_changed`.
+The Journal then filters on `action = 'completed'` and never needs to know
+what the board looked like in April.
+
+This is append-only and backward compatible — existing rows keep their
+meaning, and the Journal's history simply starts from when the new action
+ships. Pre-existing completions can be reconstructed from `status_changed`
+once, against the terminal set as it stands, and that reconstruction is a
+known approximation rather than a silent one.
 
 ---
 
@@ -265,7 +317,7 @@ this data." Three options:
 | Option | Good | Bad |
 |---|---|---|
 | **A. Journal reads all sheets directly** via OAuth | No new infrastructure; same pattern as both existing SPAs | Journal must mirror Thrive's *and* Hive's row mappings — the mirror tax goes from 2 to 4 |
-| **B. Thrive gets an Apps Script API** mirroring Hive's | Symmetric; agents and future apps benefit; business rules enforced server-side | A new deployment, a new API key, a new thing to keep in sync |
+| **B. Thrive gets an Apps Script API** mirroring Hive's | Symmetric; agents and future apps benefit; business rules enforced server-side; Hive's is a working template | A new deployment, a new API key, a new thing to keep in sync |
 | **C. Journal reads the aggregate only** | One read per day; almost no mirroring | Drill-down into a specific activity still needs a raw read |
 
 **Recommended: C for the day view, A for drill-down, Hive's existing API for
@@ -273,8 +325,9 @@ Hive.** Concretely, rendering a day is:
 
 1. **Thrive** — one `DailySummary` row for the date. One read, thirteen
    cells, no schema mirroring at all.
-2. **Hive** — the existing Apps Script API, filtered to that Denver-local
-   date. No new read path; Hive already built one.
+2. **Hive** — the existing Apps Script API, via the new `getAuditLog`
+   action from §3, filtered to that Denver-local date. The transport
+   already exists and is proven by the MCP server; the action does not.
 3. **Journal notes** — the Journal's own sheet.
 4. **Drill-down** (tapping the day's activities) — `Workouts` rows for that
    date, which does need the row mapping, and is the only place it does.
@@ -351,27 +404,29 @@ decision rather than an oversight.
 
 ## 10. Open questions
 
-1. **[DECIDE §3]** Journal reads Hive completions from `Audit Log`, or Hive
-   stops clearing `completed_at`?
-2. **[VERIFY §3]** Does Hive's SPA write to `Audit Log`, or only the Apps
-   Script API? If only the latter, the event log has holes and option 1
-   above is unsafe as stated.
-3. **[DECIDE §4]** Confirm the `type`/`sub_type` split, and whether
+1. **[DECIDE §4]** Confirm the `type`/`sub_type` split, and whether
    Biking-Road and Running-Trail are coming (they change nothing, which is
    the point of the split).
-4. **[VERIFY §4]** Which of these COROS actually reports as distinct sport
+2. **[VERIFY §4]** Which of these COROS actually reports as distinct sport
    codes — indoor vs outdoor running may or may not be distinguishable in
    the payload.
-5. **[DECIDE §5]** Confirm `DailySummary`'s column set before it is built;
+3. **[DECIDE §5]** Confirm `DailySummary`'s column set before it is built;
    adding columns later is easy, changing their meaning is not.
-6. **[VERIFY §2]** COROS's sleep-day attribution, so the wake-day rule can be
+4. **[VERIFY §2]** COROS's sleep-day attribution, so the wake-day rule can be
    implemented rather than assumed.
-7. **[DECIDE §6]** Accept the three-mirror position for now, or build the
+5. **[DECIDE §6]** Accept the three-mirror position for now, or build the
    shared package with the Journal?
-8. **[DECIDE §7]** Structured daily inputs in the Journal, or free text only?
-9. **[DECIDE §7]** Does the Journal get its own Google Sheet, or a tab in an
+6. **[DECIDE §7]** Structured daily inputs in the Journal, or free text only?
+7. **[DECIDE §7]** Does the Journal get its own Google Sheet, or a tab in an
    existing one? (Own sheet recommended — ownership boundaries have held up
    well across Thrive and Hive.)
-10. Does the Journal write anything back to Thrive or Hive, or is it
-    strictly read-plus-own-notes? Read-only is assumed throughout this
-    document.
+8. Does the Journal write anything back to Thrive or Hive, or is it
+   strictly read-plus-own-notes? Read-only is assumed throughout this
+   document.
+
+### Settled
+
+- **§3 — Journal reads Hive completions from `Audit Log`.** Adds a
+  `getAuditLog` action, an explicit `completed` audit action, and
+  Denver-local date filtering to Hive. Verified that both Hive write paths
+  already log, so the event stream is complete.
