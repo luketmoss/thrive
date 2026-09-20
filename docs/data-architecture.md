@@ -16,6 +16,23 @@ amendments it forces on the sync plan.
 holds the contracts; that one holds the product.** Where they overlap, the
 spec is newer and says so explicitly.
 
+### Why all three live in `thrive/docs`
+
+These documents impose work on Hive and on an unbuilt Journal app, so
+Thrive's repository is not an obviously neutral home. It is nonetheless the
+right one for now:
+
+- Thrive holds the large majority of the work described here.
+- The three documents cross-reference each other constantly, and relative
+  links inside one repository beat cross-repo links that rot.
+- Thrive is public; keeping them together means they stay readable together.
+
+The neutrality problem is real but small, and is better fixed with a pointer
+from Hive's README to this document than by moving the document somewhere
+neither app owns. **Revisit when the Journal repository exists** — that is
+when `journal-spec.md` has an obviously better home, and when the question
+becomes concrete rather than hypothetical.
+
 ---
 
 ## 1. The systems

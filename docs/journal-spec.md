@@ -293,4 +293,12 @@ an existing deployment, none of which changes Hive's write path.
 
 1. **[VERIFY §6]** Does COROS's daily payload carry a sleep score? If so,
    `sleep_quality` is double-sourced and follows the same store-both rule.
-2. What is the app called, and does it get its own repository?
+2. **What is the app called?** Unresolved — "the Journal" is a placeholder
+   and nothing downstream depends on it. Thrive, Hive, Forage and Keel are
+   all short nouns that are not literal descriptions of what they do, so
+   "Journal" would be the first exception to that pattern.
+
+**Settled:** the app gets **its own repository** when it is built, matching
+every other app — separate deployment, GitHub Pages path, Google Sheet and
+board. This specification lives in `thrive/docs` only because its companion
+documents do; it moves to the Journal's repository once that exists.
