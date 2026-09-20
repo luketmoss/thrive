@@ -12,6 +12,10 @@ Companion to `docs/coros-sync-plan.md`, which covers getting COROS data
 and onto one page. Where the two disagree, this one is newer — §9 lists the
 amendments it forces on the sync plan.
 
+`docs/journal-spec.md` specifies the Journal app itself. **This document
+holds the contracts; that one holds the product.** Where they overlap, the
+spec is newer and says so explicitly.
+
 ---
 
 ## 1. The systems
@@ -491,8 +495,20 @@ The Journal's sheet:
 | C | `created_at` |
 | D | `updated_at` |
 
-**Decided: free text only for v1.** No mood, energy, soreness or weight
-columns.
+**Superseded — see `docs/journal-spec.md` §6.** The Journal now carries
+`sleep_hours`, `sleep_quality` (`Poor`/`OK`/`Good`) and `energy`
+(`Low`/`OK`/`High`) alongside free text.
+
+The reversal came with the morning-driver reframing, which did not exist
+when this was decided. The original reasoning — below — was about a
+retrospective log nobody would reliably fill in. An app opened every morning
+as the first thing you look at is a different proposition, and three taps is
+a different burden from a nightly writing exercise. The concern the original
+decision raised still stands as a risk to watch, not as a reason to refuse.
+
+*Original decision, retained for the argument:*
+
+**Free text only for v1.** No mood, energy, soreness or weight columns.
 
 The argument for structure was that correlation needs a dependent variable
 measured consistently — everything the system captures automatically is
@@ -635,10 +651,13 @@ In the order they were taken.
   the SPA keeps its direct Sheets path as Hive's does.
 - **§6 — The sync writes through the API**, backfill paced against quota.
   The API must therefore land before the sync plan's Phase 3.
-- **§7 — Journal notes are free text only** for v1. Structured daily inputs
-  deferred, not foreclosed — prose stays retroactively scoreable.
+- **§7 — Journal notes are free text only** for v1. **Reversed** once the
+  Journal became a morning driver — see `journal-spec.md` §6 for the fields
+  and the reasoning.
 - **§7 — The Journal gets its own Google Sheet**, written directly, no API
   of its own yet. Establishes the rule: talk directly to what you own, via
   an API to what you don't.
-- **§10 — The Journal is read-only**, writing only its own notes.
-  Deep-linking into Thrive and Hive is the escape hatch if needed.
+- **§10 — The Journal is read-only**, writing only its own notes. Holds
+  unchanged. Deep-linking is now the *primary* mechanism rather than a
+  fallback (`journal-spec.md` §5): rescheduling a workout opens Thrive's
+  existing planner UI instead of reimplementing it.
