@@ -461,7 +461,27 @@ Everything above is derived data. "A place for me to add additional notes
 for the day" is **authored** data, and it cannot live in a derived table —
 `DailySummary` is rebuilt nightly and would erase it.
 
-The Journal owns its own sheet:
+**Decided: its own Google Sheet**, written directly by the Journal SPA. No
+Apps Script API of its own for now — nothing else consumes Journal data yet,
+and building a seam before there is anything on the other side of it is
+premature. If Forage or an agent later needs journal entries, Hive's pattern
+is the template and the sheet does not have to move.
+
+This follows the principle the §6 decision made explicit:
+
+> **Talk directly to what you own; go through an API to what you don't.**
+
+Both existing SPAs already work this way — Hive's frontend writes `Items`
+directly, while its MCP server, which owns nothing, goes through the API. The
+Journal reads Thrive and Hive through their APIs and writes its own notes
+directly.
+
+Keeping it in a separate spreadsheet rather than a Groundwork tab keeps the
+ownership boundary crisp, keeps the 10M-cell ceiling independent — which
+matters as `DailySummary` accrues a row per day indefinitely — and means no
+schema change in Thrive can reach it.
+
+The Journal's sheet:
 
 | Col | Field |
 |---|---|
@@ -530,15 +550,15 @@ decision rather than an oversight.
    this only decides which signal it reads.
 2. **[VERIFY §2]** COROS's sleep-day attribution, so the wake-day rule can be
    implemented rather than assumed.
-3. **[DECIDE §7]** Does the Journal get its own Google Sheet, or a tab in an
-   existing one? (Own sheet recommended — ownership boundaries have held up
-   well across Thrive and Hive.)
-4. Does the Journal write anything back to Thrive or Hive, or is it
+3. Does the Journal write anything back to Thrive or Hive, or is it
    strictly read-plus-own-notes? Read-only is assumed throughout this
    document.
 
 ### Settled
 
+- **§7 — The Journal gets its own Google Sheet**, written directly, no API
+  of its own yet. Establishes the rule: talk directly to what you own, via
+  an API to what you don't.
 - **§7 — Journal notes are free text only** for v1. Structured daily inputs
   deferred, not foreclosed — prose stays retroactively scoreable.
 - **§6 — The sync writes through the API**, backfill paced against quota.
