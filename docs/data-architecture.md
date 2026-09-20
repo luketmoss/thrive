@@ -317,14 +317,36 @@ scrolls, and Sheets reads are whole-range fetches.
 | C | `activity_types` | e.g. `bike:mountain,weight` |
 | D | `total_moving_s` | |
 | E | `total_elapsed_s` | |
-| F | `total_distance_m` | Outdoor only — see the double-count note |
+| F | `total_distance_m` | **Outdoor only** — see below |
 | G | `total_ascent_m` | |
-| H | `steps` | From `DailyHealth` |
-| I | `resting_hr` | |
-| J | `hrv` | |
-| K | `sleep_total_s` | |
-| L | `training_load` | |
-| M | `computed_at` | |
+| H | `max_effort` | Hardest effort logged that day. `Easy`/`Medium`/`Hard`, or blank |
+| I | `effort_counts` | e.g. `Hard:1,Medium:2`. Blank when nothing was logged |
+| J | `steps` | From `DailyHealth` |
+| K | `resting_hr` | |
+| L | `hrv` | |
+| M | `sleep_total_s` | |
+| N | `training_load` | Duplicated from `DailyHealth` — see below |
+| O | `computed_at` | |
+
+**Effort (H, I) is the only subjective signal in the row**, and likely the
+most predictive one for "what has negative effects" — a day's intensity
+says more than its distance. Two columns rather than one because `max_effort`
+alone cannot distinguish one hard session from three: a single hard set and
+an all-hard workout both read `Hard`. `effort_counts` carries the volume.
+
+Both stay blank when nothing was logged. A day with no workouts has no
+effort, which is not the same as `Easy`.
+
+**`total_distance_m` (F) excludes indoor activities.** Trainer and treadmill
+distance is a different quantity from ground covered, and summing them makes
+"how far did I travel this month" meaningless as a trend. The consequence
+worth documenting wherever this is displayed: **F is not the sum of the day's
+activity distances**, and will disagree with the drill-down on any day with
+an indoor session.
+
+**`training_load` (N) is duplicated from `DailyHealth`** — a deliberate
+denormalization so the Journal's day view is one read. It cannot drift,
+because the whole row is recomputed from source every night.
 
 **`DailySummary` is derived and never authoritative.** It is rebuildable at
 any time from `Workouts` + `DailyHealth`, and nothing may write to it by
@@ -360,7 +382,7 @@ this data." Three options:
 **Recommended: C for the day view, A for drill-down, Hive's existing API for
 Hive.** Concretely, rendering a day is:
 
-1. **Thrive** — one `DailySummary` row for the date. One read, thirteen
+1. **Thrive** — one `DailySummary` row for the date. One read, fifteen
    cells, no schema mirroring at all.
 2. **Hive** — the existing Apps Script API, via the new `getAuditLog`
    action from §3, filtered to that Denver-local date. The transport
@@ -445,22 +467,22 @@ decision rather than an oversight.
    outdoor. If they do, venue derivation is a lookup; if not, it falls back
    to GPS presence in the detail payload. Either way the *rule* is settled —
    this only decides which signal it reads.
-2. **[DECIDE §5]** Confirm `DailySummary`'s column set before it is built;
-   adding columns later is easy, changing their meaning is not.
-3. **[VERIFY §2]** COROS's sleep-day attribution, so the wake-day rule can be
+2. **[VERIFY §2]** COROS's sleep-day attribution, so the wake-day rule can be
    implemented rather than assumed.
-4. **[DECIDE §6]** Accept the three-mirror position for now, or build the
+3. **[DECIDE §6]** Accept the three-mirror position for now, or build the
    shared package with the Journal?
-5. **[DECIDE §7]** Structured daily inputs in the Journal, or free text only?
-6. **[DECIDE §7]** Does the Journal get its own Google Sheet, or a tab in an
+4. **[DECIDE §7]** Structured daily inputs in the Journal, or free text only?
+5. **[DECIDE §7]** Does the Journal get its own Google Sheet, or a tab in an
    existing one? (Own sheet recommended — ownership boundaries have held up
    well across Thrive and Hive.)
-7. Does the Journal write anything back to Thrive or Hive, or is it
+6. Does the Journal write anything back to Thrive or Hive, or is it
    strictly read-plus-own-notes? Read-only is assumed throughout this
    document.
 
 ### Settled
 
+- **§5 — `DailySummary` columns fixed at A:O.** Carries `max_effort` and
+  `effort_counts`; `total_distance_m` is outdoor-only.
 - **§4 — `sub_type` fill rule.** Venue is derived (sport code, else GPS
   presence); terrain is never derived and stays blank until set by hand.
   Nothing is defaulted.
