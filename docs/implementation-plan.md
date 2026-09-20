@@ -22,9 +22,10 @@ two boards cleanly.
 | Epic | [thrive#127](https://github.com/luketmoss/thrive/issues/127) | — |
 | B1 + B5 — `Workouts` A:Z, `started_at_utc` backfill | [thrive#128](https://github.com/luketmoss/thrive/issues/128) | — |
 | B2 — activity taxonomy | [thrive#129](https://github.com/luketmoss/thrive/issues/129) | #128 |
-| B3 — Apps Script API | [thrive#130](https://github.com/luketmoss/thrive/issues/130) | #128 |
+| B3a — Apps Script API: scaffold + `Workouts` | [thrive#130](https://github.com/luketmoss/thrive/issues/130) | #128 |
+| B3b — API actions: Exercises, Templates, Sets | [thrive#134](https://github.com/luketmoss/thrive/issues/134) | #130 |
 | B4 — `DailySummary` | [thrive#131](https://github.com/luketmoss/thrive/issues/131) | #128, #130 |
-| B6 — MCP server → API client | [thrive#132](https://github.com/luketmoss/thrive/issues/132) | #130 |
+| B6 — MCP server → API client | [thrive#132](https://github.com/luketmoss/thrive/issues/132) | #130, #134 |
 | A — COROS verification spike | [thrive#133](https://github.com/luketmoss/thrive/issues/133) | — |
 | C1–C3 — Hive audit log read path | [hive#239](https://github.com/luketmoss/hive/issues/239) | — |
 | C4 — Hive item deep links | [hive#240](https://github.com/luketmoss/hive/issues/240) | — |
@@ -120,7 +121,22 @@ ride gains a terrain choice.
 logging improvement is wanted sooner.*
 
 ### B3 — Thrive Apps Script API
-The big one, and the gate for the Journal. Hive's `apps-script/` is a working
+**Split during refinement into #130 and #134.** Sizing it against Hive — 955
+lines and 13 actions for their whole API, against Thrive's 16 MCP tools and
+~1,700 lines of `domain.js` + `index.js` — made one issue materially larger
+than the thing it copies, on the critical path, as a refactor of code in
+daily use.
+
+The split is by **consumer**, not read/write: a read/write split cuts across
+every consumer, since the Journal needs reads and the sync needs writes on
+the same tab.
+
+- **#130** — scaffold, auth, envelope, deployment, CI, plus `Workouts` and
+  planned-by-date. Unblocks #131 and the Journal. Medium.
+- **#134** — `Exercises`, `Templates`, `Sets`, `Labels`. Consumed only by
+  #132.
+
+The gate for the Journal. Hive's `apps-script/` is a working
 template: `doGet()` with a `payload` param, API key auth, business rules and
 validation server-side.
 
