@@ -417,27 +417,28 @@ Concretely, rendering a day is:
 4. **Drill-down** (tapping the day's activities) — `Workouts` rows for that
    date, also via the API, so the Journal never carries Thrive's row shape.
 
-### The open edge: how the sync writes
+### How the sync writes
 
-The API settles how data is *read*. How the nightly sync *writes* is now a
-live question, and the two candidate answers pull in opposite directions:
+**Decided: through the API, like every other non-browser client.** The
+historical backfill paces itself against Apps Script quota the same way it
+already paces against the 50/day FIT cap — it is specified as a resumable
+queue rather than one long run, so the shape already fits.
 
-- **Through the API**, like every other non-browser client. One mapping,
-  consistent story. But Apps Script deployments carry execution-time and
-  daily-quota limits that a bulk historical backfill (§11 of the sync plan,
-  several hundred activities) could bump into, and a nightly job failing on a
-  platform quota is a bad failure mode.
-- **Direct via the service account**, as the sync plan currently assumes.
-  No quota exposure and it already needs service-account credentials for
-  Drive blobs regardless. But it reintroduces a third row mapping — the
-  exact thing this decision was meant to cap.
+Nightly volume (1–2 activities plus a 7–10 day rollup recompute) sits far
+inside any quota. The backfill is the only real pressure, and the failure
+mode there is a loud quota error on a resumable job, not silent divergence.
 
-Nightly volume is tiny (1–2 activities plus a 7–10 day rollup) and would sit
-well inside any quota. The backfill is the only real pressure, and it is
-already specified as a paced, resumable queue rather than one long run, which
-is the same shape quota-pacing needs.
+The alternative — direct service-account writes — would have reintroduced
+the third row mapping this decision exists to prevent. The sync needs
+service-account credentials anyway for Drive blobs and the rotating COROS
+refresh token, so it ends up holding three credentials: COROS OAuth tokens
+(stored in Drive), the Google service account (Drive only), and the Thrive
+API key. Only the first two are secrets it manages; the API key is a static
+GitHub Actions secret.
 
-**[DECIDE]** — see §10.
+**Sequencing consequence:** the API must exist before the sync can write
+anything. This moves it ahead of the sync plan's Phase 3, which is the first
+phase that touches the sheet. See that document's §15.
 
 ### Knock-on effects
 
@@ -514,19 +515,18 @@ decision rather than an oversight.
    this only decides which signal it reads.
 2. **[VERIFY §2]** COROS's sleep-day attribution, so the wake-day rule can be
    implemented rather than assumed.
-3. **[DECIDE §6]** Does the nightly sync write through the new Apps Script
-   API, or keep direct service-account access to Sheets? Quota exposure on
-   the historical backfill versus a third row mapping.
-4. **[DECIDE §7]** Structured daily inputs in the Journal, or free text only?
-5. **[DECIDE §7]** Does the Journal get its own Google Sheet, or a tab in an
+3. **[DECIDE §7]** Structured daily inputs in the Journal, or free text only?
+4. **[DECIDE §7]** Does the Journal get its own Google Sheet, or a tab in an
    existing one? (Own sheet recommended — ownership boundaries have held up
    well across Thrive and Hive.)
-6. Does the Journal write anything back to Thrive or Hive, or is it
+5. Does the Journal write anything back to Thrive or Hive, or is it
    strictly read-plus-own-notes? Read-only is assumed throughout this
    document.
 
 ### Settled
 
+- **§6 — The sync writes through the API**, backfill paced against quota.
+  The API must therefore land before the sync plan's Phase 3.
 - **§6 — Thrive gets an Apps Script API**, following Hive's pattern. Caps
   the mirror count at two permanently; does not reduce it to one, because
   the SPA keeps its direct Sheets path as Hive's does.

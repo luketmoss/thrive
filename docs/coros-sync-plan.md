@@ -240,36 +240,35 @@ management that already exists.
 
 ### Where the code lives
 
-`mcp-server/` already contains both halves of what the sync needs:
-`sheets.js` (service-account REST wrapper) and `domain.js` (row mapping,
-which CLAUDE.md requires be kept in step with `frontend/src/api/*.ts`). A
-top-level `sync/` workspace that copied either one would create a **third**
-mirror of the row mapping, and the two-mirror rule is already a standing tax.
+**Superseded by `docs/data-architecture.md` §6.** This section originally
+had `sync/` import `sheets.js` and `domain.js` from `mcp-server/`, to avoid
+a third copy of the row mapping. That reasoning is obsolete: Thrive is
+getting an Apps Script API on Hive's pattern, `mcp-server/` becomes a thin
+client of it, and there is no longer a row mapping there to import.
 
-**Decided: `sync/` is a sibling workspace that imports from `mcp-server/`.**
-It does not duplicate `sheets.js` or `domain.js`. Anything the two come to
-share moves *down* into `mcp-server/` as the common module rather than being
-copied sideways. Two mirrors stay two.
+**Decided: `sync/` is a sibling workspace that writes through Thrive's Apps
+Script API**, exactly as the MCP server and the Journal do. It holds no row
+mapping of its own.
 
-Making the sync a subcommand of `mcp-server` was the alternative; it keeps
-the dependency graph trivial but muddies what that package is for — an MCP
-server for agents is a different thing from a nightly ETL job.
+Practical consequences:
 
-Practical consequences, none of them blocking but all of them real:
-
-- **`mcp-server/` becomes a library as well as a binary.** Its `package.json`
-  has a single `main`; the modules `sync/` imports become a de facto public
-  surface. Adding an explicit `exports` map is the cheap way to say which
-  modules those are, so a future refactor inside `mcp-server` doesn't break
-  `sync/` silently.
+- **The API must exist before the sync writes anything.** See §15 — it lands
+  ahead of Phase 3, which is the first phase to touch the sheet.
+- **The backfill paces against Apps Script quota.** Nightly volume (1–2
+  activities plus the rollup recompute) is far inside any limit; the §11
+  historical import is the only real pressure, and it is already specified
+  as a resumable queue rather than one long run.
+- **The sync holds three credentials**: COROS OAuth tokens (stored in
+  Drive), the Google service account (Drive blobs only — no Sheets scope
+  needed any more), and the Thrive API key as a static Actions secret.
 - **CI needs a third job.** `.github/workflows/ci.yml` runs `frontend` and
   `mcp-server` and is deliberately not path-filtered, because `/ship`
   refuses to merge a PR whose checks are absent. A `sync` job follows the
-  same pattern for the same reason.
-- **A change inside `mcp-server/domain.js` can now break `sync/`.** That is
-  the price of not having a third mirror, and it is the right trade — a
-  break surfaces as a failing test rather than as data drifting apart
-  silently, which is what the mirror rule exists to prevent.
+  same pattern for the same reason. The Apps Script project likewise needs
+  its tests wired in, as Hive does with vitest.
+- **`mcp-server/` gets refactored into an API client.** Real work on code
+  that currently functions; sequence it deliberately rather than folding it
+  into the COROS effort.
 
 ### Token storage — a Phase 1 fork
 
@@ -856,6 +855,7 @@ Intended to become an epic with one issue per phase, each running through
 | 0 | Verification (§2) | Items 1–3 answered. **Item 2 gates Phase 1's token design** |
 | 1 | OAuth flow + token storage in Drive | One successful authenticated read, and a rotated token surviving a second run |
 | 2 | Raw ingestion to Drive | Payloads landing with hashes, no sheet writes at all |
+| 2b | **Thrive Apps Script API** | Read and write actions for `Workouts`, `DailyHealth`, `DailySummary`; deployed, key issued, tests wired into CI. **Blocks Phase 3** — see §4 |
 | 3 | Sheet schema + normalization + merge + rollup | `Workouts` A:Z, `DailyHealth` and `DailySummary` live; a week of real activities correctly typed, timed and measured; §8 merge preserves a deliberate edit; `DailySummary` rebuilds idempotently |
 | 4 | FIT fetch with budget counter | FITs landing in Drive, cap respected, backlog logged |
 | 5 | Strength enrichment (§7) | A real lift session enriched, a deliberate non-match logged rather than duplicated |
@@ -864,6 +864,10 @@ Intended to become an epic with one issue per phase, each running through
 | 8 | MCP server exposure | Agents can query daily health and synced activity detail |
 | 9 | Garmin import | History loaded under `source = 'garmin_import'` |
 | 10 | COROS historical backfill | Paced against the FIT cap, resumable, not in Actions |
+
+Phase 2b is new, and is a consequence of `docs/data-architecture.md` §6.
+Nothing writes to the sheet before it exists. It is also the natural moment
+to refactor `mcp-server/` into an API client, though that can trail.
 
 Phases 2 and 3 are deliberately separate. Landing raw data reliably is a
 different problem from mapping it correctly; conflating them makes both
@@ -898,8 +902,10 @@ already answered are not repeated.
 
 ### Settled
 
-- **§4 — `sync/` imports from `mcp-server/`.** A sibling workspace, not a
-  subcommand, and not a third copy of the row mapping.
+- **§4 — `sync/` writes through Thrive's Apps Script API.** A sibling
+  workspace holding no row mapping of its own. *(Supersedes the earlier
+  decision to import from `mcp-server/`, which assumed a row mapping would
+  still live there.)*
 - **§9 — Mountain Time.** Cron is `17 9 * * *`; local dates are computed in
   `America/Denver`, never from the runner's clock. Now a cross-app contract —
   `docs/data-architecture.md` §2 is the normative statement.
