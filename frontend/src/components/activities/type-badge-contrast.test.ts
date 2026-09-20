@@ -98,3 +98,43 @@ describe('AC1: new hues are distinguishable from badge-bike, not merely differen
     });
   }
 });
+
+/**
+ * A custom property's value from one of the theme blocks.
+ *
+ * Colour tokens live in `[data-theme="light"]` / `[data-theme="dark"]`, not
+ * `:root` — `:root` carries the theme-independent radius and spacing scale.
+ * `design-tokens.test.ts` draws the same distinction.
+ */
+function token(name: string, dark = false): string {
+  const theme = dark ? 'dark' : 'light';
+  const block = css.match(new RegExp(`\\[data-theme="${theme}"\\]\\s*\\{([^}]+)\\}`))?.[1];
+  const m = block?.match(new RegExp(`${name}\\s*:\\s*([^;]+);`));
+  if (!m) throw new Error(`No ${name} in the ${dark ? 'dark' : 'light'} block`);
+  return m[1].trim();
+}
+
+// #129 AC3 — the venue control claims EffortToggle's AA contract, so the
+// states it actually renders in have to hold it. The selected state was the
+// one that did not: --color-primary-hover measures 4.17:1 on
+// --color-primary-light and fails, which is why --color-primary-on-light
+// exists.
+describe('AC3: the venue toggle states meet AA', () => {
+  for (const dark of [false, true]) {
+    const theme = dark ? 'dark' : 'light';
+
+    it(`the selected state meets 4.5:1 (${theme})`, () => {
+      const fg = token('--color-primary-on-light', dark);
+      const bg = token('--color-primary-light', dark);
+      expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5);
+    });
+
+    it(`the unset state meets 4.5:1 (${theme})`, () => {
+      // Inherited from .effort-toggle-session .effort-btn, which uses
+      // --color-text-secondary precisely because the muted token fails.
+      const fg = token('--color-text-secondary', dark);
+      const bg = token('--color-surface', dark);
+      expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+});

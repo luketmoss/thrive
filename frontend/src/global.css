@@ -61,6 +61,10 @@
   --color-primary: #FF6B35;
   --color-primary-hover: #D4400A;
   --color-primary-light: #fff0eb;
+  /* Accent text ON --color-primary-light. --color-primary-hover measures only
+     4.17:1 against that tint and fails AA, so a selected control needs its
+     own darker step rather than reusing the hover colour. */
+  --color-primary-on-light: #B83508;
   --color-primary-rgb: 255, 107, 53;
   --color-primary-focus-ring: rgba(255, 107, 53, 0.25);
   --color-danger: #d32f2f;
@@ -95,6 +99,7 @@
   --color-primary: #FF6B35;
   --color-primary-hover: #FF9A76;
   --color-primary-light: #2d1a10;
+  --color-primary-on-light: #FF9A76;
   --color-primary-rgb: 255, 107, 53;
   --color-primary-focus-ring: rgba(255, 107, 53, 0.3);
   --color-danger: #ef5350;
@@ -1852,7 +1857,7 @@ input, select, textarea {
 .sub-type-toggle .sub-type-btn.active {
   background: var(--color-primary-light);
   border-color: var(--color-primary);
-  color: var(--color-primary-hover);
+  color: var(--color-primary-on-light);
 }
 
 .effort-btn-easy.active {
