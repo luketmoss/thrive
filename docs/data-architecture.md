@@ -4,7 +4,8 @@
 **Status:** Draft for review.
 **Scope:** The contracts that let a journaling app present one day's data
 drawn from Thrive, Hive, and its own notes. Forage is named where it would
-attach, and otherwise out of scope.
+attach, and otherwise out of scope. Goals are deferred entirely — §8 records
+why, including the target Thrive already removed once.
 
 Companion to `docs/coros-sync-plan.md`, which covers getting COROS data
 *into* Thrive. This document covers getting data *out* of several systems
@@ -514,16 +515,47 @@ a genuinely reversible decision.
 
 ---
 
-## 8. Gap: goals have no home at all
+## 8. Goals — deliberately out of scope
 
 "Capture data that will help me achieve goals" and "create plans to achieve
 goals" imply a goal entity — a target, a metric, a window, a progress
-reading. Nothing in Thrive, Hive, or this document holds one.
+reading. Nothing in Thrive, Hive, or this document holds one, and **nothing
+here will.** Goals are explicitly deferred, not forgotten.
 
-This is noted rather than designed. It is a real gap against the stated
-purpose, but it sits behind the data model: goals are expressed *over*
-`DailySummary`, so `DailySummary` has to exist first. Flagging so it is a
-decision rather than an oversight.
+The sequencing argument is that goals are expressed *over* `DailySummary`,
+so that has to exist first. But there is stronger evidence than sequencing.
+
+### Thrive already tried this and removed it
+
+Commit `d7fd771` (#112, closed via #114, 11 September 2026) deleted a weekly
+session target from the Activities screen. The commit message is the clearest
+statement of the problem:
+
+> The targets (3 lifts / 2 rides / 1 stretch) were hardcoded constants
+> shipped as AC3 of #105, not user data. Nobody chose them, hike activities
+> counted toward nothing, and #100 removed the Config sheet tab so there was
+> nowhere to persist a real per-user goal. Removed rather than kept as a
+> number nobody set.
+
+Three things worth carrying forward whenever goals are revisited:
+
+1. **A target nobody set is worse than no target.** It was removed for being
+   decorative, not for being wrong.
+2. **There is no configuration persistence in Thrive.** #100 removed the
+   `Config` tab. Any real goal needs somewhere to live, and that place does
+   not currently exist.
+3. **Partial coverage is a design flaw, not a gap to fill later.** Hikes
+   counting toward nothing is what made the feature feel arbitrary — and the
+   activity taxonomy has since grown from four types to eight-plus under §4,
+   which makes "what counts toward this goal" harder, not easier.
+
+Anything built here later should also expect goals to be several different
+shapes — accumulation ("500 miles this year"), consistency ("lift 3x a
+week"), performance ("squat 275", which lives at set grain, not day grain),
+and constraint ("no more than two hard days running"). A single
+metric/target/deadline row handles the first two and misrepresents the other
+two. That is a large enough design problem to deserve its own pass rather
+than a column bolted onto something else.
 
 ---
 
