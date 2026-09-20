@@ -542,7 +542,37 @@ decision rather than an oversight.
 
 ---
 
-## 10. Open questions
+## 10. The Journal is read-only
+
+**Decided: the Journal reads Thrive and Hive, and writes only its own
+notes.** Corrections happen in the app that owns the data.
+
+The temptation is real — you are looking at a day, the sport type is wrong,
+and fixing it in place beats opening another app. But the cost is
+disproportionate:
+
+- `DailySummary` is derived and rebuilt nightly, so a write aimed at it
+  would simply vanish. A real correction has to reach through to `Workouts`.
+- That means the Journal needs write actions, the row mapping it currently
+  avoids entirely, and a rule for how its edits interact with the sync
+  plan's §8 three-way merge.
+- Hive is worse: `Items` writes carry business rules, cascading child
+  updates and audit entries, all of which live in the Apps Script layer
+  precisely so that clients do not reimplement them.
+
+Read-only also keeps a quietly valuable property: **the Journal cannot
+corrupt anything.** If it is wrong, it is wrong on screen and every source
+of truth is intact.
+
+**Deep-linking is the escape hatch** if the ergonomics chafe — tapping an
+activity opens it in Thrive, tapping a task opens Hive. That is navigation,
+not writes: no mapping, no merge interaction, just URL plumbing in both
+apps. Worth doing the moment read-only starts to feel constraining, and it
+does not change any contract in this document.
+
+---
+
+## 11. Open questions
 
 1. **[VERIFY §4]** Whether COROS's sport codes distinguish indoor from
    outdoor. If they do, venue derivation is a lookup; if not, it falls back
@@ -550,30 +580,33 @@ decision rather than an oversight.
    this only decides which signal it reads.
 2. **[VERIFY §2]** COROS's sleep-day attribution, so the wake-day rule can be
    implemented rather than assumed.
-3. Does the Journal write anything back to Thrive or Hive, or is it
-   strictly read-plus-own-notes? Read-only is assumed throughout this
-   document.
 
-### Settled
+---
 
-- **§7 — The Journal gets its own Google Sheet**, written directly, no API
-  of its own yet. Establishes the rule: talk directly to what you own, via
-  an API to what you don't.
-- **§7 — Journal notes are free text only** for v1. Structured daily inputs
-  deferred, not foreclosed — prose stays retroactively scoreable.
-- **§6 — The sync writes through the API**, backfill paced against quota.
-  The API must therefore land before the sync plan's Phase 3.
-- **§6 — Thrive gets an Apps Script API**, following Hive's pattern. Caps
-  the mirror count at two permanently; does not reduce it to one, because
-  the SPA keeps its direct Sheets path as Hive's does.
-- **§5 — `DailySummary` columns fixed at A:O.** Carries `max_effort` and
-  `effort_counts`; `total_distance_m` is outdoor-only.
-- **§4 — `sub_type` fill rule.** Venue is derived (sport code, else GPS
-  presence); terrain is never derived and stays blank until set by hand.
-  Nothing is defaulted.
-- **§4 — `type` + `sub_type` confirmed.** More venue/terrain variants are
-  expected, so each one must cost a value rather than a code change.
+## 12. Settled decisions
+
+In the order they were taken.
+
 - **§3 — Journal reads Hive completions from `Audit Log`.** Adds a
   `getAuditLog` action, an explicit `completed` audit action, and
   Denver-local date filtering to Hive. Verified that both Hive write paths
   already log, so the event stream is complete.
+- **§4 — `type` + `sub_type` confirmed.** More venue/terrain variants are
+  expected, so each one must cost a value rather than a code change.
+- **§4 — `sub_type` fill rule.** Venue is derived (sport code, else GPS
+  presence); terrain is never derived and stays blank until set by hand.
+  Nothing is defaulted.
+- **§5 — `DailySummary` columns fixed at A:O.** Carries `max_effort` and
+  `effort_counts`; `total_distance_m` is outdoor-only.
+- **§6 — Thrive gets an Apps Script API**, following Hive's pattern. Caps
+  the mirror count at two permanently; does not reduce it to one, because
+  the SPA keeps its direct Sheets path as Hive's does.
+- **§6 — The sync writes through the API**, backfill paced against quota.
+  The API must therefore land before the sync plan's Phase 3.
+- **§7 — Journal notes are free text only** for v1. Structured daily inputs
+  deferred, not foreclosed — prose stays retroactively scoreable.
+- **§7 — The Journal gets its own Google Sheet**, written directly, no API
+  of its own yet. Establishes the rule: talk directly to what you own, via
+  an API to what you don't.
+- **§10 — The Journal is read-only**, writing only its own notes.
+  Deep-linking into Thrive and Hive is the escape hatch if needed.
