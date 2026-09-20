@@ -40,12 +40,19 @@ function getExercises(filters) {
 /**
  * An exercise by id or name.
  *
- * Mirrors `resolveExercise` in mcp-server/index.js exactly — id, then a
- * unique exact name, then a unique partial — because #132 deletes that copy
- * and callers must not notice a change in which references resolve.
+ * Mirrors `resolveExercise` in mcp-server/index.js — id, then a unique exact
+ * name, then a unique partial — because #132 deletes that copy and callers
+ * must not notice a change in which references resolve. A differential test
+ * over 14 reference shapes found one deliberate divergence, below.
  *
  * Every ambiguity throws with the candidates named. Guessing between two
  * exercises with the same name is how the wrong set gets logged.
+ *
+ * **Divergence, deliberate:** an empty reference. The MCP version falls
+ * through to partial matching, where `''` is a substring of every name, and
+ * reports the entire library as "ambiguous matches" — technically true and
+ * useless. Here it is refused as a missing argument, which is what it is.
+ * Both are failure paths, so no working call changes behaviour under #132.
  */
 function resolveExercise(ref, exercises) {
   var q = String(ref === undefined ? '' : ref).trim().toLowerCase();

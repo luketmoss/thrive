@@ -124,6 +124,18 @@ describe('AC3: resolution happens server-side and never guesses', () => {
     const { res } = preview([{ exercise: 'Kettlebell Swing', set_number: 1, reps: '10' }]);
     expect(res.error).toMatch(/No exercise matching "Kettlebell Swing"/);
   });
+
+  // The one deliberate divergence from mcp-server's resolver, found by a
+  // differential test over 14 reference shapes. There, '' falls through to
+  // partial matching — where it is a substring of every name — and reports
+  // the whole library as ambiguous. Both are failure paths, so #132 changes
+  // no working call.
+  it('refuses an empty exercise reference as missing, not as ambiguous', () => {
+    const { res } = preview([{ exercise: '', set_number: 1, reps: '10' }]);
+    expect(res.success).toBe(false);
+    expect(res.error).toMatch(/An exercise reference is required/);
+    expect(res.error).not.toMatch(/ambiguous/);
+  });
 });
 
 describe('AC4: resolution without writing', () => {
