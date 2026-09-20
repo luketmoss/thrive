@@ -115,8 +115,10 @@ const FIELD_META: Record<CardioField, { label: string; placeholder: string; deci
  * entered one, so the label has to carry it.
  */
 export function CardioFields({ workoutType, subType, values, onChange, idPrefix }: Props) {
+  // Two separate questions: does this pair have a cardio fieldset at all, and
+  // then which of its fields are on screen right now.
+  if (!hasCardioFields(workoutType, subType)) return null;
   const visible = visibleCardioFields(workoutType, subType, values);
-  if (visible.length === 0) return null;
 
   const field = (key: CardioField) => {
     const { label, placeholder, decimal } = FIELD_META[key];
