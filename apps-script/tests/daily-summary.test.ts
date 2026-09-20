@@ -93,6 +93,64 @@ describe('AC1: the rebuild is idempotent over an arbitrary range', () => {
       .toMatch(/Expected YYYY-MM-DD/);
   });
 
+  // A derived tab may not keep a row its sources no longer imply. Found in
+  // review: the rebuild skipped empty days without clearing what was there.
+  it('removes a row for a day that no longer earns one', () => {
+    const first = rebuild({ workouts: workouts() }, '2026-09-15', '2026-09-16');
+    expect(first.summaryRows).toHaveLength(2);
+
+    // The 15th's only workout is deleted; the 16th's remains.
+    const second = rebuild({
+      workouts: [workouts()[1]],
+      dailySummary: JSON.parse(JSON.stringify(first.summaryRows)),
+    }, '2026-09-15', '2026-09-16');
+
+    expect(second.res.data.removed).toBe(1);
+    expect(second.summaryRows).toHaveLength(1);
+    expect(second.summaryRows[0][COL.date]).toBe('2026-09-16');
+  });
+
+  it('removes several stale rows without corrupting the ones that stay', () => {
+    const three = () => [
+      workoutRow({ id: 'w_1', date: '2026-09-15', type: 'weight', effort: 'Hard' }),
+      workoutRow({ id: 'w_2', date: '2026-09-16', type: 'bike', distance_m: '19956' }),
+      workoutRow({ id: 'w_3', date: '2026-09-17', type: 'run', distance_m: '5000' }),
+    ];
+    const first = rebuild({ workouts: three() }, '2026-09-15', '2026-09-17');
+    expect(first.summaryRows).toHaveLength(3);
+
+    // The first and last days lose their workouts; the middle one survives.
+    const second = rebuild({
+      workouts: [three()[1]],
+      dailySummary: JSON.parse(JSON.stringify(first.summaryRows)),
+    }, '2026-09-15', '2026-09-17');
+
+    expect(second.res.data.removed).toBe(2);
+    expect(second.summaryRows).toHaveLength(1);
+    expect(second.summaryRows[0][COL.date]).toBe('2026-09-16');
+    expect(second.summaryRows[0][COL.total_distance_m]).toBe('19956');
+  });
+
+  it('leaves rows outside the rebuilt range alone', () => {
+    const first = rebuild({
+      workouts: [
+        workoutRow({ id: 'w_1', date: '2026-09-15', type: 'weight' }),
+        workoutRow({ id: 'w_2', date: '2026-09-20', type: 'bike' }),
+      ],
+    }, '2026-09-15', '2026-09-20');
+    expect(first.summaryRows).toHaveLength(2);
+
+    // Rebuild only the 15th, with its workout gone. The 20th is out of range
+    // and must survive even though its source is absent from this call.
+    const second = rebuild({
+      workouts: [],
+      dailySummary: JSON.parse(JSON.stringify(first.summaryRows)),
+    }, '2026-09-15', '2026-09-15');
+
+    expect(second.res.data.removed).toBe(1);
+    expect(second.summaryRows.map((r) => r[COL.date])).toEqual(['2026-09-20']);
+  });
+
   it('excludes planned workouts — a plan is not a thing that happened', () => {
     const { summaryRows } = rebuild({
       workouts: [workoutRow({ id: 'w_p', date: '2026-09-15', status: 'planned', type: 'weight' })],

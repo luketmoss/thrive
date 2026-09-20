@@ -286,6 +286,7 @@ function rebuildDailySummary(from, to, options) {
   var written = 0;
   var skipped = 0;
   var updated = 0;
+  var removed = [];
 
   for (var k = 0; k < dates.length; k++) {
     var date = dates[k];
@@ -295,6 +296,13 @@ function rebuildDailySummary(from, to, options) {
     var summary = buildDaySummary(date, dayWorkouts, dayHealth, computedAt);
     if (!summary) {
       skipped += 1;
+      // A day that has a row but no longer earns one — its last workout was
+      // deleted, say. The row has to go: this tab is derived, so a row that
+      // its sources no longer imply is not stale data to be tolerated, it is
+      // wrong data. Collected here and removed after the loop, bottom-to-top.
+      if (Object.prototype.hasOwnProperty.call(rowByDate, date)) {
+        removed.push(rowByDate[date]);
+      }
       continue;
     }
 
@@ -311,6 +319,14 @@ function rebuildDailySummary(from, to, options) {
     }
   }
 
+  // Bottom-to-top: removing a row shifts every row below it up, so descending
+  // order is what keeps the remaining indices valid. The same rule as
+  // everywhere else in this codebase.
+  removed.sort(function (a, b) { return b - a; });
+  for (var r = 0; r < removed.length; r++) {
+    sheet.deleteRow(removed[r]);
+  }
+
   return {
     from: start,
     to: end,
@@ -318,6 +334,7 @@ function rebuildDailySummary(from, to, options) {
     written: written,
     updated: updated,
     skipped: skipped,
+    removed: removed.length,
     computed_at: computedAt,
   };
 }
