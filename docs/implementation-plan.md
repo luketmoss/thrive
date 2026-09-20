@@ -24,6 +24,7 @@ two boards cleanly.
 | B2 — activity taxonomy | [thrive#129](https://github.com/luketmoss/thrive/issues/129) | #128 |
 | B3a — Apps Script API: scaffold + `Workouts` | [thrive#130](https://github.com/luketmoss/thrive/issues/130) | #128 |
 | B3b — API actions: Exercises, Templates, Sets | [thrive#134](https://github.com/luketmoss/thrive/issues/134) | #130 |
+| *(Labels needs no API — `domain.js` has none and no tool touches it)* | — | — |
 | B4 — `DailySummary` | [thrive#131](https://github.com/luketmoss/thrive/issues/131) | #128, #130 |
 | B6 — MCP server → API client | [thrive#132](https://github.com/luketmoss/thrive/issues/132) | #130, #134 |
 | A — COROS verification spike | [thrive#133](https://github.com/luketmoss/thrive/issues/133) | — |
@@ -133,8 +134,16 @@ the same tab.
 
 - **#130** — scaffold, auth, envelope, deployment, CI, plus `Workouts` and
   planned-by-date. Unblocks #131 and the Journal. Medium.
-- **#134** — `Exercises`, `Templates`, `Sets`, `Labels`. Consumed only by
-  #132.
+- **#134** — `Exercises`, `Templates`, `Sets`. Consumed only by #132.
+
+Refining #134 sharpened the boundary into a principle worth recording:
+**the API accepts domain objects, never sheet rows or row indices.** Row
+mapping *and row resolution* (`findSetSlots`, `resolveSetTarget`,
+`planSetUpdates`) move server-side; narration (`describeSlots`,
+`describeSetState`, `describeLoad`) stays in `mcp-server/`, since formatting
+tool output for an agent is not a data concern. Had the API exposed
+row-index CRUD instead, `mcp-server/` would still need the sheet shape to
+call it and the mirror would have survived the refactor intact.
 
 The gate for the Journal. Hive's `apps-script/` is a working
 template: `doGet()` with a `payload` param, API key auth, business rules and
