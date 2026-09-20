@@ -379,33 +379,78 @@ this data." Three options:
 | **B. Thrive gets an Apps Script API** mirroring Hive's | Symmetric; agents and future apps benefit; business rules enforced server-side; Hive's is a working template | A new deployment, a new API key, a new thing to keep in sync |
 | **C. Journal reads the aggregate only** | One read per day; almost no mirroring | Drill-down into a specific activity still needs a raw read |
 
-**Recommended: C for the day view, A for drill-down, Hive's existing API for
-Hive.** Concretely, rendering a day is:
+**Decided: Thrive gets an Apps Script API, following Hive's pattern (B).**
+The day view still reads `DailySummary` (C), because one row beats a query
+however it is served.
 
-1. **Thrive** — one `DailySummary` row for the date. One read, fifteen
-   cells, no schema mirroring at all.
+### What this does and does not fix
+
+It is worth being precise, because Hive is the evidence and Hive did **not**
+unify everything:
+
+- **Hive's SPA still talks to Sheets directly.** `frontend/src/api/sheets.ts`
+  calls `sheetsAppend('Items!A:N', …)`, and Hive's CLAUDE.md still requires
+  `apps-script/src/rules.js` and `frontend/src/state/rules.ts` to be kept in
+  step. Only the MCP server moved behind the API.
+- So this **caps** Thrive's mirror count at two — the SPA's mapping and the
+  Apps Script one — **permanently, regardless of how many consumers appear.**
+  It does not reduce it to one.
+
+That cap is the actual win. Without it, every new reader of Thrive's data
+adds a mirror; with it, the Journal, a future dashboard and anything else
+cost nothing. Thrive's MCP server also stops duplicating `domain.js` and
+becomes a thin client, exactly as Hive's is.
+
+Moving the SPA behind the API too is possible and is what would reach one
+mirror, but it trades a direct Sheets call holding the user's own OAuth
+token for an extra network hop through a script deployment. Hive judged that
+trade not worth it. Nothing here needs to revisit that.
+
+Concretely, rendering a day is:
+
+1. **Thrive** — one `DailySummary` row for the date, via the API. One read,
+   fifteen cells, no schema mirroring at all.
 2. **Hive** — the existing Apps Script API, via the new `getAuditLog`
    action from §3, filtered to that Denver-local date. The transport
    already exists and is proven by the MCP server; the action does not.
 3. **Journal notes** — the Journal's own sheet.
 4. **Drill-down** (tapping the day's activities) — `Workouts` rows for that
-   date, which does need the row mapping, and is the only place it does.
+   date, also via the API, so the Journal never carries Thrive's row shape.
 
-This defers option B rather than rejecting it. If a third consumer of
-Thrive appears, or if the drill-down mirroring becomes painful, B is the
-answer and Hive is the template.
+### The open edge: how the sync writes
 
-### The mirror tax is now the central maintenance risk
+The API settles how data is *read*. How the nightly sync *writes* is now a
+live question, and the two candidate answers pull in opposite directions:
 
-CLAUDE.md already requires `frontend/src/api/*.ts` and
-`mcp-server/domain.js` to change together. The sync plan §4 keeps that at
-two by having `sync/` import from `mcp-server/` rather than copy it. A
-Journal that reads `Workouts` makes it three.
+- **Through the API**, like every other non-browser client. One mapping,
+  consistent story. But Apps Script deployments carry execution-time and
+  daily-quota limits that a bulk historical backfill (§11 of the sync plan,
+  several hundred activities) could bump into, and a nightly job failing on a
+  platform quota is a bad failure mode.
+- **Direct via the service account**, as the sync plan currently assumes.
+  No quota exposure and it already needs service-account credentials for
+  Drive blobs regardless. But it reintroduces a third row mapping — the
+  exact thing this decision was meant to cap.
 
-**[DECIDE]** The scalable fix is a small shared package — types plus row
-mapping — consumed by every Thrive client. That is real work and is probably
-not v1 of the Journal. But `DailySummary` exists partly to *delay* needing
-it, and that is worth being explicit about rather than discovering later.
+Nightly volume is tiny (1–2 activities plus a 7–10 day rollup) and would sit
+well inside any quota. The backfill is the only real pressure, and it is
+already specified as a paced, resumable queue rather than one long run, which
+is the same shape quota-pacing needs.
+
+**[DECIDE]** — see §10.
+
+### Knock-on effects
+
+- **Thrive's MCP server becomes an API client.** `mcp-server/domain.js` and
+  `mcp-server/sheets.js` largely dissolve into the Apps Script deployment,
+  as Hive's did. This is a meaningful refactor of working code and should be
+  sequenced deliberately, not bundled into the COROS work.
+- **The sync plan's §4 changes.** It has `sync/` importing from
+  `mcp-server/` precisely to avoid a third mapping. If `mcp-server/` no
+  longer holds one, that reasoning is obsolete and the sync's write path is
+  the open question above.
+- **A shared types package is no longer the answer**, and the sync plan's
+  standing `[DECIDE]` on it can close. The API is the seam instead.
 
 ---
 
@@ -469,8 +514,9 @@ decision rather than an oversight.
    this only decides which signal it reads.
 2. **[VERIFY §2]** COROS's sleep-day attribution, so the wake-day rule can be
    implemented rather than assumed.
-3. **[DECIDE §6]** Accept the three-mirror position for now, or build the
-   shared package with the Journal?
+3. **[DECIDE §6]** Does the nightly sync write through the new Apps Script
+   API, or keep direct service-account access to Sheets? Quota exposure on
+   the historical backfill versus a third row mapping.
 4. **[DECIDE §7]** Structured daily inputs in the Journal, or free text only?
 5. **[DECIDE §7]** Does the Journal get its own Google Sheet, or a tab in an
    existing one? (Own sheet recommended — ownership boundaries have held up
@@ -481,6 +527,9 @@ decision rather than an oversight.
 
 ### Settled
 
+- **§6 — Thrive gets an Apps Script API**, following Hive's pattern. Caps
+  the mirror count at two permanently; does not reduce it to one, because
+  the SPA keeps its direct Sheets path as Hive's does.
 - **§5 — `DailySummary` columns fixed at A:O.** Carries `max_effort` and
   `effort_counts`; `total_distance_m` is outdoor-only.
 - **§4 — `sub_type` fill rule.** Venue is derived (sport code, else GPS
