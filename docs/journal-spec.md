@@ -66,9 +66,10 @@ It reads seven `DailySummary` rows plus the planned-workout query — cheap
 enough that no weekly aggregate needs materializing. `data-architecture.md`
 §5 already rejects materialized weekly rollups for exactly this reason.
 
-**[DECIDE]** Which day the week starts on. Thrive's
-`activities-helpers.ts` groups by Monday (`thisMonday` / `lastMonday`), so
-matching that keeps the two apps agreeing about what "this week" means.
+**The week starts Monday**, matching Thrive's `activities-helpers.ts`,
+which groups This Week / Last Week by `thisMonday` / `lastMonday`. Two apps
+disagreeing about what "this week" means would be worse than either
+convention on its own merits.
 
 A full week screen with totals is deliberately deferred, not rejected. If
 the strip proves insufficient, it is an additive change.
@@ -120,14 +121,31 @@ Three groups, in this order:
 
 1. **Overdue** — `due_date` before today, not in a terminal status.
 2. **Due today** — `due_date` equals today.
-3. **Due soon** — a short forward window. **[DECIDE]** — three days, seven,
-   or configurable.
+3. **Due soon** — a rolling seven days from today.
 
 ### Past
 
 What was completed that day, from the `Audit Log` via the new `getAuditLog`
 action, filtered on the `completed` action. `data-architecture.md` §3 covers
 why this reads the event log rather than `completed_at`.
+
+**The strip and "due soon" are both seven days long and are not the same
+seven days.** The strip is a fixed Monday-to-Sunday calendar week; "due soon"
+is a rolling horizon from today. On a Wednesday, a task due the following
+Tuesday appears under "due soon" but falls off the right-hand edge of the
+strip.
+
+This is deliberate. They answer different questions — the strip orients you
+within the week, "due soon" tells you what is bearing down regardless of
+where the week boundary happens to fall. A rolling window also stays a
+constant size, where "rest of this week" would be widest on Monday and empty
+by Friday, which is backwards. Worth knowing so the mismatch is not later
+mistaken for a bug.
+
+**Not configurable.** Thrive has had no settings persistence since #100
+removed the `Config` tab, so this would mean building one. The #112 lesson
+(`data-architecture.md` §8) is not that numbers should be configurable — it
+is that a number nobody chose is worse than no number. Seven was chosen.
 
 ### Links
 
@@ -275,7 +293,4 @@ an existing deployment, none of which changes Hive's write path.
 
 1. **[VERIFY §6]** Does COROS's daily payload carry a sleep score? If so,
    `sleep_quality` is double-sourced and follows the same store-both rule.
-2. **[DECIDE §4]** "Due soon" window — three days, seven, or configurable?
-3. **[DECIDE §2]** Which day does the week strip start on? Thrive already
-   groups by Monday, and disagreeing would be worse than either choice.
-4. What is the app called, and does it get its own repository?
+2. What is the app called, and does it get its own repository?
