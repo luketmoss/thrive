@@ -243,6 +243,37 @@ which is exactly what a `bike` row logged last month is. Do not guess them
 into `mountain` retroactively; offer a one-time reclassification in the UI if
 it turns out to matter.
 
+### How `sub_type` gets filled
+
+The two modifiers are not equally knowable, and the sync treats them
+differently.
+
+**Venue (`indoor` / `outdoor`) is derived.** Resolve in this order:
+
+1. COROS's sport type code, if it distinguishes them — **[VERIFY]**, and the
+   cheapest signal if present.
+2. Otherwise, the presence of GPS/location data in the activity detail
+   payload. An indoor ride or treadmill run has no track.
+
+Prefer a field on the *detail* payload over the FIT file. FIT retrieval is
+capped at 50/day and happens after normalization in the sync plan's §6 loop,
+so making venue depend on it would leave `sub_type` blank whenever the budget
+is exhausted, and fill it in on a later night — a value that changes on its
+own is worse than one that was never set.
+
+**Terrain (`mountain` / `gravel`) is never derived.** It is not a
+device-observable property: two rides with identical track, HR and elevation
+differ only in what they were ridden on. The sync leaves it blank and the
+user sets it in Thrive.
+
+**Nothing is defaulted.** Defaulting `bike` to `mountain` because most rides
+are was considered and rejected — it is the same move CLAUDE.md forbids for
+`Workouts!L–Q`, where a defaulted value becomes indistinguishable from a
+meant one. Blank means unspecified, and that is a legitimate permanent state.
+
+Manual correction is safe by construction: the sync plan's §8 three-way merge
+sees the field diverge from what it last wrote and stops touching it.
+
 `type` gains `run` and `walk` — currently six non-test sites, per the sync
 plan §13.
 
@@ -410,9 +441,10 @@ decision rather than an oversight.
 
 ## 10. Open questions
 
-1. **[VERIFY §4]** Which of these COROS actually reports as distinct sport
-   codes — indoor vs outdoor running may or may not be distinguishable in
-   the payload.
+1. **[VERIFY §4]** Whether COROS's sport codes distinguish indoor from
+   outdoor. If they do, venue derivation is a lookup; if not, it falls back
+   to GPS presence in the detail payload. Either way the *rule* is settled —
+   this only decides which signal it reads.
 2. **[DECIDE §5]** Confirm `DailySummary`'s column set before it is built;
    adding columns later is easy, changing their meaning is not.
 3. **[VERIFY §2]** COROS's sleep-day attribution, so the wake-day rule can be
@@ -429,6 +461,9 @@ decision rather than an oversight.
 
 ### Settled
 
+- **§4 — `sub_type` fill rule.** Venue is derived (sport code, else GPS
+  presence); terrain is never derived and stays blank until set by hand.
+  Nothing is defaulted.
 - **§4 — `type` + `sub_type` confirmed.** More venue/terrain variants are
   expected, so each one must cost a value rather than a code change.
 - **§3 — Journal reads Hive completions from `Audit Log`.** Adds a
