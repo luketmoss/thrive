@@ -11,6 +11,35 @@ covers what the existing apps owe it, not the app itself.
 
 ---
 
+## 0. Issues
+
+Created 20 September 2026. Thrive items are sub-issues of the epic; Hive's
+are standalone and cross-referenced, since sub-issue links do not span the
+two boards cleanly.
+
+| Item | Issue | Depends on |
+|---|---|---|
+| Epic | [thrive#127](https://github.com/luketmoss/thrive/issues/127) | — |
+| B1 + B5 — `Workouts` A:Z, `started_at_utc` backfill | [thrive#128](https://github.com/luketmoss/thrive/issues/128) | — |
+| B2 — activity taxonomy | [thrive#129](https://github.com/luketmoss/thrive/issues/129) | #128 |
+| B3 — Apps Script API | [thrive#130](https://github.com/luketmoss/thrive/issues/130) | #128 |
+| B4 — `DailySummary` | [thrive#131](https://github.com/luketmoss/thrive/issues/131) | #128, #130 |
+| B6 — MCP server → API client | [thrive#132](https://github.com/luketmoss/thrive/issues/132) | #130 |
+| A — COROS verification spike | [thrive#133](https://github.com/luketmoss/thrive/issues/133) | — |
+| C1–C3 — Hive audit log read path | [hive#239](https://github.com/luketmoss/hive/issues/239) | — |
+| C4 — Hive item deep links | [hive#240](https://github.com/luketmoss/hive/issues/240) | — |
+
+**Not on the project boards.** This environment has no `gh` CLI, and both
+repos' board tooling shells out to it (`.thrive/board.mjs` uses
+`execFileSync('gh', …)`; Hive's convention is `gh api graphql`). Placement
+needs `node .thrive/board.mjs` run locally, or the project's auto-add
+workflow.
+
+Track D (the sync phases) is deliberately not broken out — those phases
+depend on answers from #133, and specifying them now would be guesswork.
+
+---
+
 ## 1. The shape of it
 
 Four tracks. **Three of them start immediately and in parallel**, because
