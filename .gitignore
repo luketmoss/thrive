@@ -10,3 +10,6 @@ scripts/.migrate-*-backup-*.json
 # Apps Script (#130) — holds the script id; the API key lives in script
 # properties and never on disk.
 .clasp.json
+
+# resumable backfill progress (scripts/backfill-*.mjs)
+scripts/.backfill-*-progress.json

@@ -123,3 +123,35 @@ var SECTIONS = ['warmup', 'primary', 'SS1', 'SS2', 'SS3', 'burnout', 'cooldown']
 /** The fields a set correction may change. Mirrors SET_UPDATE_FIELDS. */
 var SET_UPDATE_FIELDS = ['weight', 'reps', 'planned_reps', 'effort'];
 
+// --- DailySummary (A:R) — #131 --------------------------------------
+//
+// One row per local calendar day. Derived, never authoritative: if this tab
+// and Workouts disagree, Workouts is right and this is stale.
+//
+// Coverage (H-J) sits next to the totals it qualifies rather than appended at
+// the end. A sum over nullable fields is incomplete information without its
+// coverage, so they belong together; readable ordering is free while the tab
+// does not exist yet, and a migration later.
+var DAILY_SUMMARY_FIELDS = [
+  'date',                  // A  PK, America/Denver local calendar date
+  'activity_count',        // B  all activities, indoor and outdoor
+  'activity_types',        // C  e.g. "bike:mountain,weight"
+  'total_moving_s',        // D
+  'total_elapsed_s',       // E
+  'total_distance_m',      // F  OUTDOOR ONLY
+  'total_ascent_m',        // G  OUTDOOR ONLY
+  'cardio_activity_count', // H  the `of` — outdoor cardio that day
+  'distance_withdata',     // I  how many of H contributed to F
+  'ascent_withdata',       // J  how many of H contributed to G
+  'max_effort',            // K  session effort, blank when nobody said
+  'effort_counts',         // L  e.g. "Hard:1,Medium:2"
+  'steps',                 // M  from DailyHealth
+  'resting_hr',            // N
+  'hrv',                   // O
+  'sleep_total_s',         // P
+  'training_load',         // Q
+  'computed_at',           // R
+];
+
+var DAILY_SUMMARY_COLUMN_COUNT = 18;
+

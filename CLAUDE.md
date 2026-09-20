@@ -41,6 +41,13 @@ Google Sheet "Groundwork" with 5 tabs:
   sub_type, source, source_activity_id, raw_ref, fit_ref, fit_fetched_at, synced_at, started_at_utc, calories
 - **Sets** (A:J): workout_id, exercise_id, Exercise Name, Section, Exercise Order, Set #, Planned Reps, Weight (lbs), Reps, Effort
 - **Labels** (A:D): id, name, color_key, created
+- **DailySummary** (A:R) — **derived, never authoritative** (#131). One row per
+  local calendar day, rebuildable at any time from `Workouts` + `DailyHealth`.
+  Nothing writes here by hand. If it disagrees with `Workouts`, `Workouts` is
+  right and this is stale.
+  `total_distance_m`/`total_ascent_m` are **outdoor only**, so they will not
+  equal the sum of a day's activity distances on any day with an indoor
+  session — correct, and surprising, so say so wherever it is displayed.
 
 `Created` on `Exercises`/`Workouts`/`Labels` is written but never read — a
 deliberate forensic trail, not dead weight to be removed.
