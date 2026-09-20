@@ -464,6 +464,23 @@ input, select, textarea {
   color: #5d4037;
 }
 
+/* #129. Run is rose and Walk is teal — chosen to sit clear of badge-bike's
+   blue under deuteranopia and protanopia, where a green or a second blue
+   would collapse into it. A violet was tried first and rejected: it measured
+   AA fine but sat too close to the blue once the red/green axis flattens,
+   which is the failure the criterion was actually about. Both measure AA
+   (>= 4.5:1) on their own tint; type-badge-contrast.test.ts enforces both
+   properties. */
+.badge-run {
+  background: #fce7f3;
+  color: #9d174d;
+}
+
+.badge-walk {
+  background: #d7f2ee;
+  color: #10605a;
+}
+
 [data-theme="dark"] .badge-weight {
   background: #3b1515;
   color: #fca5a5;
@@ -482,6 +499,16 @@ input, select, textarea {
 [data-theme="dark"] .badge-hike {
   background: #2c1f1a;
   color: #d7ccc8;
+}
+
+[data-theme="dark"] .badge-run {
+  background: #2e1022;
+  color: #f5a8d3;
+}
+
+[data-theme="dark"] .badge-walk {
+  background: #0c2a28;
+  color: #7fded3;
 }
 
 .badge-planned {
@@ -1781,7 +1808,8 @@ input, select, textarea {
   width: 100%;
 }
 
-.effort-toggle-session .effort-btn {
+.effort-toggle-session .effort-btn,
+.sub-type-toggle .sub-type-btn {
   flex: 1;
   width: auto;
   min-width: 44px;
@@ -1795,10 +1823,36 @@ input, select, textarea {
 
 /* Active state is signalled by weight and an inset ring as well as colour, so
    it does not rely on hue alone. */
-.effort-toggle-session .effort-btn.active {
+.effort-toggle-session .effort-btn.active,
+.sub-type-toggle .sub-type-btn.active {
   font-weight: 700;
   border-width: 2px;
   box-shadow: inset 0 0 0 1px currentColor;
+}
+
+/* #129 venue/terrain picker. Deliberately shares the session effort toggle's
+   sizing and active-state rules above rather than restating them — it is the
+   same control with a different vocabulary, and the 44px target, AA unset
+   contrast and non-colour active cue are the parts that must not drift. It
+   carries no per-value hue: venue has no ordinal meaning the way effort does,
+   so a single accent reads as "chosen" without implying a scale. */
+.sub-type-toggle {
+  display: flex;
+  gap: var(--space-sm);
+  width: 100%;
+}
+
+.sub-type-toggle .sub-type-btn {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.sub-type-toggle .sub-type-btn.active {
+  background: var(--color-primary-light);
+  border-color: var(--color-primary);
+  color: var(--color-primary-hover);
 }
 
 .effort-btn-easy.active {

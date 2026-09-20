@@ -193,7 +193,7 @@ describe('Edit workout - duration editing', () => {
       notes: 'Felt strong',
       elapsed_seconds: minutesToSeconds('45'),
       effort: '',
-      distance_m: '', ascent_m: '', descent_m: '', avg_hr: '',
+      sub_type: '', distance_m: '', ascent_m: '', descent_m: '', avg_hr: '',
     };
     expect(metadata.elapsed_seconds).toBe('2700');
     expect(secondsToMinutes(metadata.elapsed_seconds)).toBe(45);
@@ -206,7 +206,7 @@ describe('Edit workout - duration editing', () => {
       notes: '',
       elapsed_seconds: minutesToSeconds(''),
       effort: '',
-      distance_m: '', ascent_m: '', descent_m: '', avg_hr: '',
+      sub_type: '', distance_m: '', ascent_m: '', descent_m: '', avg_hr: '',
     };
     expect(metadata.elapsed_seconds).toBe('');
     expect(secondsToMinutes(metadata.elapsed_seconds)).toBeNull();
@@ -230,7 +230,7 @@ describe('Session effort (#102)', () => {
       notes: '',
       elapsed_seconds: '',
       effort: 'Hard',
-      distance_m: '', ascent_m: '', descent_m: '', avg_hr: '',
+      sub_type: '', distance_m: '', ascent_m: '', descent_m: '', avg_hr: '',
     };
     expect(metadata.effort).toBe('Hard');
   });
@@ -242,7 +242,7 @@ describe('Session effort (#102)', () => {
       notes: '',
       elapsed_seconds: '',
       effort: '',
-      distance_m: '', ascent_m: '', descent_m: '', avg_hr: '',
+      sub_type: '', distance_m: '', ascent_m: '', descent_m: '', avg_hr: '',
     };
     expect(metadata.effort).toBe('');
   });

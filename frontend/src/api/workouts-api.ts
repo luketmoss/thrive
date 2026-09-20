@@ -111,7 +111,7 @@ export function workoutToRow(w: Workout): (string | number)[] {
 export async function createWorkout(
   data: { type: WorkoutType; name: string; template_id?: string; notes?: string; elapsed_seconds?: string; effort?: Effort | '';
     distance_m?: string; ascent_m?: string; descent_m?: string; avg_hr?: string;
-    copied_from?: string; date?: string; status?: string },
+    copied_from?: string; date?: string; status?: string; sub_type?: string },
   token: string,
 ): Promise<Workout> {
   const id = `w_${crypto.randomUUID().slice(0, 8)}`;
@@ -140,9 +140,10 @@ export async function createWorkout(
     ascent_m: data.ascent_m || '',
     descent_m: data.descent_m || '',
     avg_hr: data.avg_hr || '',
+    // #129: venue/terrain, chosen by the user. '' means unspecified.
+    sub_type: data.sub_type || '',
     // #128: sync provenance. Nothing in the app writes these — a hand-logged
     // workout is exactly the row with a blank `source`.
-    sub_type: '',
     source: '',
     source_activity_id: '',
     raw_ref: '',

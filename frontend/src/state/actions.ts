@@ -830,7 +830,8 @@ export async function copyWorkout(
 
 export async function startSimpleWorkout(
   data: { type: WorkoutType; name: string; notes: string; elapsed_seconds: string; effort: Effort | '';
-         distance_m: string; ascent_m: string; descent_m: string; avg_hr: string; date?: string },
+         distance_m: string; ascent_m: string; descent_m: string; avg_hr: string; date?: string;
+         sub_type?: string },
   token: string,
 ): Promise<void> {
   try {
@@ -844,6 +845,7 @@ export async function startSimpleWorkout(
       ascent_m: data.ascent_m,
       descent_m: data.descent_m,
       avg_hr: data.avg_hr,
+      sub_type: data.sub_type,
       date: data.date,
     }, token);
 
@@ -908,6 +910,8 @@ export interface EditWorkoutData {
   ascent_m: string;
   descent_m: string;
   avg_hr: string;
+  /** `Workouts!R`. '' is unspecified and a legitimate permanent state (#129). */
+  sub_type: string;
 }
 
 export interface EditSetData {
@@ -945,6 +949,7 @@ export async function saveWorkoutEdits(
       ascent_m: metadata.ascent_m,
       descent_m: metadata.descent_m,
       avg_hr: metadata.avg_hr,
+      sub_type: metadata.sub_type,
     };
     await updateWorkoutApi(workout.sheetRow, updatedWorkout, token);
 
@@ -1064,6 +1069,7 @@ export async function saveSimpleWorkoutEdits(
       ascent_m: metadata.ascent_m,
       descent_m: metadata.descent_m,
       avg_hr: metadata.avg_hr,
+      sub_type: metadata.sub_type,
     };
     await updateWorkoutApi(workout.sheetRow, updatedWorkout, token);
 

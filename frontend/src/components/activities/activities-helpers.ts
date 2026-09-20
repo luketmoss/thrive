@@ -372,8 +372,8 @@ export function coverageSuffix(c: CoveredTotal, noun = 'rides'): string {
   return c.withData === c.of ? '' : ` · ${c.withData}/${c.of} ${noun}`;
 }
 
-/** Activities that can carry cardio attributes; see #103. */
-const CARDIO_TYPES = new Set(['bike', 'hike']);
+/** Activities that can carry cardio attributes; see #103, extended by #129. */
+const CARDIO_TYPES = new Set(['bike', 'hike', 'run', 'walk']);
 
 export function isCardioWorkout(w: WorkoutWithRow): boolean {
   return CARDIO_TYPES.has(w.type);
