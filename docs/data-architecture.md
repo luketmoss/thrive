@@ -216,9 +216,15 @@ These are not eight peer values. They are a **sport** crossed with a
    need a guess-based migration.
 3. The filter UI grows from four chips to eight, on a 375px screen.
 
-### Proposed: `type` + `sub_type`
+### Decided: `type` + `sub_type`
 
 Keep `Workouts!D` (`type`) coarse, add `sub_type` as a new column.
+
+**The modifier dimension is expected to grow** — Biking-Road, Running-Trail
+and similar variants are anticipated rather than hypothetical. That is what
+makes the split worth its complexity: each new variant is a new *value* in
+an existing column, touching no enum, no filter UI and no migration. A flat
+enum would pay a code change for each one, and pay it forever.
 
 | User-facing | `type` | `sub_type` | Distance | Ascent/Descent | HR |
 |---|---|---|---|---|---|
@@ -404,28 +410,27 @@ decision rather than an oversight.
 
 ## 10. Open questions
 
-1. **[DECIDE §4]** Confirm the `type`/`sub_type` split, and whether
-   Biking-Road and Running-Trail are coming (they change nothing, which is
-   the point of the split).
-2. **[VERIFY §4]** Which of these COROS actually reports as distinct sport
+1. **[VERIFY §4]** Which of these COROS actually reports as distinct sport
    codes — indoor vs outdoor running may or may not be distinguishable in
    the payload.
-3. **[DECIDE §5]** Confirm `DailySummary`'s column set before it is built;
+2. **[DECIDE §5]** Confirm `DailySummary`'s column set before it is built;
    adding columns later is easy, changing their meaning is not.
-4. **[VERIFY §2]** COROS's sleep-day attribution, so the wake-day rule can be
+3. **[VERIFY §2]** COROS's sleep-day attribution, so the wake-day rule can be
    implemented rather than assumed.
-5. **[DECIDE §6]** Accept the three-mirror position for now, or build the
+4. **[DECIDE §6]** Accept the three-mirror position for now, or build the
    shared package with the Journal?
-6. **[DECIDE §7]** Structured daily inputs in the Journal, or free text only?
-7. **[DECIDE §7]** Does the Journal get its own Google Sheet, or a tab in an
+5. **[DECIDE §7]** Structured daily inputs in the Journal, or free text only?
+6. **[DECIDE §7]** Does the Journal get its own Google Sheet, or a tab in an
    existing one? (Own sheet recommended — ownership boundaries have held up
    well across Thrive and Hive.)
-8. Does the Journal write anything back to Thrive or Hive, or is it
+7. Does the Journal write anything back to Thrive or Hive, or is it
    strictly read-plus-own-notes? Read-only is assumed throughout this
    document.
 
 ### Settled
 
+- **§4 — `type` + `sub_type` confirmed.** More venue/terrain variants are
+  expected, so each one must cost a value rather than a code change.
 - **§3 — Journal reads Hive completions from `Audit Log`.** Adds a
   `getAuditLog` action, an explicit `completed` audit action, and
   Denver-local date filtering to Hive. Verified that both Hive write paths
