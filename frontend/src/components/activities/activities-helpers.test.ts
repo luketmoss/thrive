@@ -43,6 +43,7 @@ function makeWorkout(overrides: Partial<WorkoutWithRow> = {}): WorkoutWithRow {
     ascent_m: '',
     descent_m: '',
     avg_hr: '',
+    sub_type: '', source: '', source_activity_id: '', raw_ref: '', fit_ref: '', fit_fetched_at: '', synced_at: '', started_at_utc: '', calories: '',
     sheetRow: 2,
     ...overrides,
   };

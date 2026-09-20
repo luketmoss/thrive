@@ -110,8 +110,13 @@ const {
 const TOKEN = 'test-token';
 
 function workoutRow(w: { id: string; date: string; time: string; type: string; name: string; status?: string }): string[] {
-  // A:Q — eleven original columns plus the six nullable attributes (#101).
-  return [w.id, w.date, w.time, w.type, w.name, '', '', '', '', '', w.status || '', '', '', '', '', '', ''];
+  // A:Z — eleven original columns, the six nullable attributes (#101) and
+  // the nine sync provenance columns (#128).
+  return [
+    w.id, w.date, w.time, w.type, w.name, '', '', '', '', '', w.status || '',
+    '', '', '', '', '', '',
+    '', '', '', '', '', '', '', '', '',
+  ];
 }
 
 function setRow(s: { workout_id: string; exercise_id: string; exercise_name: string }): string[] {
@@ -127,6 +132,9 @@ function workoutsFromSheet(): WorkoutWithRow[] {
     moving_seconds: row[11] || '', effort: (row[12] || '') as WorkoutWithRow['effort'],
     distance_m: row[13] || '', ascent_m: row[14] || '',
     descent_m: row[15] || '', avg_hr: row[16] || '',
+    sub_type: row[17] || '', source: row[18] || '', source_activity_id: row[19] || '',
+    raw_ref: row[20] || '', fit_ref: row[21] || '', fit_fetched_at: row[22] || '',
+    synced_at: row[23] || '', started_at_utc: row[24] || '', calories: row[25] || '',
     sheetRow: i + 2,
   }));
 }
@@ -177,6 +185,7 @@ describe('AC2: a workout write never targets another workout\'s row', () => {
       id: 'w_ghost', date: '2026-09-01', time: '09:00', type: 'weight', name: 'Ghost',
       template_id: '', notes: '', elapsed_seconds: '', created: '', copied_from: '', status: 'active',
       moving_seconds: '', effort: '', distance_m: '', ascent_m: '', descent_m: '', avg_hr: '',
+      sub_type: '', source: '', source_activity_id: '', raw_ref: '', fit_ref: '', fit_fetched_at: '', synced_at: '', started_at_utc: '', calories: '',
       sheetRow: 2,
     };
     workouts.value = [staleWorkout];
@@ -205,6 +214,7 @@ describe('AC2: a workout write never targets another workout\'s row', () => {
       id: 'w_planned', date: '', time: '', type: 'weight', name: 'Planned',
       template_id: '', notes: '', elapsed_seconds: '', created: '', copied_from: '', status: 'planned',
       moving_seconds: '', effort: '', distance_m: '', ascent_m: '', descent_m: '', avg_hr: '',
+      sub_type: '', source: '', source_activity_id: '', raw_ref: '', fit_ref: '', fit_fetched_at: '', synced_at: '', started_at_utc: '', calories: '',
       sheetRow: 2,
     };
     workouts.value = [staleWorkout];

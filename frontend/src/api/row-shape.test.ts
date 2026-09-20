@@ -70,8 +70,8 @@ describe('templateRowValues', () => {
   });
 });
 
-// Issue #101 — the Workouts tab is A:Q: eleven original columns plus six
-// nullable activity attributes.
+// Issue #128 — the Workouts tab is A:Z: eleven original columns, six nullable
+// activity attributes (#101) and nine sync provenance columns.
 describe('workoutToRow', () => {
   const workout: Workout = {
     id: 'w_001',
@@ -91,10 +91,21 @@ describe('workoutToRow', () => {
     ascent_m: '',
     descent_m: '',
     avg_hr: '',
+    sub_type: '',
+    source: '',
+    source_activity_id: '',
+    raw_ref: '',
+    fit_ref: '',
+    fit_fetched_at: '',
+    synced_at: '',
+    started_at_utc: '',
+    calories: '',
   };
 
-  it('emits exactly seventeen cells, spanning A:Q', () => {
-    expect(workoutToRow(workout)).toHaveLength(17);
+  // AC2: sheetsAppend writes every value it is handed regardless of the range,
+  // so a short row would leave stale cells behind on an edit.
+  it('emits exactly twenty-six cells, spanning A:Z', () => {
+    expect(workoutToRow(workout)).toHaveLength(26);
   });
 
   it('keeps Created, copied_from and status at I, J, K so they do not shift', () => {
@@ -105,8 +116,32 @@ describe('workoutToRow', () => {
     expect(row[10]).toBe('');                           // K status
   });
 
-  // AC1: the new columns ship empty and are never defaulted.
-  it('writes the six new attributes as empty cells, never as 0', () => {
-    expect(workoutToRow(workout).slice(11)).toEqual(['', '', '', '', '', '']);
+  // #101 AC1: the activity attributes ship empty and are never defaulted.
+  it('writes the six activity attributes as empty cells, never as 0', () => {
+    expect(workoutToRow(workout).slice(11, 17)).toEqual(['', '', '', '', '', '']);
+  });
+
+  // AC2: positions 17-25 must be '' rather than undefined — a row of undefined
+  // would write the string "undefined" into R:Z.
+  it('writes the nine sync columns as empty strings, never undefined', () => {
+    const row = workoutToRow(workout);
+    expect(row.slice(17)).toEqual(['', '', '', '', '', '', '', '', '']);
+    for (const cell of row) expect(cell).not.toBeUndefined();
+  });
+
+  it('keeps sub_type at R and calories at Z', () => {
+    const row = workoutToRow({
+      ...workout,
+      sub_type: 'gravel',
+      source: 'coros',
+      source_activity_id: '4821',
+      started_at_utc: '2026-03-15T07:00:00-06:00',
+      calories: '612',
+    });
+    expect(row[17]).toBe('gravel');                      // R sub_type
+    expect(row[18]).toBe('coros');                       // S source
+    expect(row[19]).toBe('4821');                        // T source_activity_id
+    expect(row[24]).toBe('2026-03-15T07:00:00-06:00');   // Y started_at_utc
+    expect(row[25]).toBe('612');                         // Z calories
   });
 });

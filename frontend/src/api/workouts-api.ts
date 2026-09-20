@@ -18,13 +18,13 @@ export class WorkoutRowMismatchError extends Error {
   }
 }
 
-// ── Workouts tab (A:Q) ──────────────────────────────────────────────
+// ── Workouts tab (A:Z) ──────────────────────────────────────────────
 
 export async function fetchWorkouts(token: string): Promise<WorkoutWithRow[]> {
   if (isDemo()) return [...DEMO_WORKOUTS];
 
   return withReauth(token, async (t) => {
-    const rows = await sheetsGet('Workouts!A2:Q', t);
+    const rows = await sheetsGet('Workouts!A2:Z', t);
     return rows.map((row, i) => ({
       id: row[0] || '',
       date: row[1] || '',
@@ -43,6 +43,17 @@ export async function fetchWorkouts(token: string): Promise<WorkoutWithRow[]> {
       ascent_m: row[14] || '',
       descent_m: row[15] || '',
       avg_hr: row[16] || '',
+      // #128 R-Z. A row written before the migration has no cells here at
+      // all, so `|| ''` is what keeps them blank rather than undefined.
+      sub_type: row[17] || '',
+      source: row[18] || '',
+      source_activity_id: row[19] || '',
+      raw_ref: row[20] || '',
+      fit_ref: row[21] || '',
+      fit_fetched_at: row[22] || '',
+      synced_at: row[23] || '',
+      started_at_utc: row[24] || '',
+      calories: row[25] || '',
       sheetRow: i + 2,
     }));
   });
@@ -61,7 +72,7 @@ export async function findWorkoutRow(workoutId: string, token: string): Promise<
 }
 
 /**
- * Builds a `Workouts!A:Q` row. Both the create and the edit path go through
+ * Builds a `Workouts!A:Z` row. Both the create and the edit path go through
  * here: `sheetsAppend`/`sheetsUpdate` write every value handed to them
  * regardless of the range, so two builders that had to agree — and didn't —
  * is exactly how #100 nearly resurrected a deleted column.
@@ -85,6 +96,15 @@ export function workoutToRow(w: Workout): (string | number)[] {
     w.ascent_m,
     w.descent_m,
     w.avg_hr,
+    w.sub_type,
+    w.source,
+    w.source_activity_id,
+    w.raw_ref,
+    w.fit_ref,
+    w.fit_fetched_at,
+    w.synced_at,
+    w.started_at_utc,
+    w.calories,
   ];
 }
 
@@ -120,11 +140,22 @@ export async function createWorkout(
     ascent_m: data.ascent_m || '',
     descent_m: data.descent_m || '',
     avg_hr: data.avg_hr || '',
+    // #128: sync provenance. Nothing in the app writes these — a hand-logged
+    // workout is exactly the row with a blank `source`.
+    sub_type: '',
+    source: '',
+    source_activity_id: '',
+    raw_ref: '',
+    fit_ref: '',
+    fit_fetched_at: '',
+    synced_at: '',
+    started_at_utc: '',
+    calories: '',
   };
 
   if (!isDemo()) {
     await withReauth(token, (t) =>
-      sheetsAppend('Workouts!A:Q', [workoutToRow(workout)], t),
+      sheetsAppend('Workouts!A:Z', [workoutToRow(workout)], t),
     );
   }
 
@@ -148,7 +179,7 @@ export async function updateWorkout(
       throw new WorkoutRowMismatchError(workout.id);
     }
 
-    await sheetsUpdate(`Workouts!A${sheetRow}:Q${sheetRow}`, [workoutToRow(workout)], t);
+    await sheetsUpdate(`Workouts!A${sheetRow}:Z${sheetRow}`, [workoutToRow(workout)], t);
   });
 }
 

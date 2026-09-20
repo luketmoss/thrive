@@ -228,7 +228,7 @@ const mockSets: SetWithRow[] = [
 ];
 
 const mockWorkouts: WorkoutWithRow[] = [
-  { id: 'w1', date: '2026-03-10', time: '07:00', type: 'weight', name: 'Push A', template_id: '', notes: '', elapsed_seconds: '3600', created: '2026-03-10T07:00:00.000Z', copied_from: '', status: '', moving_seconds: '', effort: '', distance_m: '', ascent_m: '', descent_m: '', avg_hr: '', sheetRow: 2 },
+  { id: 'w1', date: '2026-03-10', time: '07:00', type: 'weight', name: 'Push A', template_id: '', notes: '', elapsed_seconds: '3600', created: '2026-03-10T07:00:00.000Z', copied_from: '', status: '', moving_seconds: '', effort: '', distance_m: '', ascent_m: '', descent_m: '', avg_hr: '', sub_type: '', source: '', source_activity_id: '', raw_ref: '', fit_ref: '', fit_fetched_at: '', synced_at: '', started_at_utc: '', calories: '', sheetRow: 2 },
 ];
 
 describe('Issue #23 — Exercise card last-workout info', () => {
@@ -256,8 +256,8 @@ describe('Issue #23 — Exercise card last-workout info', () => {
         { workout_id: 'w_new', exercise_id: 'ex1', exercise_name: 'Bench Press', section: 'primary', exercise_order: 1, set_number: 1, planned_reps: '', weight: '185', reps: '8', effort: '', sheetRow: 3 },
       ];
       const wkts: WorkoutWithRow[] = [
-        { id: 'w_old', date: '2026-01-01', time: '', type: 'weight', name: '', template_id: '', notes: '', elapsed_seconds: '', created: '', copied_from: '', status: '', moving_seconds: '', effort: '', distance_m: '', ascent_m: '', descent_m: '', avg_hr: '', sheetRow: 2 },
-        { id: 'w_new', date: '2026-03-10', time: '', type: 'weight', name: '', template_id: '', notes: '', elapsed_seconds: '', created: '', copied_from: '', status: '', moving_seconds: '', effort: '', distance_m: '', ascent_m: '', descent_m: '', avg_hr: '', sheetRow: 3 },
+        { id: 'w_old', date: '2026-01-01', time: '', type: 'weight', name: '', template_id: '', notes: '', elapsed_seconds: '', created: '', copied_from: '', status: '', moving_seconds: '', effort: '', distance_m: '', ascent_m: '', descent_m: '', avg_hr: '', sub_type: '', source: '', source_activity_id: '', raw_ref: '', fit_ref: '', fit_fetched_at: '', synced_at: '', started_at_utc: '', calories: '', sheetRow: 2 },
+        { id: 'w_new', date: '2026-03-10', time: '', type: 'weight', name: '', template_id: '', notes: '', elapsed_seconds: '', created: '', copied_from: '', status: '', moving_seconds: '', effort: '', distance_m: '', ascent_m: '', descent_m: '', avg_hr: '', sub_type: '', source: '', source_activity_id: '', raw_ref: '', fit_ref: '', fit_fetched_at: '', synced_at: '', started_at_utc: '', calories: '', sheetRow: 3 },
       ];
       const map = buildLastPerformedMap(setsMulti, wkts);
       expect(map.get('ex1')).toBe('2026-03-10');

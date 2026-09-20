@@ -11,7 +11,7 @@ import {
 const RANGES = {
   exercises: 'Exercises!A2:E',
   templates: 'Templates!A2:H',
-  workouts: 'Workouts!A2:Q',
+  workouts: 'Workouts!A2:Z',
   sets: 'Sets!A2:J',
 };
 
@@ -315,14 +315,71 @@ export async function replaceTemplateRows(templateId, name, exercises, existingR
   );
 }
 
-// --- Workouts (A:Q) -------------------------------------------------
+// --- Workouts (A:Z) -------------------------------------------------
 
 export function workoutRowValues(w) {
   return [
     w.id, w.date, w.time, w.type, w.name, w.template_id,
     w.notes, w.elapsed_seconds, w.created, w.copied_from, w.status,
     w.moving_seconds, w.effort, w.distance_m, w.ascent_m, w.descent_m, w.avg_hr,
+    w.sub_type, w.source, w.source_activity_id, w.raw_ref, w.fit_ref,
+    w.fit_fetched_at, w.synced_at, w.started_at_utc, w.calories,
   ];
+}
+
+/** The timezone every hand-logged `Date`/`Time` pair is implicitly in. */
+const HOME_TZ = 'America/Denver';
+
+const OFFSET_FMT = new Intl.DateTimeFormat('en-US', {
+  timeZone: HOME_TZ,
+  year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit',
+  hour12: false,
+});
+
+/**
+ * The UTC offset `America/Denver` was on at a given naive local instant,
+ * as `-07:00` (MST) or `-06:00` (MDT).
+ *
+ * Resolved per call rather than once per run: a backfill spanning January and
+ * July crosses two offsets, and taking one for the whole run would put half
+ * the rows an hour out.
+ *
+ * Works by reading the naive local wall clock as if it were UTC, asking what
+ * Denver's wall clock reads at that instant, and taking the difference. There
+ * is no timezone dependency in either project and this needs none.
+ */
+export function denverOffset(date, time) {
+  const asIfUtc = new Date(`${date}T${time}:00Z`);
+  if (Number.isNaN(asIfUtc.getTime())) return '';
+
+  const p = Object.fromEntries(OFFSET_FMT.formatToParts(asIfUtc).map((x) => [x.type, x.value]));
+  const denverAsUtc = Date.UTC(
+    Number(p.year), Number(p.month) - 1, Number(p.day),
+    Number(p.hour) % 24, Number(p.minute), Number(p.second),
+  );
+  const offsetMinutes = Math.round((denverAsUtc - asIfUtc.getTime()) / 60000);
+
+  const sign = offsetMinutes < 0 ? '-' : '+';
+  const abs = Math.abs(offsetMinutes);
+  const hh = String(Math.floor(abs / 60)).padStart(2, '0');
+  const mm = String(abs % 60).padStart(2, '0');
+  return `${sign}${hh}:${mm}`;
+}
+
+/**
+ * `Date` + `Time` -> the ISO 8601 instant for `Workouts!Y`, DST-aware.
+ *
+ * Returns '' when there is no time to convert. A workout with a date but no
+ * time has no instant, and assuming midnight would invent one — see #128 AC5.
+ */
+export function startedAtUtc(date, time) {
+  const d = String(date ?? '').trim();
+  const t = String(time ?? '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !/^\d{2}:\d{2}$/.test(t)) return '';
+
+  const offset = denverOffset(d, t);
+  return offset === '' ? '' : `${d}T${t}:00${offset}`;
 }
 
 /**
@@ -396,6 +453,17 @@ export async function fetchWorkouts() {
     ascent_m: row[14] || '',
     descent_m: row[15] || '',
     avg_hr: row[16] || '',
+    // #128 R-Z. Blank on every row written before the migration, and blank
+    // `source` is what "logged by hand" looks like — never default these.
+    sub_type: row[17] || '',
+    source: row[18] || '',
+    source_activity_id: row[19] || '',
+    raw_ref: row[20] || '',
+    fit_ref: row[21] || '',
+    fit_fetched_at: row[22] || '',
+    synced_at: row[23] || '',
+    started_at_utc: row[24] || '',
+    calories: row[25] || '',
     sheetRow: i + 2,
   }));
 }
@@ -423,13 +491,23 @@ export function buildWorkout(data) {
     ascent_m: '',
     descent_m: '',
     avg_hr: '',
+    // #128: sync provenance, written by the sync job and nothing else.
+    sub_type: '',
+    source: '',
+    source_activity_id: '',
+    raw_ref: '',
+    fit_ref: '',
+    fit_fetched_at: '',
+    synced_at: '',
+    started_at_utc: '',
+    calories: '',
   };
   return workout;
 }
 
 /** Append workout rows in a single request. */
 export async function appendWorkouts(list) {
-  await sheetsAppend('Workouts!A:Q', list.map((w) => workoutRowValues(w)));
+  await sheetsAppend('Workouts!A:Z', list.map((w) => workoutRowValues(w)));
 }
 
 /**
@@ -446,7 +524,7 @@ export async function writeWorkoutRow(workout) {
       `changed underneath this call. Re-read the workout and retry.`,
     );
   }
-  await sheetsUpdate(`Workouts!A${workout.sheetRow}:Q${workout.sheetRow}`, [workoutRowValues(workout)]);
+  await sheetsUpdate(`Workouts!A${workout.sheetRow}:Z${workout.sheetRow}`, [workoutRowValues(workout)]);
 }
 
 // --- Sets (A:J) -----------------------------------------------------
