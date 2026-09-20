@@ -16,6 +16,17 @@ amendments it forces on the sync plan.
 holds the contracts; that one holds the product.** Where they overlap, the
 spec is newer and says so explicitly.
 
+### A note on scope
+
+These are mostly contracts, but **§4 changes what Thrive looks like.** New
+activity types appear in the selector and filters, a `sub_type` control is
+added, and cardio fields start appearing and disappearing by venue.
+`coros-sync-plan.md` §13 lists the rest of the user-visible surface — a
+provenance badge on activity cards and a last-synced line in Settings.
+
+Everything else here — the join key, the audit-log read, `DailySummary`, the
+Apps Script API — is invisible to anyone using the existing apps.
+
 ### Why all three live in `thrive/docs`
 
 These documents impose work on Hive and on an unbuilt Journal app, so
@@ -374,6 +385,17 @@ because the whole row is recomputed from source every night.
 any time from `Workouts` + `DailyHealth`, and nothing may write to it by
 hand. The sync job recomputes every date in its rolling window each night,
 which makes it self-healing for free.
+
+**That nightly window covers only recent days, so existing history has no
+rows and needs a one-time backfill.** The Journal reads this tab for its day
+view, so without it, scrolling back past the sync's start date shows empty
+days across all pre-existing data. The rebuild must therefore take an
+arbitrary date range rather than the sync's window, and must be re-run after
+any historical import. `coros-sync-plan.md` §15 specifies it.
+
+Historical rows are legitimately partial: there is no `DailyHealth` before
+COROS, so the health columns are **blank** for every pre-switch day. Blank,
+never zero — a day before the watch existed is not a day with no steps.
 
 Weekly and monthly rollups are **not** materialized. They are cheap sums
 over a year of `DailySummary` rows (365 rows) and materializing them adds a

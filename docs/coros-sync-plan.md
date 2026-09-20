@@ -793,6 +793,15 @@ Not v1 scope, but three constraints on v1 design:
 
 ## 13. Impact on the existing app
 
+**This is not a backend-only programme.** Several of the items below change
+what the app looks like and how logging a workout feels. Worth stating
+plainly, because the data model work reads as invisible and most of it is.
+
+The user-visible ones: the type selector and Activities filters grow by two
+types, a `sub_type` control appears for bike/run/walk, cardio fields appear
+and disappear depending on venue, activity cards gain a provenance badge,
+and Settings gains a last-synced line.
+
 What this touches beyond new code:
 
 - **`WorkoutType` gains `run` and `walk`** — six non-test sites, plus tests.
@@ -803,9 +812,8 @@ What this touches beyond new code:
   empty Ascent field invites the `0` that CLAUDE.md's nullable discipline
   exists to prevent. Outdoor `run` gets distance, ascent and HR; never
   descent.
-- **`Workouts` grows to A:Z, not A:Y** — `sub_type` at R shifts every
-  sync-owned column one letter right.
-- **`Workouts` grows from A:Q to A:Y** — every range literal in
+- **`Workouts` grows from A:Q to A:Z** — `sub_type` at R shifts every
+  sync-owned column one letter right. Every range literal in
   `frontend/src/api/workouts-api.ts` and `mcp-server/domain.js` changes
   together, per CLAUDE.md's standing rule.
 - **`row-shape.test.ts`** guards column mapping and must be extended.
@@ -845,7 +853,81 @@ There is no drop-in replacement. The practical consequences:
 
 ---
 
-## 15. Phasing
+## 15. Migration of existing data
+
+Most of this plan appends rather than rewrites, but not all of it, and the
+one genuine gap is large enough to strand the Journal.
+
+### `DailySummary` has no history — the load-bearing one
+
+§6's loop rebuilds `DailySummary` only for dates inside the rolling window.
+Every workout logged before the sync starts would therefore have **no
+`DailySummary` row at all**, and the Journal reads that tab for its day view.
+Scrolling back past the sync's start date would show empty days across the
+entire existing history.
+
+**A one-time backfill over all history is required**, and it has three
+properties that must be designed in rather than bolted on:
+
+1. **The rebuild takes an arbitrary date range**, not the sync's window. If
+   the rebuild is written against `window_start..today`, the backfill has to
+   reimplement it, and the two will drift. One function, a range parameter.
+2. **It is re-runnable, and must be re-run after any historical import.**
+   Phases 9 and 10 load Garmin and COROS history; any `DailySummary` built
+   before those lands would be missing them. This is not a one-time event
+   at the end of the project.
+3. **Historical rows are legitimately partial.** There is no `DailyHealth`
+   before COROS, so `steps`, `resting_hr`, `hrv`, `sleep_total_s` and
+   `training_load` are **blank** for every pre-switch day. Blank, never
+   zero — a day before the watch existed is not a day with no steps. The
+   activity-derived columns populate normally.
+
+Volume is modest: a few hundred to a couple of thousand rows depending on
+how far back history goes, written through the API in paced batches like any
+other backfill.
+
+### `started_at_utc` on existing rows
+
+`Workouts!Y` is new and empty on every existing row. It is derivable from
+the existing `Date` + `Time` by applying the `America/Denver` offset **for
+that date**, so the conversion must be DST-aware rather than applying a
+fixed −6 or −7.
+
+Two caveats, both acceptable:
+
+- A row logged while travelling gets the Denver offset, which is wrong. There
+  is no better information available, so this is a known approximation
+  rather than a bug — and §5's reason for the column (a ride at 9pm Sunday
+  must not land in the wrong week) is about local-week correctness, which
+  the naive `Date` already satisfies for the home timezone.
+- A row with a blank `Time` has no instant to compute. Leave
+  `started_at_utc` blank rather than assuming midnight.
+
+### `DailyHealth` history — **[VERIFY]**
+
+There is no daily health data before COROS, and it is unclear whether any
+can be recovered. §11 describes the Garmin export as returning FIT files,
+which are per-activity. **Whether that export also contains daily wellness
+data — steps, sleep, resting HR — is unverified**, and it decides whether
+pre-switch days can ever show anything but activities.
+
+This is worth checking against the export as soon as it arrives, because it
+is the difference between a Journal whose history is complete and one whose
+health panel starts abruptly on the switch date.
+
+### What needs no migration
+
+- **`sub_type`** — blank on existing rows means unspecified, which is
+  accurate. §5 explicitly forbids guessing them into `mountain`.
+- **`source`** — blank means manual, which those rows are.
+- **Every other new `Workouts` column** — appended, blank, read as unset.
+- **Hive's `completed` audit action** — historical completions carry only
+  `status_changed`. `docs/data-architecture.md` §3 already records the
+  one-time reconstruction as a known approximation.
+
+---
+
+## 16. Phasing
 
 Intended to become an epic with one issue per phase, each running through
 `/refine` and `/finish` independently.
@@ -864,6 +946,7 @@ Intended to become an epic with one issue per phase, each running through
 | 8 | MCP server exposure | Agents can query daily health and synced activity detail |
 | 9 | Garmin import | History loaded under `source = 'garmin_import'` |
 | 10 | COROS historical backfill | Paced against the FIT cap, resumable, not in Actions |
+| 11 | **`DailySummary` + `started_at_utc` backfill** | Rebuilt across all history *after* phases 9–10; historical health columns correctly blank, not zero — see §15 |
 
 Phase 2b is new, and is a consequence of `docs/data-architecture.md` §6.
 Nothing writes to the sheet before it exists. It is also the natural moment
@@ -880,7 +963,7 @@ prevent.
 
 ---
 
-## 16. Open questions
+## 17. Open questions
 
 Carried forward or newly raised; the ones Rev 2 asked and this revision has
 already answered are not repeated.
