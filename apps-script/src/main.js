@@ -1,0 +1,143 @@
+// Entry point for the Thrive Apps Script web app.
+//
+// Everything goes through doGet, including writes: Apps Script answers POST
+// with a redirect, which breaks anonymous callers. Writes pass their data as
+// a URL-encoded `payload` query parameter, which is why that parameter has a
+// length ceiling — see MAX_PAYLOAD_CHARS in types.js.
+//
+// Read examples:
+//   ?action=getWorkouts&key=...
+//   ?action=getWorkouts&key=...&from=2026-09-01&to=2026-09-30&type=bike
+//   ?action=getWorkout&key=...&id=w_1a2b3c4d
+//   ?action=getPlannedWorkouts&key=...&date=2026-09-21
+//
+// Write examples:
+//   ?action=createWorkout&key=...&payload={"data":{"type":"bike","name":"Evening Ride"}}
+//   ?action=updateWorkout&key=...&payload={"id":"w_1a2b3c4d","changes":{"effort":"Hard"}}
+
+/**
+ * Every response uses this shape — success, rejection and thrown error alike
+ * (#130 AC1), so a caller never has to guess which of three shapes it got.
+ */
+function envelope(result) {
+  return ContentService
+    .createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function fail(message) {
+  return { success: false, error: message };
+}
+
+/**
+ * The key lives in script properties, never in source — this file is in a
+ * public repo. An unconfigured key is an error, not an open door.
+ */
+function validateApiKey(key) {
+  var expected = PropertiesService.getScriptProperties().getProperty('API_KEY');
+  if (!expected) throw new Error('API_KEY not configured in script properties');
+  return key === expected;
+}
+
+/**
+ * Parse the `payload` parameter, refusing one too long to have survived the
+ * URL intact (#130 AC5).
+ *
+ * The check is on the way in rather than after parsing because the dangerous
+ * case is not a parse failure — it is a truncated payload that still parses,
+ * into an object missing its last fields. Refusing by length catches that
+ * before it can be written.
+ */
+function parsePayload(raw) {
+  if (!raw) return {};
+  if (raw.length > MAX_PAYLOAD_CHARS) {
+    throw new Error(
+      'payload is ' + raw.length + ' characters, over the ' + MAX_PAYLOAD_CHARS +
+      ' limit. Writes travel in the URL, so an over-long payload is truncated ' +
+      'in transit rather than delivered. Split the request into batches.'
+    );
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    throw new Error(
+      'payload is not valid JSON (' + (err.message || String(err)) + '). ' +
+      'If it is near the ' + MAX_PAYLOAD_CHARS + ' character limit it may have ' +
+      'been truncated in transit.'
+    );
+  }
+}
+
+function doGet(e) {
+  var params = (e && e.parameter) || {};
+  var action = params.action;
+  var result;
+
+  try {
+    if (!validateApiKey(params.key)) {
+      return envelope(fail('Invalid or missing API key'));
+    }
+
+    var payload = parsePayload(params.payload);
+
+    switch (action) {
+      // --- Reads ---
+      case 'getWorkouts':
+        result = {
+          success: true,
+          data: getWorkouts({
+            date: params.date,
+            from: params.from,
+            to: params.to,
+            type: params.type,
+            status: params.status,
+          }),
+        };
+        break;
+
+      case 'getWorkout':
+        if (!params.id) {
+          result = fail('id parameter required');
+          break;
+        }
+        var found = getWorkout(params.id);
+        result = found
+          ? { success: true, data: found }
+          : fail('Workout "' + params.id + '" not found');
+        break;
+
+      // A date with nothing planned returns [], not an error.
+      case 'getPlannedWorkouts':
+        result = { success: true, data: getPlannedWorkouts(params.date) };
+        break;
+
+      // --- Writes ---
+      case 'createWorkout':
+        if (!payload.data) {
+          result = fail('payload.data field required');
+          break;
+        }
+        result = { success: true, data: createWorkout(payload.data) };
+        break;
+
+      case 'updateWorkout':
+        if (!payload.id) {
+          result = fail('payload.id field required');
+          break;
+        }
+        if (!payload.changes) {
+          result = fail('payload.changes field required');
+          break;
+        }
+        result = { success: true, data: updateWorkout(payload.id, payload.changes) };
+        break;
+
+      default:
+        result = fail('Unknown action: "' + (action || '') + '"');
+    }
+  } catch (err) {
+    result = fail(err.message || String(err));
+  }
+
+  return envelope(result);
+}

@@ -50,3 +50,21 @@ jobs:
           cache-dependency-path: mcp-server/package-lock.json
       - run: npm ci
       - run: npm test
+
+  # #130. Like the two above, deliberately not path-filtered.
+  apps-script:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps-script
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: apps-script/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - name: typecheck
+        run: npm run typecheck

@@ -6,3 +6,7 @@ dist/
 
 # one-time migration backups (scripts/migrate-*.mjs)
 scripts/.migrate-*-backup-*.json
+
+# Apps Script (#130) — holds the script id; the API key lives in script
+# properties and never on disk.
+.clasp.json
