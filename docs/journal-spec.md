@@ -51,6 +51,30 @@ because the panels' content changes kind, not just value.
 | **Notes** | The entry, editable | The entry, editable | Usually empty; editable |
 | **Health** | That day's metrics | Last night's sleep, resting HR, HRV | Nothing yet |
 
+### The week strip
+
+A 7-day row across the top of the day page. Each day shows density — a mark
+for a scheduled workout, a completed activity, and outstanding tasks — and
+taps to jump to that day.
+
+This is **navigation with signal, not a second screen.** It answers "how is
+my week shaping up" without a separate layout carrying its own past / today /
+future states, and it sits naturally on the day page because a week spans all
+three at once: completed behind, today in the middle, planned ahead.
+
+It reads seven `DailySummary` rows plus the planned-workout query — cheap
+enough that no weekly aggregate needs materializing. `data-architecture.md`
+§5 already rejects materialized weekly rollups for exactly this reason.
+
+**[DECIDE]** Which day the week starts on. Thrive's
+`activities-helpers.ts` groups by Monday (`thisMonday` / `lastMonday`), so
+matching that keeps the two apps agreeing about what "this week" means.
+
+A full week screen with totals is deliberately deferred, not rejected. If
+the strip proves insufficient, it is an additive change.
+
+### Panel behaviour by state
+
 The **Hive** row is the one that changes most sharply: a past day asks "what
 did I finish," which is an event-log question (`getAuditLog`), while today
 asks "what is outstanding," which is a due-date question (`getItems`). Two
@@ -252,7 +276,6 @@ an existing deployment, none of which changes Hive's write path.
 1. **[VERIFY §6]** Does COROS's daily payload carry a sleep score? If so,
    `sleep_quality` is double-sourced and follows the same store-both rule.
 2. **[DECIDE §4]** "Due soon" window — three days, seven, or configurable?
-3. **[DECIDE §2]** Does the Journal show a week view, or only single days?
-   The original framing said "my day, week, etc." and this specification
-   currently describes only days.
+3. **[DECIDE §2]** Which day does the week strip start on? Thrive already
+   groups by Monday, and disagreeing would be worse than either choice.
 4. What is the app called, and does it get its own repository?
