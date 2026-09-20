@@ -44,6 +44,13 @@ export function makeSheet(rows: CellValue[][], columnCount = 26) {
     appendRow(row: CellValue[]) {
       rows.push(row);
     },
+    // 1-based sheet row, header included — `deleteRow(2)` removes the first
+    // data row. Modelling the shift is the point: a delete that re-used a
+    // stale row number would silently hit the wrong record here too, which is
+    // why `replaceTemplate` deletes bottom-to-top.
+    deleteRow(rowNum: number) {
+      rows.splice(rowNum - 2, 1);
+    },
     getRange(startRow: number, startCol: number, numRows: number, numCols: number) {
       return {
         getValues() {
@@ -147,6 +154,18 @@ export interface LoadedApi {
   sandbox: Sandbox;
   /** The live Workouts backing array — assert against this after a write. */
   rows: CellValue[][];
+  /** The other tabs' live backing arrays (#134). */
+  exerciseRows: CellValue[][];
+  templateRows: CellValue[][];
+  setRows: CellValue[][];
+}
+
+/** Tab fixtures for `loadApi`. Each defaults to empty. */
+export interface Fixtures {
+  workouts?: CellValue[][];
+  exercises?: CellValue[][];
+  templates?: CellValue[][];
+  sets?: CellValue[][];
 }
 
 /**
@@ -157,10 +176,19 @@ export interface LoadedApi {
  * every test rather than stubbed past.
  */
 export function loadApi(
-  workoutRows: CellValue[][] = [],
+  workoutRowsOrFixtures: CellValue[][] | Fixtures = [],
   options: { apiKey?: string; now?: Date; uuids?: string[] } = {},
 ): LoadedApi {
   const apiKey = options.apiKey ?? 'test-key';
+
+  // Callers from #130 pass Workouts rows positionally; #134 needs four tabs.
+  const fixtures: Fixtures = Array.isArray(workoutRowsOrFixtures)
+    ? { workouts: workoutRowsOrFixtures }
+    : workoutRowsOrFixtures;
+  const workoutRows = fixtures.workouts ?? [];
+  const exerciseRows = fixtures.exercises ?? [];
+  const templateRows = fixtures.templates ?? [];
+  const setRows = fixtures.sets ?? [];
 
   // A fixed clock where one is needed, so `created` and "today" are assertable.
   const FixedDate = options.now
@@ -171,20 +199,29 @@ export function loadApi(
       })
     : Date;
 
-  const sandbox = loadSources(['types.js', 'utils.js', 'workouts.js', 'main.js'], {
+  const sandbox = loadSources(
+    ['types.js', 'utils.js', 'workouts.js', 'exercises.js', 'templates.js', 'sets.js', 'main.js'],
+    {
     ContentService: makeContentService(),
     PropertiesService: makePropertiesService({ API_KEY: apiKey, SPREADSHEET_ID: 'sheet-id' }),
-    Utilities: makeUtilities(options.uuids),
-    Date: FixedDate,
-  });
+      Utilities: makeUtilities(options.uuids),
+      Date: FixedDate,
+    }
+  );
 
-  const sheet = makeSheet(workoutRows, sandbox.WORKOUT_COLUMN_COUNT);
+  const sheets: Record<string, ReturnType<typeof makeSheet>> = {
+    Workouts: makeSheet(workoutRows, sandbox.WORKOUT_COLUMN_COUNT),
+    Exercises: makeSheet(exerciseRows, sandbox.EXERCISE_COLUMN_COUNT),
+    Templates: makeSheet(templateRows, sandbox.TEMPLATE_COLUMN_COUNT),
+    Sets: makeSheet(setRows, sandbox.SET_COLUMN_COUNT),
+  };
   sandbox.getSheet = (name: string) => {
-    if (name !== 'Workouts') throw new Error('Sheet "' + name + '" not stubbed');
+    const sheet = sheets[name];
+    if (!sheet) throw new Error('Sheet "' + name + '" not stubbed');
     return sheet;
   };
 
-  return { sandbox, rows: workoutRows };
+  return { sandbox, rows: workoutRows, exerciseRows, templateRows, setRows };
 }
 
 /** A workout as the API returns it. */
@@ -232,4 +269,37 @@ export function workoutRow(overrides: Record<string, CellValue> = {}): CellValue
     'fit_fetched_at', 'synced_at', 'started_at_utc', 'calories',
   ];
   return ORDER.map((f) => fields[f] ?? '');
+}
+
+/** An Exercises row (A:E), with only the named fields set. */
+export function exerciseRow(overrides: Record<string, CellValue> = {}): CellValue[] {
+  const f: Record<string, CellValue> = {
+    id: 'ex_001', name: 'Bench Press', tags: 'Push,Chest', notes: '', created: '',
+    ...overrides,
+  };
+  return ['id', 'name', 'tags', 'notes', 'created'].map((k) => f[k] ?? '');
+}
+
+/** A Templates row (A:H). */
+export function templateRow(overrides: Record<string, CellValue> = {}): CellValue[] {
+  const f: Record<string, CellValue> = {
+    template_id: 'tpl_001', template_name: 'Upper Push A', order: 1,
+    exercise_id: 'ex_001', exercise_name: 'Bench Press', section: 'primary',
+    sets: '4', reps: '6',
+    ...overrides,
+  };
+  return ['template_id', 'template_name', 'order', 'exercise_id', 'exercise_name',
+    'section', 'sets', 'reps'].map((k) => f[k] ?? '');
+}
+
+/** A Sets row (A:J) — ten cells, no column K (#100). */
+export function setRow(overrides: Record<string, CellValue> = {}): CellValue[] {
+  const f: Record<string, CellValue> = {
+    workout_id: 'w_001', exercise_id: 'ex_001', exercise_name: 'Bench Press',
+    section: 'primary', exercise_order: 1, set_number: 1,
+    planned_reps: '6', weight: '', reps: '', effort: '',
+    ...overrides,
+  };
+  return ['workout_id', 'exercise_id', 'exercise_name', 'section', 'exercise_order',
+    'set_number', 'planned_reps', 'weight', 'reps', 'effort'].map((k) => f[k] ?? '');
 }
