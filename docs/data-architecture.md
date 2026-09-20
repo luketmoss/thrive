@@ -470,12 +470,27 @@ The Journal owns its own sheet:
 | C | `created_at` |
 | D | `updated_at` |
 
-**[DECIDE]** Whether the Journal also captures structured daily inputs —
-mood, energy, soreness, weight — alongside free text. Those are exactly the
-variables that make "look for patterns in things that have negative effects"
-answerable, and they cost one column each. But they are also a daily data
-entry burden, and an unfilled column is worse than an absent one. Worth
-deciding deliberately rather than by accretion.
+**Decided: free text only for v1.** No mood, energy, soreness or weight
+columns.
+
+The argument for structure was that correlation needs a dependent variable
+measured consistently — everything the system captures automatically is
+either what the body did or what the watch inferred, and nothing records how
+a day actually felt. The argument against won: a subjective field filled for
+three weeks and then abandoned produces a dataset that *looks* analyzable
+and is not, with gaps landing disproportionately on bad days, which is
+exactly when it would matter most. Sparse subjective data biased toward good
+days is worse than none.
+
+**This defers correlation against subjective state; it does not foreclose
+it.** Free text is lossier than a scale but it is not a dead end — the prose
+persists and an agent can score a year of it retroactively. An unfilled
+numeric column cannot be recovered that way. If a structured field is added
+later, it starts collecting from that day forward and the back catalogue is
+still readable by other means.
+
+Columns are cheap to add and the day view does not change shape, so this is
+a genuinely reversible decision.
 
 ---
 
@@ -515,16 +530,17 @@ decision rather than an oversight.
    this only decides which signal it reads.
 2. **[VERIFY §2]** COROS's sleep-day attribution, so the wake-day rule can be
    implemented rather than assumed.
-3. **[DECIDE §7]** Structured daily inputs in the Journal, or free text only?
-4. **[DECIDE §7]** Does the Journal get its own Google Sheet, or a tab in an
+3. **[DECIDE §7]** Does the Journal get its own Google Sheet, or a tab in an
    existing one? (Own sheet recommended — ownership boundaries have held up
    well across Thrive and Hive.)
-5. Does the Journal write anything back to Thrive or Hive, or is it
+4. Does the Journal write anything back to Thrive or Hive, or is it
    strictly read-plus-own-notes? Read-only is assumed throughout this
    document.
 
 ### Settled
 
+- **§7 — Journal notes are free text only** for v1. Structured daily inputs
+  deferred, not foreclosed — prose stays retroactively scoreable.
 - **§6 — The sync writes through the API**, backfill paced against quota.
   The API must therefore land before the sync plan's Phase 3.
 - **§6 — Thrive gets an Apps Script API**, following Hive's pattern. Caps
