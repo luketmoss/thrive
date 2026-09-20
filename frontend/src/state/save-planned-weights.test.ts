@@ -105,6 +105,7 @@ describe('Planned workout save keeps prescribed loads (#118 AC5)', () => {
       id: 'w_new', date: '2026-09-20', time: '', type: 'weight', name: 'Legs A', template_id: '', notes: '',
       elapsed_seconds: '', created: '', copied_from: '', status: 'planned', moving_seconds: '', effort: '',
       distance_m: '', ascent_m: '', descent_m: '', avg_hr: '',
+      sub_type: '', source: '', source_activity_id: '', raw_ref: '', fit_ref: '', fit_fetched_at: '', synced_at: '', started_at_utc: '', calories: '',
     });
   });
 

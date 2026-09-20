@@ -10,7 +10,7 @@ import {
   parseDurationMinutes, findUnknownFields, findStaleExerciseNames,
   formatWeight, describeLoad, isSetLogged, buildSchedulePlan,
   resolveSetTarget, planSetUpdates, describeSetState, findStaleSetRows,
-  prepareSchedule,
+  prepareSchedule, startedAtUtc, denverOffset,
 } from './domain.js';
 
 test('normalizeDate passes ISO dates through', () => {
@@ -154,9 +154,12 @@ test('a workout row carries session effort in column M', () => {
     template_id: '', notes: '', elapsed_seconds: '3720', created: '', copied_from: '',
     status: '', moving_seconds: '', effort: 'Hard', distance_m: '', ascent_m: '',
     descent_m: '', avg_hr: '',
+    sub_type: '', source: '', source_activity_id: '', raw_ref: '', fit_ref: '',
+    fit_fetched_at: '', synced_at: '', started_at_utc: '', calories: '',
   };
   const row = workoutRowValues(w);
-  assert.equal(row.length, 17);
+  // #128 widened the tab to A:Z; M must not have moved.
+  assert.equal(row.length, 26);
   assert.equal(row[12], 'Hard', 'effort belongs in column M');
 });
 
@@ -522,4 +525,92 @@ test('prepareSchedule needs exercises for weight workouts only', () => {
   assert.match(prepareSchedule({ date: 'today', name: 'x' }, scheduleCtx()).errors[0], /needs either a template or an exercises list/);
   const hike = prepareSchedule({ date: 'today', name: 'Hike', type: 'hike' }, scheduleCtx());
   assert.deepEqual([hike.errors.length, hike.rows.length, hike.workout.type], [0, 0, 'hike']);
+});
+
+// --- #128: Workouts A:Z -------------------------------------------
+
+function bareWorkout(overrides = {}) {
+  return {
+    id: 'w_001', date: '2026-03-15', time: '07:00', type: 'weight',
+    name: 'Upper Push A', template_id: '', notes: '', elapsed_seconds: '3720',
+    created: '2026-03-15T07:00:00.000Z', copied_from: '', status: '',
+    moving_seconds: '', effort: '', distance_m: '', ascent_m: '',
+    descent_m: '', avg_hr: '',
+    sub_type: '', source: '', source_activity_id: '', raw_ref: '',
+    fit_ref: '', fit_fetched_at: '', synced_at: '', started_at_utc: '',
+    calories: '',
+    ...overrides,
+  };
+}
+
+// AC2: sheetsAppend writes every value it is handed regardless of the range,
+// so a short row leaves stale cells and a row of undefined writes "undefined".
+test('a workout row spans all twenty-six columns, A:Z', () => {
+  assert.equal(workoutRowValues(bareWorkout()).length, 26);
+});
+
+test('the nine sync columns write empty strings, never undefined', () => {
+  const row = workoutRowValues(bareWorkout());
+  assert.deepEqual(row.slice(17), ['', '', '', '', '', '', '', '', '']);
+  assert.equal(row.some((cell) => cell === undefined), false);
+});
+
+test('a workout row carries sync provenance in columns R-Z', () => {
+  const row = workoutRowValues(bareWorkout({
+    sub_type: 'gravel',
+    source: 'coros',
+    source_activity_id: '4821',
+    raw_ref: 'drive_raw_1',
+    fit_ref: 'drive_fit_1',
+    fit_fetched_at: '2026-03-15T09:00:00.000Z',
+    synced_at: '2026-03-15T09:01:00.000Z',
+    started_at_utc: '2026-03-15T07:00:00-06:00',
+    calories: '612',
+  }));
+  assert.equal(row[17], 'gravel');                     // R
+  assert.equal(row[18], 'coros');                      // S
+  assert.equal(row[19], '4821');                       // T
+  assert.equal(row[20], 'drive_raw_1');                // U
+  assert.equal(row[21], 'drive_fit_1');                // V
+  assert.equal(row[22], '2026-03-15T09:00:00.000Z');   // W
+  assert.equal(row[23], '2026-03-15T09:01:00.000Z');   // X
+  assert.equal(row[24], '2026-03-15T07:00:00-06:00');  // Y
+  assert.equal(row[25], '612');                        // Z
+});
+
+test('the activity attributes stay at L-Q and do not shift', () => {
+  const row = workoutRowValues(bareWorkout({ effort: 'Hard', sub_type: 'gravel' }));
+  assert.equal(row[8], '2026-03-15T07:00:00.000Z');    // I Created
+  assert.equal(row[12], 'Hard');                       // M Effort
+  assert.equal(row[16], '');                           // Q Avg HR
+});
+
+// AC4: the offset is resolved per row, for that row's own date.
+test('startedAtUtc applies MST in January and MDT in July', () => {
+  assert.equal(startedAtUtc('2026-01-15', '09:00'), '2026-01-15T09:00:00-07:00');
+  assert.equal(startedAtUtc('2026-07-15', '09:00'), '2026-07-15T09:00:00-06:00');
+});
+
+test('denverOffset flips across the same run, not once for it', () => {
+  assert.equal(denverOffset('2026-03-07', '12:00'), '-07:00');
+  assert.equal(denverOffset('2026-03-10', '12:00'), '-06:00');
+  assert.equal(denverOffset('2026-10-15', '12:00'), '-06:00');
+  assert.equal(denverOffset('2026-11-10', '12:00'), '-07:00');
+});
+
+// AC5: a date with no time has no instant. Midnight is not assumed.
+test('startedAtUtc returns empty for a workout with no time', () => {
+  assert.equal(startedAtUtc('2026-03-15', ''), '');
+  assert.equal(startedAtUtc('2026-03-15', undefined), '');
+});
+
+test('startedAtUtc returns empty rather than guessing at junk', () => {
+  assert.equal(startedAtUtc('', '09:00'), '');
+  assert.equal(startedAtUtc('15 March', '09:00'), '');
+  assert.equal(startedAtUtc('2026-03-15', '9am'), '');
+});
+
+test('startedAtUtc keeps the local wall clock the user logged', () => {
+  // The point of Y is the instant; B and C stay local and must not move.
+  assert.ok(startedAtUtc('2026-07-15', '21:00').startsWith('2026-07-15T21:00'));
 });

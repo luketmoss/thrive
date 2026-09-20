@@ -51,6 +51,18 @@ export interface Workout {
   ascent_m: string;
   descent_m: string;
   avg_hr: string;
+  // Sync provenance and reference attributes (#128, columns R-Z). Nullable for
+  // the same reason as the block above: '' means nobody said. For `source`, ''
+  // positively means "logged by hand" — do not default it to a vendor name.
+  sub_type: string;
+  source: string;
+  source_activity_id: string;
+  raw_ref: string;
+  fit_ref: string;
+  fit_fetched_at: string;
+  synced_at: string;
+  started_at_utc: string;
+  calories: string;
 }
 export interface WorkoutWithRow extends Workout { sheetRow: number; }
 
