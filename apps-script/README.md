@@ -27,6 +27,7 @@ added there too.
 | `src/exercises.js` | `Exercises`, plus the rename cascade |
 | `src/templates.js` | `Templates`, grouped reads and wholesale replace |
 | `src/sets.js` | `Sets`, slot resolution, atomic bulk update, history |
+| `src/daily-summary.js` | `DailySummary` rollup, rebuild over any range |
 | `src/main.js` | `doGet` dispatch, auth, response envelope |
 
 `Labels` is deliberately absent: `domain.js` contains no Labels code and no
@@ -107,6 +108,27 @@ by hand.
 | `appendSets` | `{"sets":[...]}` |
 | `previewSetUpdates` | `{"workout_id":"...","updates":[...]}` — **writes nothing** |
 | `updateSets` | same payload — **all-or-nothing** |
+
+### DailySummary (#131)
+
+| Action | Parameters / payload |
+|---|---|
+| `getDailySummary` | `from`, `to` (optional) |
+| `rebuildDailySummary` | `{"from":"...","to":"...","computed_at":"..."}` |
+| `getHistoryDateRange` | — the span `Workouts` actually covers |
+
+**The range is a parameter, not a window.** The nightly recompute and the
+historical backfill are the same call with different bounds, so there is no
+second implementation of "catch up" to drift out of step with the one for
+"last night".
+
+**Derived, never authoritative.** Every row is rebuildable from `Workouts` +
+`DailyHealth`. A day with no activities and no health data produces **no row**
+— zero activities and "we have no information" are different claims.
+
+`total_distance_m` and `total_ascent_m` are **outdoor only**: a treadmill's
+distance is a machine estimate of ground never covered. They will not equal
+the sum of a day's activity distances on any day with an indoor session.
 
 ## The shaping principle
 

@@ -265,6 +265,31 @@ function doGet(e) {
         result = { success: true, data: applySetUpdates(payload.workout_id, payload.updates) };
         break;
 
+      // --- DailySummary (#131) ---
+      case 'getDailySummary':
+        result = {
+          success: true,
+          data: getDailySummaries({ from: params.from, to: params.to }),
+        };
+        break;
+
+      // The range is a parameter: the nightly job and the historical backfill
+      // are the same call with different bounds.
+      case 'rebuildDailySummary':
+        if (!payload.from || !payload.to) {
+          result = fail('payload.from and payload.to are required (YYYY-MM-DD)');
+          break;
+        }
+        result = {
+          success: true,
+          data: rebuildDailySummary(payload.from, payload.to, { computed_at: payload.computed_at }),
+        };
+        break;
+
+      case 'getHistoryDateRange':
+        result = { success: true, data: historyDateRange() };
+        break;
+
       default:
         result = fail('Unknown action: "' + (action || '') + '"');
     }

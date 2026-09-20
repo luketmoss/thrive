@@ -158,6 +158,7 @@ export interface LoadedApi {
   exerciseRows: CellValue[][];
   templateRows: CellValue[][];
   setRows: CellValue[][];
+  summaryRows: CellValue[][];
 }
 
 /** Tab fixtures for `loadApi`. Each defaults to empty. */
@@ -166,6 +167,9 @@ export interface Fixtures {
   exercises?: CellValue[][];
   templates?: CellValue[][];
   sets?: CellValue[][];
+  dailySummary?: CellValue[][];
+  /** Omit entirely to model the tab not existing yet — the pre-sync state. */
+  dailyHealth?: CellValue[][];
 }
 
 /**
@@ -189,6 +193,7 @@ export function loadApi(
   const exerciseRows = fixtures.exercises ?? [];
   const templateRows = fixtures.templates ?? [];
   const setRows = fixtures.sets ?? [];
+  const summaryRows = fixtures.dailySummary ?? [];
 
   // A fixed clock where one is needed, so `created` and "today" are assertable.
   const FixedDate = options.now
@@ -200,7 +205,8 @@ export function loadApi(
     : Date;
 
   const sandbox = loadSources(
-    ['types.js', 'utils.js', 'workouts.js', 'exercises.js', 'templates.js', 'sets.js', 'main.js'],
+    ['types.js', 'utils.js', 'workouts.js', 'exercises.js', 'templates.js', 'sets.js',
+      'daily-summary.js', 'main.js'],
     {
     ContentService: makeContentService(),
     PropertiesService: makePropertiesService({ API_KEY: apiKey, SPREADSHEET_ID: 'sheet-id' }),
@@ -214,14 +220,24 @@ export function loadApi(
     Exercises: makeSheet(exerciseRows, sandbox.EXERCISE_COLUMN_COUNT),
     Templates: makeSheet(templateRows, sandbox.TEMPLATE_COLUMN_COUNT),
     Sets: makeSheet(setRows, sandbox.SET_COLUMN_COUNT),
+    DailySummary: makeSheet(summaryRows, sandbox.DAILY_SUMMARY_COLUMN_COUNT),
   };
+  // DailyHealth is absent unless a fixture supplies it, which is the real
+  // pre-sync state: the tab does not exist, and that is not a tab of zeros.
+  if (fixtures.dailyHealth) sheets.DailyHealth = makeSheet(fixtures.dailyHealth, 6);
+
   sandbox.getSheet = (name: string) => {
     const sheet = sheets[name];
     if (!sheet) throw new Error('Sheet "' + name + '" not stubbed');
     return sheet;
   };
+  // `getSpreadsheet().getSheetByName` returns null for an absent tab rather
+  // than throwing — daily-summary.js relies on that to detect no DailyHealth.
+  sandbox.getSpreadsheet = () => ({
+    getSheetByName: (name: string) => sheets[name] ?? null,
+  });
 
-  return { sandbox, rows: workoutRows, exerciseRows, templateRows, setRows };
+  return { sandbox, rows: workoutRows, exerciseRows, templateRows, setRows, summaryRows };
 }
 
 /** A workout as the API returns it. */
