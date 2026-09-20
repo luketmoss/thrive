@@ -233,8 +233,11 @@ pattern.
 
 *The only Track C item with user-visible effect.*
 
-**Not needed:** due-date range queries already work server-side in
-`items.js`.
+**Also needed: hive#241.** Due-date range queries look implemented —
+`items.js` filters on `due_after` / `due_before` — but `main.js` never passes
+those parameters to `getItems`, so they are unreachable over the API. The
+Journal's "due today / due soon / overdue" panel depends on them. Tracked in
+Hive as a bug, found while verifying Track C.
 
 ---
 

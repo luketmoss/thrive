@@ -284,7 +284,7 @@ separate.
 | `getAuditLog` action | **New** — `data-architecture.md` §3 |
 | Explicit `completed` audit action | **New** — same |
 | Denver-local date filtering | **New** — same |
-| Due-date range queries | **Already works** — `getItems` filters `due_after` / `due_before` server-side |
+| Due-date range queries | **Broken** — `items.js` implements the filters but `main.js` never passes them through. Tracked as hive#241 |
 | **Deep link to an item** | **New** — board and view are URL-bound, `selectedItemId` is not |
 
 ### Sequencing
