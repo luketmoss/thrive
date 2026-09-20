@@ -6,6 +6,9 @@
 and *daily health summaries*, pulling both from COROS into Thrive
 automatically so all training data lives in one analyzable place.
 
+**Sequencing:** `docs/implementation-plan.md` orders this work against the
+Thrive and Hive changes it depends on.
+
 **Companion:** `docs/data-architecture.md` covers how Thrive's data is
 consumed by other apps (the planned Journal, Hive). It is newer than this
 document and amends it in several places — see §5, §6 and §13 below, and its

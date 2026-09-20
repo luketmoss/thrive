@@ -12,6 +12,9 @@ Companion to `docs/coros-sync-plan.md`, which covers getting COROS data
 and onto one page. Where the two disagree, this one is newer — §9 lists the
 amendments it forces on the sync plan.
 
+`docs/implementation-plan.md` sequences the Thrive and Hive work these
+contracts require.
+
 `docs/journal-spec.md` specifies the Journal app itself. **This document
 holds the contracts; that one holds the product.** Where they overlap, the
 spec is newer and says so explicitly.

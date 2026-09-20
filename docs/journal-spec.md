@@ -7,7 +7,13 @@ depends on) and `docs/coros-sync-plan.md` (how the health data arrives).
 
 This document specifies the app. The contracts it consumes live in
 `data-architecture.md` and are being built into Thrive and Hive
-independently — see §8 for what those apps owe this one.
+independently — see §8 for what those apps owe this one, and
+`implementation-plan.md` for when that work lands.
+
+**This specification does not stand alone.** It leans on
+`data-architecture.md` throughout — the join key, the audit-log decision,
+`DailySummary`'s columns — and §8 deliberately does not restate what that
+document settles. Anyone building from this needs all three.
 
 *(The app is referred to as "the Journal" throughout. It has no name yet.)*
 
