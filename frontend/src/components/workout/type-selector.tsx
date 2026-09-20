@@ -10,6 +10,8 @@ const TYPES: { type: WorkoutType; label: string; icon: string }[] = [
   { type: 'stretch', label: 'Stretch', icon: '🤸' },
   { type: 'bike', label: 'Bike', icon: '🚴' },
   { type: 'hike', label: 'Hike', icon: '🥾' },
+  { type: 'run', label: 'Run', icon: '🏃' },
+  { type: 'walk', label: 'Walk', icon: '🚶' },
 ];
 
 export function TypeSelector({ onSelect }: Props) {

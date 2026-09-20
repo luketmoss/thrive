@@ -8,6 +8,7 @@ import { minutesToSeconds } from '../../api/duration';
 import { EffortToggle } from '../shared/effort-toggle';
 import type { Effort } from '../../api/types';
 import { CardioFields } from '../shared/cardio-fields';
+import { SubTypeToggle, subTypeOptions } from '../shared/sub-type-toggle';
 import type { CardioValues } from '../shared/cardio-fields';
 import { milesToMeters, feetToMeters, bpmToStored } from '../../api/units';
 
@@ -20,6 +21,8 @@ const TYPE_LABELS: Record<string, string> = {
   stretch: 'Stretch',
   bike: 'Bike',
   hike: 'Hike',
+  run: 'Run',
+  walk: 'Walk',
 };
 
 export function SimpleWorkout({ workoutType, onBack }: Props) {
@@ -32,6 +35,8 @@ export function SimpleWorkout({ workoutType, onBack }: Props) {
   const [notes, setNotes] = useState('');
   const [duration, setDuration] = useState('');
   const [effort, setEffort] = useState<Effort | ''>('');
+  // Unset, and it stays unset unless the user picks one (#129 AC5).
+  const [subType, setSubType] = useState('');
   const [cardio, setCardio] = useState<CardioValues>({ distance: '', ascent: '', descent: '', avgHr: '' });
   const patchCardio = (patch: Partial<CardioValues>) => setCardio((c) => ({ ...c, ...patch }));
 
@@ -52,6 +57,7 @@ export function SimpleWorkout({ workoutType, onBack }: Props) {
         ascent_m: feetToMeters(cardio.ascent),
         descent_m: feetToMeters(cardio.descent),
         avg_hr: bpmToStored(cardio.avgHr),
+        sub_type: subType,
         date: safeDate,
       }, token);
       navigate('/');
@@ -68,7 +74,7 @@ export function SimpleWorkout({ workoutType, onBack }: Props) {
         <button
           class="template-editor-back"
           onClick={() => {
-            const dirty = notes || duration || effort
+            const dirty = notes || duration || effort || subType
               || cardio.distance || cardio.ascent || cardio.descent || cardio.avgHr;
             if (dirty && !confirm('Discard changes? Your edits will not be saved.')) return;
             onBack();
@@ -122,8 +128,23 @@ export function SimpleWorkout({ workoutType, onBack }: Props) {
         />
       </div>
 
+      {/* Directly above the fields it governs — venue decides which of them
+          are asked for, so the two belong together (#129 AC2). */}
+      {subTypeOptions(workoutType).length > 0 && (
+        <div class="form-group">
+          <label class="form-label">Type (optional)</label>
+          <SubTypeToggle
+            workoutType={workoutType}
+            value={subType}
+            onChange={setSubType}
+            label="Activity type"
+          />
+        </div>
+      )}
+
       <CardioFields
         workoutType={workoutType}
+        subType={subType}
         values={cardio}
         onChange={patchCardio}
         idPrefix="new"

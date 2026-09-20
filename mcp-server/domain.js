@@ -15,7 +15,7 @@ const RANGES = {
   sets: 'Sets!A2:J',
 };
 
-export const WORKOUT_TYPES = ['weight', 'stretch', 'bike', 'hike'];
+export const WORKOUT_TYPES = ['weight', 'stretch', 'bike', 'hike', 'run', 'walk'];
 export const EFFORTS = ['Easy', 'Medium', 'Hard'];
 export const SECTIONS = ['warmup', 'primary', 'SS1', 'SS2', 'SS3', 'burnout', 'cooldown'];
 

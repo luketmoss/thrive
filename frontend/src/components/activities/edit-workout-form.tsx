@@ -7,6 +7,7 @@ import { secondsToMinutesInput, minutesToSeconds } from '../../api/duration';
 import { EffortToggle } from '../shared/effort-toggle';
 import type { Effort } from '../../api/types';
 import { CardioFields, storedToCardio } from '../shared/cardio-fields';
+import { SubTypeToggle, subTypeOptions } from '../shared/sub-type-toggle';
 import type { CardioValues } from '../shared/cardio-fields';
 import { milesToMeters, feetToMeters, bpmToStored, metersToMilesInput, metersToFeetInput } from '../../api/units';
 
@@ -23,6 +24,7 @@ export function EditWorkoutForm({ workoutId }: Props) {
   const [duration, setDuration] = useState(secondsToMinutesInput(workout?.elapsed_seconds ?? ''));
   const [notes, setNotes] = useState(workout?.notes || '');
   const [effort, setEffort] = useState<Effort | ''>(workout?.effort || '');
+  const [subType, setSubType] = useState(workout?.sub_type || '');
   const [cardio, setCardio] = useState<CardioValues>(() => storedToCardio(workout));
   const patchCardio = (patch: Partial<CardioValues>) => setCardio((c) => ({ ...c, ...patch }));
   const [saving, setSaving] = useState(false);
@@ -49,6 +51,7 @@ export function EditWorkoutForm({ workoutId }: Props) {
         ascent_m: feetToMeters(cardio.ascent),
         descent_m: feetToMeters(cardio.descent),
         avg_hr: bpmToStored(cardio.avgHr),
+        sub_type: subType,
       }, token);
       navigate(`/history/${workoutId}`);
     } catch {
@@ -59,7 +62,7 @@ export function EditWorkoutForm({ workoutId }: Props) {
   };
 
   const handleDiscard = () => {
-    if (date !== workout.date || name !== workout.name || duration !== secondsToMinutesInput(workout.elapsed_seconds) || notes !== workout.notes || effort !== (workout.effort || '')
+    if (date !== workout.date || name !== workout.name || duration !== secondsToMinutesInput(workout.elapsed_seconds) || notes !== workout.notes || effort !== (workout.effort || '') || subType !== (workout.sub_type || '')
       || JSON.stringify(cardio) !== JSON.stringify(storedToCardio(workout))) {
       if (!confirm('Discard changes? Your edits will not be saved.')) return;
     }
@@ -121,8 +124,23 @@ export function EditWorkoutForm({ workoutId }: Props) {
         />
       </div>
 
+      {/* Directly above the fields it governs — venue decides which of them
+          are asked for, so the two belong together (#129 AC2). */}
+      {subTypeOptions(workout.type).length > 0 && (
+        <div class="form-group">
+          <label class="form-label">Type (optional)</label>
+          <SubTypeToggle
+            workoutType={workout.type}
+            value={subType}
+            onChange={setSubType}
+            label="Activity type"
+          />
+        </div>
+      )}
+
       <CardioFields
         workoutType={workout.type}
+        subType={subType}
         values={cardio}
         onChange={patchCardio}
         idPrefix="edit"

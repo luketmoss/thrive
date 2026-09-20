@@ -504,8 +504,9 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
         {
           date: editDate, name: editName.trim(), notes: notes.trim(),
           elapsed_seconds: minutesToSeconds(editDuration), effort: editEffort,
-          // weight workouts have no cardio UI; carry the stored values through
-          // untouched rather than writing '' over them.
+          // weight workouts have no cardio UI and no venue; carry the stored
+          // values through untouched rather than writing '' over them.
+          sub_type: workout?.sub_type ?? '',
           distance_m: workout?.distance_m ?? '',
           ascent_m: workout?.ascent_m ?? '',
           descent_m: workout?.descent_m ?? '',
