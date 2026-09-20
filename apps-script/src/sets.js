@@ -321,9 +321,9 @@ function appendSets(sets) {
   var sheet = getSheet(SETS_SHEET);
   var appended = [];
   for (var i = 0; i < sets.length; i++) {
-    sheet.appendRow(setToRow(sets[i]));
-    var s = rowToSet(setToRow(sets[i]), sheet.getLastRow());
-    appended.push(s);
+    var row = setToRow(sets[i]);
+    sheet.appendRow(row);
+    appended.push(rowToSet(row, sheet.getLastRow()));
   }
   return appended;
 }
