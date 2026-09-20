@@ -6,6 +6,11 @@
 and *daily health summaries*, pulling both from COROS into Thrive
 automatically so all training data lives in one analyzable place.
 
+**Companion:** `docs/data-architecture.md` covers how Thrive's data is
+consumed by other apps (the planned Journal, Hive). It is newer than this
+document and amends it in several places — see §5, §6 and §13 below, and its
+own §9 for the full list.
+
 ### What changed since Rev 2
 
 Rev 2 was written without access to the Thrive repository. Three of its
@@ -312,13 +317,19 @@ working parser and is worth reading before choosing one.)*
 Rev 2 proposed three new SQL tables. Two of the three already exist in
 another form, and the third moves to Drive.
 
-### Principle: the sheet carries what the UI renders
+### Principle: the sheet carries what a consumer reads
 
 Everything else lives in the raw Drive payload, reachable by agents on
 demand. Without this rule `Workouts` becomes a forty-column junk drawer
-holding cadence, normalized power and training-load fields that no screen
-ever displays. Max HR, cadence, training load and per-lap data stay in the
-payload until something actually renders them.
+holding cadence, normalized power and training-load fields that nothing ever
+reads. Max HR, cadence, training load and per-lap data stay in the payload
+until something actually reads them.
+
+*Revised.* This was originally "what the **UI** renders", written when
+Thrive's own screens were the only consumer. They are not: the MCP server
+serves agents today, and `docs/data-architecture.md` adds the Journal. The
+test is whether *some* consumer reads a field, not whether a Thrive screen
+paints it.
 
 ### `Workouts` (existing tab, extended)
 
@@ -339,18 +350,28 @@ reads as manual, which is exactly what those rows are):
 
 | Col | Name | Notes |
 |---|---|---|
-| R | `source` | `''` = manual, `coros`, `garmin_import` |
-| S | `source_activity_id` | Vendor ID. Unique with `source`. Also set on *enriched* manual rows — §7 |
-| T | `raw_ref` | Drive file ID of the raw JSON payload, nullable |
-| U | `fit_ref` | Drive file ID of the FIT blob. Nullable — see below |
-| V | `fit_fetched_at` | Nullable. Distinguishes "not yet fetched" from "no FIT exists" |
-| W | `synced_at` | Last successful write by the sync job |
-| X | `started_at_utc` | ISO 8601 with offset, e.g. `2026-09-19T14:03:00-06:00` |
-| Y | `calories` | Nullable, integer kcal. Required by §7 enrichment |
+| R | `sub_type` | Venue/terrain modifier — `mountain`, `gravel`, `indoor`, `outdoor`, or `''`. See below |
+| S | `source` | `''` = manual, `coros`, `garmin_import` |
+| T | `source_activity_id` | Vendor ID. Unique with `source`. Also set on *enriched* manual rows — §7 |
+| U | `raw_ref` | Drive file ID of the raw JSON payload, nullable |
+| V | `fit_ref` | Drive file ID of the FIT blob. Nullable — see below |
+| W | `fit_fetched_at` | Nullable. Distinguishes "not yet fetched" from "no FIT exists" |
+| X | `synced_at` | Last successful write by the sync job |
+| Y | `started_at_utc` | ISO 8601 with offset, e.g. `2026-09-19T14:03:00-06:00` |
+| Z | `calories` | Nullable, integer kcal. Required by §7 enrichment |
 
-**[DECIDE] `calories` (Y)** is the one metric admitted to the sheet without a
+**[DECIDE] `calories` (Z)** is the one metric admitted to the sheet without a
 screen rendering it yet, because §7's enrichment is pointless without it. The
 alternative is to defer both. Flagging rather than deciding unilaterally.
+
+**`sub_type` (R)** is added by `docs/data-architecture.md` §4. The target
+activity list (Biking-Mountain/Gravel/Indoor, Running-Indoor/Outdoor,
+Walking-Indoor, Hiking, Weight Training) is a *sport* crossed with a
+*venue/terrain* modifier, not eight peer enum values. Keeping `type` coarse
+and adding `sub_type` means "total miles biked" stays one predicate, existing
+`bike`/`hike` rows need no migration, and a new terrain adds no enum member.
+A blank `sub_type` means unspecified — which is exactly what last month's
+`bike` rows are. Do not backfill them by guessing.
 
 **Timezone.** Rev 2 insisted on a UTC instant plus offset and "never store
 naive local times." Thrive stores naive local `Date` (B) and `Time` (C), and
@@ -406,6 +427,23 @@ rows/year is trivial for Sheets.
 
 Same nullable discipline as `Workouts!L–Q`: a day with no sleep data is
 blank, never `0`. A watch left on the charger overnight is not zero sleep.
+
+### `DailySummary` (new tab)
+
+Added by `docs/data-architecture.md` §5, which has the column list. It is the
+per-day rollup across activities *and* health — the grain the Journal renders
+and the grain goals and pattern analysis are expressed over. Neither
+`Workouts` (per activity) nor `DailyHealth` (health only) answers "what did
+this day look like".
+
+**It is derived and never authoritative.** Rebuildable at any time from
+`Workouts` + `DailyHealth`; nothing writes to it by hand. The sync job
+recomputes every date in its rolling window each night, which makes it
+self-healing at no extra cost.
+
+Weekly and monthly rollups are deliberately *not* materialized — they are
+sums over ~365 `DailySummary` rows, and materializing them would add a
+staleness surface for no gain.
 
 ### `SyncLog` (new tab)
 
@@ -472,6 +510,11 @@ run_nightly_sync():
     for day in window_start..today_local:
         upsert DailyHealth from mcp.get_daily_data(day)
                               + mcp.get_evolab(day)
+
+    # --- aggregate rollup ---
+    for day in window_start..today_local:
+        rebuild DailySummary[day] from Workouts + DailyHealth
+        # derived, idempotent, safe to recompute every run
 
     append SyncLog row
 ```
@@ -753,9 +796,16 @@ Not v1 scope, but three constraints on v1 design:
 
 What this touches beyond new code:
 
-- **`WorkoutType` gains `run`** — six non-test sites, plus tests. Also
-  requires deciding whether `run` gets cardio fields (it should) and whether
-  it gets Descent (probably not, per the existing bike/hike split).
+- **`WorkoutType` gains `run` and `walk`** — six non-test sites, plus tests.
+- **`hasCardioFields()` and `showDescent` become `(type, sub_type)`
+  functions.** Today `cardio-fields.tsx` decides from `type` alone
+  (`type === 'bike' || type === 'hike'`). An indoor activity has no
+  meaningful ascent — a trainer or treadmill reports none — and rendering an
+  empty Ascent field invites the `0` that CLAUDE.md's nullable discipline
+  exists to prevent. Outdoor `run` gets distance, ascent and HR; never
+  descent.
+- **`Workouts` grows to A:Z, not A:Y** — `sub_type` at R shifts every
+  sync-owned column one letter right.
 - **`Workouts` grows from A:Q to A:Y** — every range literal in
   `frontend/src/api/workouts-api.ts` and `mcp-server/domain.js` changes
   together, per CLAUDE.md's standing rule.
@@ -806,7 +856,7 @@ Intended to become an epic with one issue per phase, each running through
 | 0 | Verification (§2) | Items 1–3 answered. **Item 2 gates Phase 1's token design** |
 | 1 | OAuth flow + token storage in Drive | One successful authenticated read, and a rotated token surviving a second run |
 | 2 | Raw ingestion to Drive | Payloads landing with hashes, no sheet writes at all |
-| 3 | Sheet schema + normalization + merge | `Workouts` A:Y and `DailyHealth` live; a week of real activities correctly typed, timed and measured; §8 merge preserves a deliberate edit |
+| 3 | Sheet schema + normalization + merge + rollup | `Workouts` A:Z, `DailyHealth` and `DailySummary` live; a week of real activities correctly typed, timed and measured; §8 merge preserves a deliberate edit; `DailySummary` rebuilds idempotently |
 | 4 | FIT fetch with budget counter | FITs landing in Drive, cap respected, backlog logged |
 | 5 | Strength enrichment (§7) | A real lift session enriched, a deliberate non-match logged rather than duplicated |
 | 6 | Actions cron + `SyncLog` + dead-man | Runs unattended 7 consecutive days; Settings shows last-sync age |
@@ -842,16 +892,19 @@ already answered are not repeated.
    provisional until seen.
 6. **[VERIFY §2.5]** COROS sport type codes — needed for an exhaustive
    normalization table.
-7. Does `run` get its own cardio field set, and does it get Descent?
-8. Should a mis-detected sport type be correctable in Thrive's UI, given §8
-   makes the row editable but `type` drives which cardio fields render?
+7. Should a mis-detected sport type be correctable in Thrive's UI, given §8
+   makes the row editable but `type` and `sub_type` drive which cardio
+   fields render?
 
 ### Settled
 
 - **§4 — `sync/` imports from `mcp-server/`.** A sibling workspace, not a
   subcommand, and not a third copy of the row mapping.
 - **§9 — Mountain Time.** Cron is `17 9 * * *`; local dates are computed in
-  `America/Denver`, never from the runner's clock.
+  `America/Denver`, never from the runner's clock. Now a cross-app contract —
+  `docs/data-architecture.md` §2 is the normative statement.
+- **§13 — `run` cardio fields.** Outdoor `run` gets distance, ascent and HR.
+  No descent. Indoor variants drop ascent entirely.
 
 ---
 
