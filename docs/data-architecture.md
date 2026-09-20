@@ -349,20 +349,39 @@ scrolls, and Sheets reads are whole-range fetches.
 | Col | Field | Notes |
 |---|---|---|
 | A | `date` | PK, America/Denver |
-| B | `activity_count` | |
+| B | `activity_count` | All activities, indoor and outdoor |
 | C | `activity_types` | e.g. `bike:mountain,weight` |
 | D | `total_moving_s` | |
 | E | `total_elapsed_s` | |
 | F | `total_distance_m` | **Outdoor only** — see below |
-| G | `total_ascent_m` | |
-| H | `max_effort` | Hardest effort logged that day. `Easy`/`Medium`/`Hard`, or blank |
-| I | `effort_counts` | e.g. `Hard:1,Medium:2`. Blank when nothing was logged |
-| J | `steps` | From `DailyHealth` |
-| K | `resting_hr` | |
-| L | `hrv` | |
-| M | `sleep_total_s` | |
-| N | `training_load` | Duplicated from `DailyHealth` — see below |
-| O | `computed_at` | |
+| G | `total_ascent_m` | **Outdoor only** |
+| H | `cardio_activity_count` | The `of` — outdoor cardio activities that day |
+| I | `distance_withdata` | How many of H contributed to F |
+| J | `ascent_withdata` | How many of H contributed to G |
+| K | `max_effort` | Hardest effort logged that day. `Easy`/`Medium`/`Hard`, or blank |
+| L | `effort_counts` | e.g. `Hard:1,Medium:2`. Blank when nothing was logged |
+| M | `steps` | From `DailyHealth` |
+| N | `resting_hr` | |
+| O | `hrv` | |
+| P | `sleep_total_s` | |
+| Q | `training_load` | Duplicated from `DailyHealth` — see below |
+| R | `computed_at` | |
+
+**Coverage (H–J) was added during refinement of thrive#131.** `#111`
+established that a sum over nullable fields is incomplete information without
+saying how many values contributed — `sumCovered` returns
+`{ total, withData, of }` and the Activities screen renders " · 4/5 rides"
+whenever there is a gap, so *the gap stays visible rather than having to be
+inferred*.
+
+Bare totals here would have broken that principle at the boundary: the
+Journal reads `DailySummary` rather than `Workouts`, and weekly figures are
+sums over these rows, so coverage could not be recomputed downstream. The
+Activities screen would keep reporting coverage while anything built on this
+tab structurally could not.
+
+Distance and ascent coverage are counted independently — a ride may record
+one and not the other.
 
 **Effort (H, I) is the only subjective signal in the row**, and likely the
 most predictive one for "what has negative effects" — a day's intensity
@@ -456,7 +475,7 @@ trade not worth it. Nothing here needs to revisit that.
 Concretely, rendering a day is:
 
 1. **Thrive** — one `DailySummary` row for the date, via the API. One read,
-   fifteen cells, no schema mirroring at all.
+   eighteen cells, no schema mirroring at all.
 2. **Hive** — the existing Apps Script API, via the new `getAuditLog`
    action from §3, filtered to that Denver-local date. The transport
    already exists and is proven by the MCP server; the action does not.
@@ -686,8 +705,9 @@ In the order they were taken.
 - **§4 — `sub_type` fill rule.** Venue is derived (sport code, else GPS
   presence); terrain is never derived and stays blank until set by hand.
   Nothing is defaulted.
-- **§5 — `DailySummary` columns fixed at A:O.** Carries `max_effort` and
-  `effort_counts`; `total_distance_m` is outdoor-only.
+- **§5 — `DailySummary` columns fixed at A:R.** Carries `max_effort` and
+  `effort_counts`, outdoor-only distance and ascent, and per-total coverage
+  counts. *(Was A:O; coverage added during thrive#131 refinement.)*
 - **§6 — Thrive gets an Apps Script API**, following Hive's pattern. Caps
   the mirror count at two permanently; does not reduce it to one, because
   the SPA keeps its direct Sheets path as Hive's does.

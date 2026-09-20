@@ -941,7 +941,7 @@ Intended to become an epic with one issue per phase, each running through
 | 1 | OAuth flow + token storage in Drive | One successful authenticated read, and a rotated token surviving a second run |
 | 2 | Raw ingestion to Drive | Payloads landing with hashes, no sheet writes at all |
 | 2b | **Thrive Apps Script API** | Read and write actions for `Workouts`, `DailyHealth`, `DailySummary`; deployed, key issued, tests wired into CI. **Blocks Phase 3** — see §4 |
-| 3 | Sheet schema + normalization + merge + rollup | `Workouts` A:Z, `DailyHealth` and `DailySummary` live; a week of real activities correctly typed, timed and measured; §8 merge preserves a deliberate edit; `DailySummary` rebuilds idempotently |
+| 3 | Sheet schema + normalization + merge + rollup | `Workouts` A:Z, `DailyHealth` and `DailySummary` (A:R) live; a week of real activities correctly typed, timed and measured; §8 merge preserves a deliberate edit; `DailySummary` rebuilds idempotently |
 | 4 | FIT fetch with budget counter | FITs landing in Drive, cap respected, backlog logged |
 | 5 | Strength enrichment (§7) | A real lift session enriched, a deliberate non-match logged rather than duplicated |
 | 6 | Actions cron + `SyncLog` + dead-man | Runs unattended 7 consecutive days; Settings shows last-sync age |
