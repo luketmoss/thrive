@@ -13,3 +13,6 @@ scripts/.migrate-*-backup-*.json
 
 # resumable backfill progress (scripts/backfill-*.mjs)
 scripts/.backfill-*-progress.json
+
+# Claude Code per-machine permissions — personal, never shared
+.claude/settings.local.json
