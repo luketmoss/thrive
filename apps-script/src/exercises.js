@@ -210,3 +210,26 @@ function cascadeExerciseName(exerciseId, name) {
 
   return { templates: templateStale.length, sets: setsStale.length };
 }
+
+/**
+ * Delete an exercise's library row (#132 AC6).
+ *
+ * Only the library row. Template and set rows that reference it are left in
+ * place with their cached id and name — the MCP tool refuses to get here for
+ * an exercise in use unless the caller passed force_when_in_use, so by the
+ * time this runs, orphaning those rows is a decision someone already made.
+ */
+function deleteExercise(id) {
+  if (!id) throw new Error('id is required');
+
+  var sheet = getSheet(EXERCISES_SHEET);
+  var rows = getAllRows(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    if (cell(rows[i][0]) === id) {
+      var name = cell(rows[i][1]);
+      sheet.deleteRow(i + 2);
+      return { id: id, name: name };
+    }
+  }
+  throw new Error('Exercise "' + id + '" not found');
+}

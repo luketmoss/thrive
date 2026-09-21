@@ -3,30 +3,46 @@
 // Thrive MCP server — lets an agent read, analyze, schedule and repair the
 // workout data in the Groundwork sheet.
 //
+// A thin client of the Thrive Apps Script API (#132). It holds no row
+// mapping: api.js is the only file that talks to the outside world, and it
+// speaks in domain objects. What remains here is tool definitions, narration
+// for the agent, and planning that needs no sheet.
+//
 // Writes that destroy data (delete workout / exercise, replace a template)
-// are dry-run by default: they report what they would change and only touch
-// the sheet when called again with confirm: true.
+// are dry-run by default: they report what they would change, built from API
+// reads, and only call the API's write when called again with confirm: true.
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 
-import { SPREADSHEET_ID, sheetsUpdate } from './sheets.js';
+import {
+  API_URL, API_KEY, ApiError,
+  fetchWorkouts, fetchWorkout, fetchSets, fetchExercises, fetchTemplates,
+  createWorkout, updateWorkout, deleteWorkout,
+  createExercise, updateExercise, deleteExercise,
+  createTemplate, replaceTemplate,
+  previewSetUpdates, updateSets, appendSets,
+} from './api.js';
+import {
+  planAndApplySetUpdates, EntryErrors, isEntryErrors, stripEntryPrefix,
+} from './set-updates.js';
 import {
   WORKOUT_TYPES, EFFORTS, SECTIONS,
   normalizeDate, normalizeRangeToMax, secondsToMinutes, metersToMiles, metersToFeet,
   parseDurationMinutes, findUnknownFields,
   formatWeight, describeLoad, isSetLogged, prepareSchedule,
-  fetchExercises, createExercise, writeExerciseRow,
-  fetchTemplateRows, groupTemplateRows, createTemplate, replaceTemplateRows,
-  fetchWorkouts, appendWorkouts, writeWorkoutRow,
-  fetchSets, appendSets, writeSetRow, slotKey, groupSetsByExercise,
-  resolveSetTarget, planSetUpdates, describeSetState, writeSetRowsChecked,
-  deleteRows,
+  slotKey, groupSetsByExercise, describeSetState,
 } from './domain.js';
 
-if (!SPREADSHEET_ID) {
-  console.error('THRIVE_SPREADSHEET_ID environment variable is required');
+// #132 AC4: the API URL and key replace the service account entirely. The old
+// THRIVE_SPREADSHEET_ID / THRIVE_SERVICE_ACCOUNT_KEY* variables are not read.
+if (!API_URL) {
+  console.error('THRIVE_API_URL environment variable is required (the Apps Script web app /exec URL)');
+  process.exit(1);
+}
+if (!API_KEY) {
+  console.error('THRIVE_API_KEY environment variable is required (the API_KEY script property)');
   process.exit(1);
 }
 
@@ -66,9 +82,6 @@ function tool(name, description, shape, handler) {
   );
 }
 
-/** Write a single cell — used by the exercise rename cascade. */
-const setCell = (range, value) => sheetsUpdate(range, [[value]]);
-
 /** Resolve an exercise reference (id, exact name, then unique partial name). */
 function resolveExercise(ref, exercises) {
   const q = String(ref).trim().toLowerCase();
@@ -106,10 +119,19 @@ function resolveTemplate(ref, templates) {
   return match;
 }
 
-function resolveWorkout(workoutId, workouts) {
-  const w = workouts.find((x) => x.id === workoutId);
-  if (!w) throw new Error(`No workout with id "${workoutId}".`);
-  return w;
+/**
+ * One workout by id, with the message agents have always seen when it is
+ * missing — the API's own wording differs, and parity is the bar (#132 AC1).
+ */
+async function resolveWorkout(workoutId) {
+  try {
+    return await fetchWorkout(workoutId);
+  } catch (err) {
+    if (err instanceof ApiError && /not found/.test(err.message)) {
+      throw new Error(`No workout with id "${workoutId}".`);
+    }
+    throw err;
+  }
 }
 
 const isPlanned = (w) => w.status === 'planned';
@@ -122,6 +144,10 @@ function setLine(s) {
   if (s.effort) bits.push(s.effort);
   return `set ${s.set_number}: ${bits.join(' x ')}`;
 }
+
+/** The API's `exercises` shape for a template, from resolved rows. */
+const toTemplateExercises = (rows) =>
+  rows.map((r) => ({ exercise: r.exercise_id, section: r.section, sets: r.sets, reps: r.reps }));
 
 // --- read tools -----------------------------------------------------
 
@@ -187,9 +213,8 @@ tool(
   'Get one workout in full: every exercise, every set, with weight, reps and effort.',
   { workout_id: z.string().describe('Workout id (from thrive_list_workouts)') },
   async ({ workout_id }) => {
-    const [workouts, sets] = await Promise.all([fetchWorkouts(), fetchSets()]);
-    const w = resolveWorkout(workout_id, workouts);
-    const mine = sets.filter((s) => s.workout_id === w.id);
+    const w = await resolveWorkout(workout_id);
+    const mine = await fetchSets(w.id);
 
     const out = [
       `**${w.name || '(unnamed)'}** — ${w.date}${w.time ? ` ${w.time}` : ''} [${w.type}]${isPlanned(w) ? ' (planned)' : ''}`,
@@ -260,7 +285,7 @@ tool(
   'List workout templates with their exercises, sets, reps and sections.',
   { name_contains: z.string().optional().describe('Case-insensitive substring match on template name') },
   async ({ name_contains }) => {
-    const templates = groupTemplateRows(await fetchTemplateRows());
+    const templates = await fetchTemplates();
     const list = name_contains
       ? templates.filter((t) => t.name.toLowerCase().includes(name_contains.toLowerCase()))
       : templates;
@@ -371,8 +396,7 @@ const scheduleShape = {
 
 /** Library and templates, read once, plus resolvers for prepareSchedule. */
 async function scheduleContext() {
-  const [library, templateRows] = await Promise.all([fetchExercises(), fetchTemplateRows()]);
-  const templates = groupTemplateRows(templateRows);
+  const [library, templates] = await Promise.all([fetchExercises(), fetchTemplates()]);
   return {
     library,
     resolveExercise: (ref) => resolveExercise(ref, library),
@@ -407,11 +431,11 @@ tool(
       );
     }
 
-    // Sets before the workout row: if the second append fails, the set rows
+    // Sets before the workout row: if the second write fails, the set rows
     // are invisible orphans, whereas a workout row without its sets would show
     // up as an empty session.
     await appendSets(p.rows);
-    await appendWorkouts([p.workout]);
+    await createWorkout(p.workout);
 
     const { workout, rows, plan } = p;
     const detail = plan.map(
@@ -470,10 +494,24 @@ tool(
       );
     }
 
-    // Two appends for the whole week, sets first for the reason given in
-    // thrive_schedule_workout.
+    // Every set first, for the reason given in thrive_schedule_workout, then
+    // the workouts. appendSets chunks a large week to fit the API's payload
+    // limit (#132 AC5); if a workout write fails partway, say which landed.
     await appendSets(prepared.flatMap((p) => p.rows));
-    await appendWorkouts(prepared.map((p) => p.workout));
+    const created = [];
+    for (const p of prepared) {
+      try {
+        await createWorkout(p.workout);
+      } catch (err) {
+        throw new Error(
+          `${err.message} — all set rows were written, and ${created.length} of ${prepared.length} ` +
+          'workouts were created before this one failed' +
+          (created.length ? ` (${created.map((w) => `${w.date} ${w.name}`).join('; ')})` : '') +
+          '. Re-running would duplicate those; remove them first or schedule only the rest.',
+        );
+      }
+      created.push(p.workout);
+    }
 
     return text(
       [
@@ -531,22 +569,19 @@ tool(
       return text('No changes provided.');
     }
 
-    const updated = {
-      ...ex,
-      name: name !== undefined ? name.trim() : ex.name,
-      tags: tags !== undefined ? tags : ex.tags,
-      notes: notes !== undefined ? notes : ex.notes,
-    };
-    await writeExerciseRow(updated);
+    // Only the fields passed — the API merges, so an omitted field is left
+    // alone. A rename cascades into Sets and Templates server-side, in the
+    // same call, and reports how many rows it rewrote (#134 AC5).
+    const changes = {};
+    if (name !== undefined) changes.name = name.trim();
+    if (tags !== undefined) changes.tags = tags;
+    if (notes !== undefined) changes.notes = notes;
+    const updated = await updateExercise(ex.id, changes);
 
     const out = [`Updated **${updated.name}** (${updated.id})`];
     if (name !== undefined && name.trim() !== ex.name) {
-      const [sets, templateRows] = await Promise.all([fetchSets(), fetchTemplateRows()]);
-      const affectedSets = sets.filter((s) => s.exercise_id === ex.id);
-      const affectedTpl = templateRows.filter((r) => r.exercise_id === ex.id);
-      for (const s of affectedSets) await setCell(`Sets!C${s.sheetRow}`, updated.name);
-      for (const r of affectedTpl) await setCell(`Templates!E${r.sheetRow}`, updated.name);
-      out.push(`- Renamed from "${ex.name}"; propagated to ${affectedSets.length} set rows and ${affectedTpl.length} template rows.`);
+      const { sets, templates } = updated.cascaded;
+      out.push(`- Renamed from "${ex.name}"; propagated to ${sets} set rows and ${templates} template rows.`);
     }
     if (tags !== undefined) out.push(`- Tags: ${updated.tags || '(none)'}`);
     if (notes !== undefined) out.push(`- Notes: ${updated.notes || '(none)'}`);
@@ -600,42 +635,49 @@ tool(
     }
     const seconds = duration_min !== undefined ? parseDurationMinutes(duration_min) : elapsed_seconds;
 
-    const workouts = await fetchWorkouts();
-    const w = resolveWorkout(workout_id, workouts);
+    const w = await resolveWorkout(workout_id);
 
+    // `changes` narrates for the agent; `fields` is what the API merges. Only
+    // the fields mentioned are sent, so nothing else can be blanked (#122).
     const changes = [];
+    const fields = {};
     const updated = { ...w };
     if (date !== undefined) {
       const d = normalizeDate(date);
       if (!d) throw new Error(`Could not read "${date}" as a date.`);
       changes.push(`date ${w.date} -> ${d}`);
       updated.date = d;
+      fields.date = d;
     }
-    if (name !== undefined) { changes.push(`name "${w.name}" -> "${name}"`); updated.name = name; }
-    if (type !== undefined) { changes.push(`type ${w.type} -> ${type}`); updated.type = type; }
-    if (notes !== undefined) { changes.push('notes updated'); updated.notes = notes; }
+    if (name !== undefined) { changes.push(`name "${w.name}" -> "${name}"`); updated.name = name; fields.name = name; }
+    if (type !== undefined) { changes.push(`type ${w.type} -> ${type}`); updated.type = type; fields.type = type; }
+    if (notes !== undefined) { changes.push('notes updated'); updated.notes = notes; fields.notes = notes; }
     if (seconds !== undefined) {
       const mins = secondsToMinutes(seconds);
       changes.push(mins === null ? 'duration cleared' : `duration -> ${mins} min`);
       updated.elapsed_seconds = seconds;
+      fields.elapsed_seconds = seconds;
     }
     if (effort !== undefined) {
       changes.push(`effort ${w.effort || '(unset)'} -> ${effort || '(unset)'}`);
       updated.effort = effort;
+      fields.effort = effort;
     }
     for (const [key, value] of Object.entries({ distance_m, ascent_m, descent_m, avg_hr })) {
       if (value === undefined) continue;
       changes.push(`${key} ${w[key] || '(unset)'} -> ${value || '(unset)'}`);
       updated[key] = value;
+      fields[key] = value;
     }
     if (status !== undefined) {
       const s = status === 'planned' ? 'planned' : '';
       changes.push(`status ${w.status || 'completed'} -> ${status}`);
       updated.status = s;
+      fields.status = s;
     }
     if (!changes.length) return text('No changes provided.');
 
-    await writeWorkoutRow(updated);
+    await updateWorkout(w.id, fields);
     return text(`Updated **${updated.name || '(unnamed)'}** (${updated.id}):\n${changes.map((c) => `- ${c}`).join('\n')}`);
   },
 );
@@ -667,19 +709,30 @@ tool(
     workout_id, exercise, set_number, section, exercise_order,
     weight, reps, planned_reps, effort,
   }) => {
-    const [exercises, sets] = await Promise.all([fetchExercises(), fetchSets()]);
-    const ex = resolveExercise(exercise, exercises);
-    const { slot, target } = resolveSetTarget(sets, ex, { workout_id, set_number, section, exercise_order });
+    // Resolve the exercise here so a bad reference keeps its familiar message;
+    // the API resolves which set that is, and writes it.
+    const ex = resolveExercise(exercise, await fetchExercises());
 
-    const updated = { ...target };
-    if (weight !== undefined) updated.weight = weight;
-    if (reps !== undefined) updated.reps = reps;
-    if (planned_reps !== undefined) updated.planned_reps = planned_reps;
-    if (effort !== undefined) updated.effort = effort;
+    const u = { exercise: ex.id, set_number };
+    if (section !== undefined) u.section = section;
+    if (exercise_order !== undefined) u.exercise_order = exercise_order;
+    if (weight !== undefined) u.weight = weight;
+    if (reps !== undefined) u.reps = reps;
+    if (planned_reps !== undefined) u.planned_reps = planned_reps;
+    if (effort !== undefined) u.effort = effort;
 
-    await writeSetRow(updated);
+    let change;
+    try {
+      [change] = (await updateSets(workout_id, [u])).changes;
+    } catch (err) {
+      // One entry, so drop the batch prefix and surface the bare reason.
+      if (err instanceof ApiError && isEntryErrors(err.message)) {
+        throw new Error(stripEntryPrefix(err.message));
+      }
+      throw err;
+    }
     return text(
-      `Updated ${ex.name} [${slot.section || 'no section'}] in ${workout_id} — ${setLine(updated)}`,
+      `Updated ${ex.name} [${change.slot.section || 'no section'}] in ${workout_id} — ${setLine(change.after)}`,
     );
   },
 );
@@ -711,18 +764,23 @@ tool(
       .describe('One entry per set. Only the fields you pass change.'),
   },
   async ({ workout_id, updates }) => {
-    const [exercises, workouts, sets] = await Promise.all([fetchExercises(), fetchWorkouts(), fetchSets()]);
-    resolveWorkout(workout_id, workouts);
+    const [library] = await Promise.all([fetchExercises(), resolveWorkout(workout_id)]);
 
-    const { changes, errors } = planSetUpdates(sets, workout_id, updates, (ref) => resolveExercise(ref, exercises));
-    if (errors.length) {
+    let changes;
+    try {
+      changes = await planAndApplySetUpdates(workout_id, updates, {
+        resolveExercise: (ref) => resolveExercise(ref, library),
+        previewSetUpdates,
+        updateSets,
+      });
+    } catch (err) {
+      if (!(err instanceof EntryErrors)) throw err;
       throw new Error(
-        `Nothing was written — ${errors.length} of ${updates.length} entries can't be applied:\n` +
-        errors.map((e) => `  - ${e}`).join('\n'),
+        `Nothing was written — ${err.errors.length} of ${updates.length} entries can't be applied:\n` +
+        err.errors.map((e) => `  - ${e}`).join('\n'),
       );
     }
 
-    await writeSetRowsChecked(changes.map((c) => c.after));
     return text(
       [
         `Updated ${changes.length} set${changes.length > 1 ? 's' : ''} in ${workout_id}:`,
@@ -754,7 +812,7 @@ tool(
         reps: normalizeRangeToMax(spec.reps),
       };
     });
-    const tpl = await createTemplate(name, rows);
+    const tpl = await createTemplate({ name, exercises: toTemplateExercises(rows) });
     const detail = rows.map((e, i) => `  ${i + 1}. ${e.exercise_name} [${e.section}] — ${e.sets} x ${e.reps}`);
     return text(`Created template **${name}** (id: ${tpl.id})\n${detail.join('\n')}`);
   },
@@ -772,8 +830,7 @@ tool(
   },
   async ({ template, name, exercises, confirm = false }) => {
     if (!exercises.length) throw new Error('A template needs at least one exercise.');
-    const templateRows = await fetchTemplateRows();
-    const tpl = resolveTemplate(template, groupTemplateRows(templateRows));
+    const tpl = resolveTemplate(template, await fetchTemplates());
     const library = await fetchExercises();
 
     const rows = exercises.map((spec) => {
@@ -807,7 +864,7 @@ tool(
       );
     }
 
-    await replaceTemplateRows(tpl.id, newName, rows, templateRows);
+    await replaceTemplate(tpl.id, { name: newName, exercises: toTemplateExercises(rows) });
     return text(`Replaced template **${newName}** (${tpl.id}) — ${tpl.exercises.length} rows removed, ${rows.length} written.\n${after.join('\n')}`);
   },
 );
@@ -821,9 +878,8 @@ tool(
     confirm: z.boolean().optional().describe('Set true to actually delete. Default false = preview only.'),
   },
   async ({ workout_id, confirm = false }) => {
-    const [workouts, sets] = await Promise.all([fetchWorkouts(), fetchSets()]);
-    const w = resolveWorkout(workout_id, workouts);
-    const mine = sets.filter((s) => s.workout_id === w.id);
+    const w = await resolveWorkout(workout_id);
+    const mine = await fetchSets(w.id);
 
     const summary = [
       `**${w.name || '(unnamed)'}** — ${w.date} [${w.type}]${isPlanned(w) ? ' (planned)' : ''} (${w.id})`,
@@ -837,8 +893,7 @@ tool(
       );
     }
 
-    const setsDeleted = await deleteRows('Sets', mine.map((s) => s.sheetRow));
-    await deleteRows('Workouts', [w.sheetRow]);
+    const { sets_deleted: setsDeleted } = await deleteWorkout(w.id);
     return text(`Deleted workout **${w.name || '(unnamed)'}** (${w.id}) and ${setsDeleted} set rows.`);
   },
 );
@@ -857,9 +912,10 @@ tool(
       .describe('Allow deletion even when sets or templates reference it (default false)'),
   },
   async ({ exercise, confirm = false, force_when_in_use = false }) => {
-    const [exercises, sets, templateRows, workouts] = await Promise.all([
-      fetchExercises(), fetchSets(), fetchTemplateRows(), fetchWorkouts(),
+    const [exercises, sets, templates, workouts] = await Promise.all([
+      fetchExercises(), fetchSets(), fetchTemplates(), fetchWorkouts(),
     ]);
+    const templateRows = templates.flatMap((t) => t.exercises);
     const ex = resolveExercise(exercise, exercises);
     const usedSets = sets.filter((s) => s.exercise_id === ex.id);
     const usedTemplates = [...new Set(templateRows.filter((r) => r.exercise_id === ex.id).map((r) => r.template_name))];
@@ -894,7 +950,7 @@ tool(
       );
     }
 
-    await deleteRows('Exercises', [ex.sheetRow]);
+    await deleteExercise(ex.id);
     return text(`Deleted exercise **${ex.name}** (${ex.id}).${inUse ? ' Referencing set/template rows were left in place.' : ''}`);
   },
 );

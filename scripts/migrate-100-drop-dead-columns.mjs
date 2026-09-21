@@ -15,7 +15,7 @@
  *   node scripts/migrate-100-drop-dead-columns.mjs
  */
 
-import { JWT } from '../mcp-server/node_modules/google-auth-library/build/src/index.js';
+import { JWT } from 'google-auth-library';
 import { readFileSync } from 'node:fs';
 
 const DRY_RUN = process.argv.includes('--dry-run');

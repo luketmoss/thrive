@@ -18,7 +18,7 @@
  *   node scripts/repair-120-cached-exercise-names.mjs --apply   # write
  */
 
-import { JWT } from '../mcp-server/node_modules/google-auth-library/build/src/index.js';
+import { JWT } from 'google-auth-library';
 import { readFileSync } from 'node:fs';
 import { findStaleExerciseNames } from '../mcp-server/domain.js';
 

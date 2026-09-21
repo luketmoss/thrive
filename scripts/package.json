@@ -1,0 +1,9 @@
+{
+  "name": "thrive-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "One-time migrations and admin tools for the Groundwork sheet. They use the service account directly, because schema changes (new columns, new tabs) need Sheets access the Apps Script API deliberately does not offer.",
+  "dependencies": {
+    "google-auth-library": "^9.15.0"
+  }
+}

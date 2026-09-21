@@ -14,8 +14,9 @@ This **caps the mirror count at two**, permanently, however many consumers
 appear. It does not reduce it to one: the SPA still reads Sheets directly and
 still mirrors the rules, exactly as Hive's does. The cap is the win.
 
-`src/types.js` is the third mirror. Per CLAUDE.md, a column added to a tab is
-added there too.
+Since #132 moved the MCP server onto this API, `src/types.js` and
+`frontend/src/api/types.ts` are the only two copies. Per CLAUDE.md, a column
+added to a tab is added in both.
 
 ## Layout
 

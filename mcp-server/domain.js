@@ -1,19 +1,16 @@
-// Thrive domain layer — row <-> object mapping for the Groundwork tabs.
+// Thrive domain logic that needs no sheet (#132).
 //
-// Column layouts mirror frontend/src/api/*.ts. Keep the two in sync: if a tab
-// gains a column there, widen the range and the mappers here too.
+// Row mapping and row resolution live in the Apps Script API now
+// (apps-script/src), which owns the sheet's shape. What remains here is pure:
+// planning a schedule, narrating results for an agent, and unit conversions.
+// Nothing in this file knows a column letter or a row number.
+//
+// Relative dates (`today`, `tomorrow`, `+3d`) resolve against the MACHINE's
+// local date. That is correct for an MCP server run on the athlete's own
+// computer; run it somewhere set to UTC — CI, a container — and an evening
+// "today" lands on tomorrow.
 
 import { randomUUID } from 'node:crypto';
-import {
-  sheetsGet, sheetsAppend, sheetsUpdate, sheetsBatchGetRows, sheetsBatchUpdate, deleteRows,
-} from './sheets.js';
-
-const RANGES = {
-  exercises: 'Exercises!A2:E',
-  templates: 'Templates!A2:H',
-  workouts: 'Workouts!A2:Z',
-  sets: 'Sets!A2:J',
-};
 
 export const WORKOUT_TYPES = ['weight', 'stretch', 'bike', 'hike', 'run', 'walk'];
 export const EFFORTS = ['Easy', 'Medium', 'Hard'];
@@ -21,7 +18,6 @@ export const SECTIONS = ['warmup', 'primary', 'SS1', 'SS2', 'SS3', 'burnout', 'c
 
 const newId = (prefix) => `${prefix}_${randomUUID().slice(0, 8)}`;
 const newWorkoutId = () => newId('w');
-const nowIso = () => new Date().toISOString();
 
 /** Local calendar date, not UTC — a 7pm workout must not land on tomorrow. */
 export function todayStr(d = new Date()) {
@@ -214,61 +210,6 @@ export function prepareSchedule(input, { library, resolveExercise, resolveTempla
   return { workout, rows, plan, errors: [] };
 }
 
-// --- Exercises (A:E) ------------------------------------------------
-
-export async function fetchExercises() {
-  const rows = await sheetsGet(RANGES.exercises);
-  return rows.map((row, i) => ({
-    id: row[0] || '',
-    name: row[1] || '',
-    tags: row[2] || '',
-    notes: row[3] || '',
-    created: row[4] || '',
-    sheetRow: i + 2,
-  }));
-}
-
-export async function createExercise({ name, tags = '', notes = '' }) {
-  const ex = { id: newId('ex'), name, tags, notes, created: nowIso() };
-  await sheetsAppend('Exercises!A:E', [[ex.id, ex.name, ex.tags, ex.notes, ex.created]]);
-  return ex;
-}
-
-export async function writeExerciseRow(ex) {
-  await sheetsUpdate(`Exercises!A${ex.sheetRow}:E${ex.sheetRow}`, [
-    [ex.id, ex.name, ex.tags, ex.notes, ex.created],
-  ]);
-}
-
-// --- Templates (A:J) ------------------------------------------------
-
-export async function fetchTemplateRows() {
-  const rows = await sheetsGet(RANGES.templates);
-  return rows.map((row, i) => ({
-    template_id: row[0] || '',
-    template_name: row[1] || '',
-    order: Number(row[2]) || 0,
-    exercise_id: row[3] || '',
-    exercise_name: row[4] || '',
-    section: row[5] || '',
-    sets: normalizeRangeToMax(row[6] || ''),
-    reps: normalizeRangeToMax(row[7] || ''),
-    sheetRow: i + 2,
-  }));
-}
-
-export function groupTemplateRows(rows) {
-  const map = new Map();
-  for (const row of rows) {
-    if (!map.has(row.template_id)) {
-      map.set(row.template_id, { id: row.template_id, name: row.template_name, exercises: [] });
-    }
-    map.get(row.template_id).exercises.push(row);
-  }
-  for (const tpl of map.values()) tpl.exercises.sort((a, b) => a.order - b.order);
-  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
-}
-
 /**
  * Templates and Sets rows cache the exercise name beside its id. Returns the
  * rows whose cached name no longer matches the library entry for that id
@@ -286,45 +227,6 @@ export function findStaleExerciseNames(rows, exercises) {
     else if (name !== row.exercise_name) stale.push({ row, name });
   }
   return { stale, orphans };
-}
-
-function templateRowValues(templateId, name, ex, order) {
-  return [
-    templateId, name, order,
-    ex.exercise_id, ex.exercise_name, ex.section,
-    String(ex.sets), String(ex.reps),
-  ];
-}
-
-export async function createTemplate(name, exercises) {
-  const templateId = newId('tpl');
-  await sheetsAppend(
-    'Templates!A:H',
-    exercises.map((ex, i) => templateRowValues(templateId, name, ex, i + 1)),
-  );
-  return { id: templateId, name, exercises };
-}
-
-/** Replace a template's rows wholesale (delete + append), as the app does. */
-export async function replaceTemplateRows(templateId, name, exercises, existingRows) {
-  const mine = existingRows.filter((r) => r.template_id === templateId);
-  await deleteRows('Templates', mine.map((r) => r.sheetRow));
-  await sheetsAppend(
-    'Templates!A:H',
-    exercises.map((ex, i) => templateRowValues(templateId, name, ex, i + 1)),
-  );
-}
-
-// --- Workouts (A:Z) -------------------------------------------------
-
-export function workoutRowValues(w) {
-  return [
-    w.id, w.date, w.time, w.type, w.name, w.template_id,
-    w.notes, w.elapsed_seconds, w.created, w.copied_from, w.status,
-    w.moving_seconds, w.effort, w.distance_m, w.ascent_m, w.descent_m, w.avg_hr,
-    w.sub_type, w.source, w.source_activity_id, w.raw_ref, w.fit_ref,
-    w.fit_fetched_at, w.synced_at, w.started_at_utc, w.calories,
-  ];
 }
 
 /** The timezone every hand-logged `Date`/`Time` pair is implicitly in. */
@@ -368,7 +270,7 @@ export function denverOffset(date, time) {
 }
 
 /**
- * `Date` + `Time` -> the ISO 8601 instant for `Workouts!Y`, DST-aware.
+ * `Date` + `Time` -> the ISO 8601 instant for `started_at_utc`, DST-aware.
  *
  * Returns '' when there is no time to convert. A workout with a date but no
  * time has no instant, and assuming midnight would invent one — see #128 AC5.
@@ -433,42 +335,7 @@ export function findUnknownFields(args, allowedKeys) {
   return Object.keys(args ?? {}).filter((k) => !allowed.has(k));
 }
 
-export async function fetchWorkouts() {
-  const rows = await sheetsGet(RANGES.workouts);
-  return rows.map((row, i) => ({
-    id: row[0] || '',
-    date: row[1] || '',
-    time: row[2] || '',
-    type: row[3] || 'weight',
-    name: row[4] || '',
-    template_id: row[5] || '',
-    notes: row[6] || '',
-    elapsed_seconds: row[7] || '',
-    created: row[8] || '',
-    copied_from: row[9] || '',
-    status: row[10] || '',
-    moving_seconds: row[11] || '',
-    effort: row[12] || '',
-    distance_m: row[13] || '',
-    ascent_m: row[14] || '',
-    descent_m: row[15] || '',
-    avg_hr: row[16] || '',
-    // #128 R-Z. Blank on every row written before the migration, and blank
-    // `source` is what "logged by hand" looks like — never default these.
-    sub_type: row[17] || '',
-    source: row[18] || '',
-    source_activity_id: row[19] || '',
-    raw_ref: row[20] || '',
-    fit_ref: row[21] || '',
-    fit_fetched_at: row[22] || '',
-    synced_at: row[23] || '',
-    started_at_utc: row[24] || '',
-    calories: row[25] || '',
-    sheetRow: i + 2,
-  }));
-}
-
-/** A new workout record, not yet written. Append it with appendWorkouts. */
+/** A new workout record, not yet written. Send it with api.js createWorkout. */
 export function buildWorkout(data) {
   const now = new Date();
   const workout = {
@@ -505,54 +372,7 @@ export function buildWorkout(data) {
   return workout;
 }
 
-/** Append workout rows in a single request. */
-export async function appendWorkouts(list) {
-  await sheetsAppend('Workouts!A:Z', list.map((w) => workoutRowValues(w)));
-}
-
-/**
- * Overwrite a workout row, re-checking that the row still holds this
- * workout's id first. A cached sheetRow goes stale as soon as an earlier row
- * is deleted, and writing blind would clobber a different workout — the bug
- * behind issue #95.
- */
-export async function writeWorkoutRow(workout) {
-  const cell = await sheetsGet(`Workouts!A${workout.sheetRow}:A${workout.sheetRow}`);
-  if (cell[0]?.[0] !== workout.id) {
-    throw new Error(
-      `Row ${workout.sheetRow} no longer holds workout ${workout.id} — the sheet ` +
-      `changed underneath this call. Re-read the workout and retry.`,
-    );
-  }
-  await sheetsUpdate(`Workouts!A${workout.sheetRow}:Z${workout.sheetRow}`, [workoutRowValues(workout)]);
-}
-
-// --- Sets (A:J) -----------------------------------------------------
-
-function setRowValues(s) {
-  return [
-    s.workout_id, s.exercise_id, s.exercise_name, s.section,
-    s.exercise_order, s.set_number, s.planned_reps,
-    s.weight, s.reps, s.effort,
-  ];
-}
-
-export async function fetchSets() {
-  const rows = await sheetsGet(RANGES.sets);
-  return rows.map((row, i) => ({
-    workout_id: row[0] || '',
-    exercise_id: row[1] || '',
-    exercise_name: row[2] || '',
-    section: row[3] || '',
-    exercise_order: Number(row[4]) || 0,
-    set_number: Number(row[5]) || 0,
-    planned_reps: row[6] || '',
-    weight: row[7] || '',
-    reps: row[8] || '',
-    effort: row[9] || '',
-    sheetRow: i + 2,
-  }));
-}
+// --- Sets: narration only ------------------------------------------
 
 /**
  * The same exercise can legitimately appear more than once in a workout — a
@@ -583,116 +403,9 @@ export function groupSetsByExercise(sets) {
   return slots.sort((a, b) => a.exercise_order - b.exercise_order);
 }
 
-/**
- * Slots for one exercise within one workout, optionally narrowed by section
- * or exercise_order. Returns every match so the caller can refuse to guess
- * when an exercise appears in two sections.
- */
-export function findSetSlots(sets, { workout_id, exercise_id, section, exercise_order }) {
-  const mine = sets.filter((s) => s.workout_id === workout_id && s.exercise_id === exercise_id);
-  let slots = groupSetsByExercise(mine);
-  if (section) {
-    const q = String(section).toLowerCase();
-    slots = slots.filter((g) => String(g.section).toLowerCase() === q);
-  }
-  if (exercise_order !== undefined && exercise_order !== null && exercise_order !== '') {
-    slots = slots.filter((g) => g.exercise_order === Number(exercise_order));
-  }
-  return slots;
-}
-
-/** Describe repeated slots of one exercise so an agent can pick one. */
-export function describeSlots(slots) {
-  return slots
-    .map((g) => `[${g.section || 'no section'}] exercise_order ${g.exercise_order}, ${g.sets.length} sets`)
-    .join('; ');
-}
-
-/**
- * The one set row an update means, or a thrown error that says how to narrow
- * it. Shared by thrive_update_set and thrive_update_sets so both refuse to
- * guess in exactly the same words.
- */
-export function resolveSetTarget(sets, ex, { workout_id, set_number, section, exercise_order }) {
-  const slots = findSetSlots(sets, { workout_id, exercise_id: ex.id, section, exercise_order });
-
-  if (!slots.length) {
-    const all = findSetSlots(sets, { workout_id, exercise_id: ex.id });
-    throw new Error(
-      `No ${ex.name}${section ? ` in section ${section}` : ''}` +
-      `${exercise_order ? ` at exercise_order ${exercise_order}` : ''} in workout ${workout_id}` +
-      (all.length ? ` — it appears as ${describeSlots(all)}.` : '.'),
-    );
-  }
-  if (slots.length > 1) {
-    throw new Error(
-      `${ex.name} appears ${slots.length} times in workout ${workout_id} — ${describeSlots(slots)}. ` +
-      `Pass section or exercise_order to say which set ${set_number} you mean.`,
-    );
-  }
-
-  const slot = slots[0];
-  const target = slot.sets.find((s) => s.set_number === Number(set_number));
-  if (!target) {
-    throw new Error(
-      `No set ${set_number} of ${ex.name} [${slot.section || 'no section'}] in workout ` +
-      `${workout_id} — that slot has sets 1..${slot.sets.length}.`,
-    );
-  }
-  return { slot, target };
-}
-
+/** The fields a set correction may change, and the keys an entry may carry. */
 export const SET_UPDATE_FIELDS = ['weight', 'reps', 'planned_reps', 'effort'];
-const SET_UPDATE_KEYS = ['exercise', 'set_number', 'section', 'exercise_order', ...SET_UPDATE_FIELDS];
-
-/**
- * Resolve a batch of set corrections against one workout without writing.
- * Every entry is checked and every problem collected (#119): a half-applied
- * batch is worse than a rejected one, because the caller can't tell which
- * sets are live without re-reading.
- *
- * `resolve(ref)` returns a library exercise or throws.
- */
-export function planSetUpdates(sets, workoutId, updates, resolve) {
-  const changes = [];
-  const errors = [];
-  const claimed = new Map(); // sheetRow -> index of the entry that took it
-
-  updates.forEach((u, i) => {
-    const fail = (msg) => errors.push(`updates[${i}] "${u.exercise}" set ${u.set_number}: ${msg}`);
-
-    const unknown = findUnknownFields(u, SET_UPDATE_KEYS);
-    if (unknown.length) {
-      return fail(`unknown field ${unknown.map((k) => `"${k}"`).join(', ')} — accepted: ${SET_UPDATE_KEYS.join(', ')}`);
-    }
-    if (!SET_UPDATE_FIELDS.some((f) => u[f] !== undefined)) {
-      return fail(`nothing to change — pass at least one of ${SET_UPDATE_FIELDS.join(', ')}`);
-    }
-
-    let ex;
-    let resolved;
-    try {
-      ex = resolve(u.exercise);
-      resolved = resolveSetTarget(sets, ex, {
-        workout_id: workoutId, set_number: u.set_number, section: u.section, exercise_order: u.exercise_order,
-      });
-    } catch (err) {
-      return fail(err.message);
-    }
-
-    const row = resolved.target.sheetRow;
-    if (claimed.has(row)) {
-      return fail(`targets the same set as updates[${claimed.get(row)}] — combine them into one entry`);
-    }
-    claimed.set(row, i);
-
-    const after = { ...resolved.target };
-    for (const f of SET_UPDATE_FIELDS) if (u[f] !== undefined) after[f] = u[f];
-    changes.push({ index: i, exercise: ex, slot: resolved.slot, before: resolved.target, after });
-  });
-
-  return { changes, errors };
-}
+export const SET_UPDATE_KEYS = ['exercise', 'set_number', 'section', 'exercise_order', ...SET_UPDATE_FIELDS];
 
 /** "weight 115 lbs · reps 6 · planned 8 · effort Hard", with — for blanks. */
 export function describeSetState(s) {
@@ -703,44 +416,3 @@ export function describeSetState(s) {
     `effort ${s.effort || '—'}`,
   ].join(' · ');
 }
-
-/**
- * Rows whose freshly read A..F cells no longer hold the workout, exercise and
- * set number they were read with — a row above was deleted and the cached
- * sheetRow now points at a different set (cf. #95).
- */
-export function findStaleSetRows(rows, freshRows) {
-  return rows.filter((s, i) => {
-    const r = freshRows[i] || [];
-    return r[0] !== s.workout_id || r[1] !== s.exercise_id || Number(r[5]) !== s.set_number;
-  });
-}
-
-export async function appendSets(sets) {
-  await sheetsAppend('Sets!A:J', sets.map(setRowValues));
-}
-
-export async function writeSetRow(set) {
-  await sheetsUpdate(`Sets!A${set.sheetRow}:J${set.sheetRow}`, [setRowValues(set)]);
-}
-
-/**
- * Overwrite many set rows in one request, after re-reading each target to
- * confirm it still holds the same set. Any mismatch writes nothing.
- */
-export async function writeSetRowsChecked(sets) {
-  const fresh = await sheetsBatchGetRows(sets.map((s) => `Sets!A${s.sheetRow}:F${s.sheetRow}`));
-  const stale = findStaleSetRows(sets, fresh);
-  if (stale.length) {
-    throw new Error(
-      `${stale.length} set row${stale.length > 1 ? 's' : ''} moved since ${stale.length > 1 ? 'they were' : 'it was'} ` +
-      `read (sheet rows ${stale.map((s) => s.sheetRow).join(', ')}) — the sheet changed underneath this call. ` +
-      'Nothing was written; re-read the workout and retry.',
-    );
-  }
-  await sheetsBatchUpdate(
-    sets.map((s) => ({ range: `Sets!A${s.sheetRow}:J${s.sheetRow}`, values: [setRowValues(s)] })),
-  );
-}
-
-export { deleteRows };

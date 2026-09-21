@@ -1,10 +1,10 @@
 // Thrive data types — column constants and valid values.
 //
-// IMPORTANT: this is the third mirror of the row layout, alongside
-// frontend/src/api/types.ts and mcp-server/domain.js. It exists to *cap* that
-// count: every consumer arriving after this one (#131's DailySummary, the
-// COROS sync, the Journal) calls this API instead of adding a fourth copy.
-// Per CLAUDE.md, a column added to a tab is added here too.
+// IMPORTANT: this is one of the two copies of the row layout, alongside
+// frontend/src/api/types.ts. Per CLAUDE.md, a column added to a tab is added
+// in both. There were three until #132 moved the MCP server onto this API;
+// every consumer arriving later (the COROS sync, the Journal) calls the API
+// instead of adding another copy.
 
 // Column indices for the Workouts sheet (0-based), A:Z after #128/#129.
 var COL = {
