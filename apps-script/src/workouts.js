@@ -50,7 +50,7 @@ function getWorkout(id) {
   var sheet = getSheet(WORKOUTS_SHEET);
   var rowNum = findWorkoutRow(sheet, id);
   if (rowNum === -1) return null;
-  var row = sheet.getRange(rowNum, 1, 1, WORKOUT_COLUMN_COUNT).getValues()[0];
+  var row = sheet.getRange(rowNum, 1, 1, WORKOUT_COLUMN_COUNT).getDisplayValues()[0];
   return rowToWorkout(row, rowNum);
 }
 
@@ -122,7 +122,7 @@ function createWorkout(data) {
   if (!workout.created) workout.created = isoNow();
 
   var sheet = getSheet(WORKOUTS_SHEET);
-  sheet.appendRow(workoutToRow(workout));
+  sheet.appendRow(asText(workoutToRow(workout)));
   workout.sheetRow = sheet.getLastRow();
   return workout;
 }
@@ -149,7 +149,7 @@ function updateWorkout(id, changes) {
   }
 
   var existing = rowToWorkout(
-    sheet.getRange(rowNum, 1, 1, WORKOUT_COLUMN_COUNT).getValues()[0],
+    sheet.getRange(rowNum, 1, 1, WORKOUT_COLUMN_COUNT).getDisplayValues()[0],
     rowNum
   );
 
@@ -157,6 +157,39 @@ function updateWorkout(id, changes) {
     if (Object.prototype.hasOwnProperty.call(fields, key)) existing[key] = fields[key];
   }
 
-  sheet.getRange(rowNum, 1, 1, WORKOUT_COLUMN_COUNT).setValues([workoutToRow(existing)]);
+  sheet.getRange(rowNum, 1, 1, WORKOUT_COLUMN_COUNT).setValues([asText(workoutToRow(existing))]);
   return existing;
+}
+
+/**
+ * Delete a workout and every one of its set rows (#132 AC6).
+ *
+ * Addressed by id, never by row. The set rows go first and bottom-to-top:
+ * removing a row shifts every row below it up, so descending order is what
+ * keeps the remaining indices valid. Sets before the workout for the same
+ * reason the MCP server appends them first — if the second step fails, stray
+ * set rows are invisible orphans, whereas a workout row without its sets
+ * would show up as an empty session.
+ *
+ * No preview mode: the MCP tool builds its dry run from reads, so this only
+ * ever runs when the caller has already confirmed.
+ */
+function deleteWorkout(id) {
+  if (!id) throw new Error('id is required');
+
+  var workoutsSheet = getSheet(WORKOUTS_SHEET);
+  var rowNum = findWorkoutRow(workoutsSheet, id);
+  if (rowNum === -1) throw new Error('Workout "' + id + '" not found');
+
+  var setRows = getSets({ workout_id: id })
+    .map(function (s) { return s.sheetRow; })
+    .sort(function (a, b) { return b - a; });
+
+  var setsSheet = getSheet(SETS_SHEET);
+  for (var i = 0; i < setRows.length; i++) {
+    setsSheet.deleteRow(setRows[i]);
+  }
+
+  workoutsSheet.deleteRow(rowNum);
+  return { workout_id: id, sets_deleted: setRows.length };
 }

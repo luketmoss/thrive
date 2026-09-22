@@ -148,7 +148,7 @@ function createTemplate(data) {
   var templateId = data.id || 'tpl_' + Utilities.getUuid().slice(0, 8);
   var sheet = getSheet(TEMPLATES_SHEET);
   for (var i = 0; i < resolved.exercises.length; i++) {
-    sheet.appendRow(templateRowValues(templateId, data.name, resolved.exercises[i], i + 1));
+    sheet.appendRow(asText(templateRowValues(templateId, data.name, resolved.exercises[i], i + 1)));
   }
 
   return { id: templateId, name: data.name, exercises: resolved.exercises };
@@ -185,7 +185,7 @@ function replaceTemplate(templateId, data) {
   }
 
   for (var j = 0; j < resolved.exercises.length; j++) {
-    sheet.appendRow(templateRowValues(templateId, name, resolved.exercises[j], j + 1));
+    sheet.appendRow(asText(templateRowValues(templateId, name, resolved.exercises[j], j + 1)));
   }
 
   return { id: templateId, name: name, exercises: resolved.exercises };

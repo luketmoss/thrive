@@ -14,8 +14,9 @@ This **caps the mirror count at two**, permanently, however many consumers
 appear. It does not reduce it to one: the SPA still reads Sheets directly and
 still mirrors the rules, exactly as Hive's does. The cap is the win.
 
-`src/types.js` is the third mirror. Per CLAUDE.md, a column added to a tab is
-added there too.
+Since #132 moved the MCP server onto this API, `src/types.js` and
+`frontend/src/api/types.ts` are the only two copies. Per CLAUDE.md, a column
+added to a tab is added in both.
 
 ## Layout
 
@@ -51,6 +52,24 @@ ordering is the point: the dangerous case is not a parse error but a payload
 truncated in transit that still parses, into an object quietly missing its last
 fields. #134's bulk actions are the first that will hit this, and they must
 batch rather than hope.
+
+## Writes store text; reads see what the SPA sees
+
+`appendRow` and `setValues` behave like **typing into a cell**, not like the REST
+API's `RAW` writes the SPA makes. Typed, `"2026-03-04"` becomes a date, `"07:00"` a
+time, `"3720"` a number, and `"=anything"` a live formula. So:
+
+- **Every write goes through `asText()`** (`src/utils.js`), which prefixes each value
+  with an apostrophe — Sheets' own escape. The value is stored exactly as given, the
+  apostrophe is not part of it, and a formula can never be injected.
+- **Every read uses `getDisplayValues()`**, never `getValues()`. Display values are
+  what the SPA reads (the REST API's default `FORMATTED_VALUE`), so both sides agree —
+  and a cell that was stored as a real date still reads as `"2026-03-04"`, not as
+  `"Wed Mar 04 2026 00:00:00 GMT-0700"`.
+
+Both were learned the hard way in #132: an update read a date cell with `getValues()`,
+stringified it, and wrote the long form back. The test sandbox's fake sheet now
+interprets writes the way Sheets does, so a write that skips `asText()` fails the suite.
 
 ## Actions
 

@@ -23,7 +23,7 @@
  *   node scripts/migrate-128-workouts-a-to-z.mjs
  */
 
-import { JWT } from '../mcp-server/node_modules/google-auth-library/build/src/index.js';
+import { JWT } from 'google-auth-library';
 import { readFileSync } from 'node:fs';
 import { startedAtUtc } from '../mcp-server/domain.js';
 

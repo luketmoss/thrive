@@ -4,49 +4,44 @@ Local MCP server that lets AI agents read, analyze, schedule and repair the work
 data in the Groundwork sheet — review training history, design and schedule future
 workouts, extend the exercise library, and fix data that has gone bad.
 
-## How this differs from the Hive MCP server
+## How it works
 
-Hive's MCP server is a thin client over an Apps Script web app guarded by an API key.
-Thrive has no backend at all — the SPA holds the signed-in user's OAuth token and
-calls the Sheets REST API directly (`frontend/src/api/sheets.ts`), so there is no URL
-for an MCP server to call.
+The server is a **thin client of the Thrive Apps Script API** (`apps-script/`), exactly
+as Hive's MCP server is a thin client of Hive's. It holds no row mapping and never
+touches the sheet: `api.js` is the only file that talks to the outside world, and it
+speaks in domain objects — a set is named by workout, exercise, section, order and set
+number, never by row.
 
-Rather than stand up a second backend, this server talks to the same Sheets REST API
-directly, authenticating as a **Google service account**. The row-mapping logic in
-`domain.js` mirrors `frontend/src/api/*.ts` — if a tab gains a column there, widen the
-range and the mapper here too.
+That caps the copies of Thrive's row layout at two however many consumers arrive: the
+SPA (`frontend/src/api/*.ts`), which still reads Sheets directly, and the API
+(`apps-script/src/types.js`). Before #132 this server was a third.
+
+What stays here is everything that needs no sheet: tool definitions, narration of
+results for the agent, schedule planning, and the per-entry checks whose wording agents
+already rely on.
 
 ## Setup
 
-### 1. Create a service account
+### 1. Deploy the API
 
-1. In the [Google Cloud console](https://console.cloud.google.com/), pick (or create)
-   a project and enable the **Google Sheets API**.
-2. **IAM & Admin → Service Accounts → Create service account.** No roles needed —
-   access is granted by sharing the sheet, not by project IAM.
-3. On the new account, **Keys → Add key → Create new key → JSON**. Save the file
-   somewhere outside this repo, e.g. `C:\Users\<you>\.thrive\service-account.json`.
-4. Copy the account's `client_email` (it looks like
-   `thrive-mcp@<project>.iam.gserviceaccount.com`).
+The API has to be deployed before this server can do anything. Follow
+[`apps-script/README.md`](../apps-script/README.md): `clasp push`, set the `API_KEY` and
+`SPREADSHEET_ID` script properties, deploy as a web app with anonymous access, and open
+the `/exec` URL once in a browser as the owner to authorize it.
 
-### 2. Share the sheet
+You need two values from that:
 
-Open the **Groundwork** spreadsheet, hit Share, and add that `client_email` as an
-**Editor**. Nothing works until you do this — the server will report a 403 with a
-reminder if you forget.
+- **`THRIVE_API_URL`** — the web app's `/exec` URL
+- **`THRIVE_API_KEY`** — the `API_KEY` script property
 
-### 3. Install
+### 2. Install
 
 ```powershell
 cd mcp-server
 npm install
 ```
 
-Already done if the server was set up for you — `node_modules/` will exist.
-
-(PowerShell 5.1 has no `&&` separator, hence the two lines.)
-
-### 4. Register the server
+### 3. Register the server
 
 **Claude Desktop** — `%APPDATA%\Claude\claude_desktop_config.json` on Windows,
 `~/Library/Application Support/Claude/claude_desktop_config.json` on Mac:
@@ -58,8 +53,8 @@ Already done if the server was set up for you — `node_modules/` will exist.
       "command": "node",
       "args": ["D:/Projects/code/thrive/mcp-server/index.js"],
       "env": {
-        "THRIVE_SPREADSHEET_ID": "<the id from the sheet URL>",
-        "THRIVE_SERVICE_ACCOUNT_KEY_FILE": "C:/Users/<you>/.thrive/service-account.json"
+        "THRIVE_API_URL": "https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec",
+        "THRIVE_API_KEY": "<the API_KEY script property>"
       }
     }
   }
@@ -68,19 +63,31 @@ Already done if the server was set up for you — `node_modules/` will exist.
 
 Restart Claude Desktop afterwards.
 
-**Claude Code** — same block in a `.mcp.json` at the repo root, or via
-`claude mcp add`. Don't commit real credentials.
+**Claude Code** — the same block in a `.mcp.json` at the repo root, or via
+`claude mcp add`. Don't commit the key.
 
-The spreadsheet id is the long segment in the sheet URL:
-`https://docs.google.com/spreadsheets/d/<THIS_PART>/edit`.
+### Upgrading from the service-account version
+
+Before #132 the server read the sheet as a Google service account. In the `thrive`
+entry's `env` block:
+
+1. **Add** `THRIVE_API_URL` and `THRIVE_API_KEY`.
+2. **Remove** `THRIVE_SPREADSHEET_ID` and `THRIVE_SERVICE_ACCOUNT_KEY_FILE` (or
+   `THRIVE_SERVICE_ACCOUNT_KEY`). The server no longer reads them.
+3. Restart Claude Desktop.
+
+The service account itself stays: `scripts/` still uses it for schema migrations and
+admin tools, because adding a column or a tab needs direct Sheets access that the API
+deliberately does not offer.
 
 ## Environment variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `THRIVE_SPREADSHEET_ID` | Yes | Groundwork spreadsheet id |
-| `THRIVE_SERVICE_ACCOUNT_KEY_FILE` | One of these | Path to the service account JSON key |
-| `THRIVE_SERVICE_ACCOUNT_KEY` | One of these | The service account JSON inline, for hosts that only pass strings |
+| `THRIVE_API_URL` | Yes | The API's web app `/exec` URL |
+| `THRIVE_API_KEY` | Yes | The `API_KEY` script property |
+
+The server exits at startup with a message naming whichever is missing.
 
 ## Tools
 
@@ -99,7 +106,7 @@ The spreadsheet id is the long segment in the sheet URL:
 | Tool | Description |
 |------|-------------|
 | `thrive_schedule_workout` | Create a workout with status `planned` for a future date, expanded from a template or an explicit exercise list. Exercise entries can prescribe a `weight` (every set) or `set_weights` (per set); the whole list is validated before anything is written |
-| `thrive_schedule_week` | Schedule several workouts in one call, each shaped like a `thrive_schedule_workout` call. All of them are validated first (any problem schedules none), then written in two appends |
+| `thrive_schedule_week` | Schedule several workouts in one call, each shaped like a `thrive_schedule_workout` call. All of them are validated first (any problem schedules none), then the sets are written, chunked if large, followed by the workouts |
 | `thrive_create_exercise` | Add to the exercise library (refuses duplicate names unless overridden) |
 | `thrive_create_template` | Create a reusable template from an ordered exercise list |
 
@@ -109,7 +116,7 @@ The spreadsheet id is the long segment in the sheet URL:
 |------|-------------|
 | `thrive_update_workout` | Fix date, name, type, notes, duration (`duration_min`, whole minutes), session effort, cardio attributes, or planned/completed status |
 | `thrive_update_set` | Correct one logged set's weight, reps, planned reps or effort (pass `section` when a lift appears twice) |
-| `thrive_update_sets` | Correct many sets of one workout in one call. All entries are validated first (any problem writes nothing), rows are re-checked before a single batch write, and each updated set's resulting state is echoed |
+| `thrive_update_sets` | Correct many sets of one workout in one call. All entries are validated first (any problem writes nothing), each request is atomic, and each updated set's resulting state is echoed |
 | `thrive_update_exercise` | Rename or retag an exercise |
 | `thrive_update_template` | Replace a template's exercise list wholesale |
 | `thrive_delete_workout` | Delete a workout and cascade to its sets |
@@ -119,7 +126,8 @@ The spreadsheet id is the long segment in the sheet URL:
 
 Destructive tools — `thrive_delete_workout`, `thrive_delete_exercise` and
 `thrive_update_template` — are **dry-run by default**. Called without `confirm: true`
-they report exactly what they would change and write nothing:
+they report exactly what they would change and write nothing. The preview is built from
+API reads, so the API's delete and replace actions only ever run once confirmed:
 
 ```
 DRY RUN — nothing deleted. This would remove:
@@ -132,27 +140,45 @@ DRY RUN — nothing deleted. This would remove:
 Call again with confirm: true to delete.
 ```
 
-A second call with `confirm: true` performs the write. `thrive_delete_exercise` adds a
-further gate: an exercise still referenced by sets or templates needs
-`force_when_in_use: true`, since deleting it orphans that history.
+`thrive_delete_exercise` adds a further gate: an exercise still referenced by sets or
+templates needs `force_when_in_use: true`, since deleting it orphans that history.
 
 More guardrails worth knowing:
 
 - **Unknown fields are refused.** Every tool rejects a field its schema doesn't declare,
   naming it and listing the accepted ones, and writes nothing. Without this the SDK
   strips the field and a misnamed parameter becomes a silent no-op (#117).
+- **Updates merge.** `thrive_update_workout` and `thrive_update_exercise` send only the
+  fields passed; the API leaves every other column alone. A field is cleared by passing
+  `""`, never by omitting it (#122).
+- **Rename cascade.** Renaming an exercise rewrites the cached name in every Sets and
+  Templates row, server-side and in the same call, so history doesn't fragment across
+  old and new names. Template expansion writes the library's current name and refuses a
+  template whose rows point at an exercise that no longer exists (#120).
+- **Set targets are resolved, never guessed.** The API works out which row a set
+  correction means. An exercise that appears twice in a workout (a warmup and a primary
+  of the same lift) must be narrowed with `section` or `exercise_order`, and the error
+  lists both candidates. A target matching nothing is refused rather than appended.
+- **Stale-row protection** lives in the API: a bulk set update re-reads each target
+  before writing and writes nothing if any moved (#95).
 
-- **Rename cascade.** Renaming an exercise rewrites the cached exercise name in every
-  Sets and Templates row, so history doesn't fragment across old and new names.
-  Template expansion writes the library's current name regardless of what the template
-  row cached, and refuses a template whose rows point at an exercise that no longer
-  exists (#120). `scripts/repair-120-cached-exercise-names.mjs` refreshes names that
-  went stale through hand edits to the Exercises tab.
-- **Stale row protection.** Workout updates re-check that the target row still holds
-  that workout's id before overwriting it. A cached row index goes stale the moment an
-  earlier row is deleted, and writing blind would clobber a different workout — the bug
-  behind issue #95. Row deletions go out as a single atomic `batchUpdate` rather than
-  one call per row, so a failure can't leave a half-deleted workout behind.
+### Large batches
+
+The API receives writes as a URL parameter, which caps a request's size. `api.js`
+measures each write and splits one that would not fit:
+
+- **`thrive_update_sets`** — a batch that fits is one atomic request. One that does not
+  is previewed in full first, so an invalid entry anywhere still means nothing is
+  written, then applied chunk by chunk, each chunk atomic. If a later chunk fails, the
+  error names the entries earlier chunks already wrote.
+- **`thrive_schedule_week`** — set rows are chunked the same way, then the workouts are
+  created. A failure partway says what already landed.
+
+## Dates
+
+Relative dates (`today`, `tomorrow`, `+3d`) resolve against the **machine's** local
+date. That is right for a server running on your own computer; run it somewhere set to
+UTC — CI, a container — and an evening "today" lands on tomorrow.
 
 ## Development
 
@@ -161,15 +187,17 @@ cd mcp-server
 npm test
 ```
 
-Runs the pure-function tests in `domain.test.js` (date normalization, rep-range
-collapsing, template grouping) via the built-in Node test runner. No sheet access and
-no credentials required.
+No network and no credentials: `domain.test.js` covers the pure planning and
+narration helpers, `set-updates.test.js` drives the set-update logic against a fake API
+that resolves the way the real one does, and `api.test.js` stubs `fetch`. Row mapping
+and resolution are tested where they live, in `apps-script/tests/`.
 
 ## Files
 
 | File | Role |
 |------|------|
 | `index.js` | MCP tool definitions, argument validation, output formatting |
-| `domain.js` | Row ↔ object mapping for the Groundwork tabs, id generation, date helpers |
-| `sheets.js` | Service account auth and the Sheets REST calls |
-| `domain.test.js` | Tests for the pure helpers |
+| `api.js` | The Apps Script API client — the only file that talks to the outside world |
+| `set-updates.js` | Set corrections: local checks, error remapping, chunking |
+| `domain.js` | Pure logic — schedule planning, narration, unit and date helpers |
+| `*.test.js` | Tests for each of the above |

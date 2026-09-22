@@ -310,10 +310,10 @@ function rebuildDailySummary(from, to, options) {
     if (Object.prototype.hasOwnProperty.call(rowByDate, date)) {
       // Update in place, so a re-run after a later import corrects the day
       // rather than duplicating it (#131 AC5).
-      sheet.getRange(rowByDate[date], 1, 1, DAILY_SUMMARY_COLUMN_COUNT).setValues([row]);
+      sheet.getRange(rowByDate[date], 1, 1, DAILY_SUMMARY_COLUMN_COUNT).setValues([asText(row)]);
       updated += 1;
     } else {
-      sheet.appendRow(row);
+      sheet.appendRow(asText(row));
       rowByDate[date] = sheet.getLastRow();
       written += 1;
     }

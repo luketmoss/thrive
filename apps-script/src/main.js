@@ -137,6 +137,16 @@ function doGet(e) {
         result = { success: true, data: updateWorkout(payload.id, payload.changes) };
         break;
 
+      // Dry-run lives in the caller: the MCP tool previews from reads, and only
+      // calls this once confirmed (#132 AC6).
+      case 'deleteWorkout':
+        if (!payload.id) {
+          result = fail('payload.id field required');
+          break;
+        }
+        result = { success: true, data: deleteWorkout(payload.id) };
+        break;
+
       // --- Exercises (#134) ---
       case 'getExercises':
         result = { success: true, data: getExercises({ tag: params.tag }) };
@@ -169,6 +179,15 @@ function doGet(e) {
           break;
         }
         result = { success: true, data: updateExercise(payload.id, payload.changes) };
+        break;
+
+      // Library row only; referencing rows are left in place (#132 AC6).
+      case 'deleteExercise':
+        if (!payload.id) {
+          result = fail('payload.id field required');
+          break;
+        }
+        result = { success: true, data: deleteExercise(payload.id) };
         break;
 
       case 'getExerciseHistory':

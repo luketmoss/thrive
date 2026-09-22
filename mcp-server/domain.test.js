@@ -5,11 +5,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  normalizeDate, normalizeRangeToMax, groupTemplateRows, todayStr,
-  slotKey, groupSetsByExercise, findSetSlots, secondsToMinutes, workoutRowValues, metersToMiles, metersToFeet,
+  normalizeDate, normalizeRangeToMax, todayStr,
+  slotKey, groupSetsByExercise, secondsToMinutes, metersToMiles, metersToFeet,
   parseDurationMinutes, findUnknownFields, findStaleExerciseNames,
   formatWeight, describeLoad, isSetLogged, buildSchedulePlan,
-  resolveSetTarget, planSetUpdates, describeSetState, findStaleSetRows,
+  describeSetState,
   prepareSchedule, startedAtUtc, denverOffset,
 } from './domain.js';
 
@@ -50,26 +50,14 @@ test('normalizeRangeToMax leaves non-numeric values alone', () => {
   assert.equal(normalizeRangeToMax(undefined), '');
 });
 
-test('groupTemplateRows groups by template and sorts exercises by order', () => {
-  const rows = [
-    { template_id: 't2', template_name: 'Pull', order: 2, exercise_name: 'Row' },
-    { template_id: 't1', template_name: 'Push', order: 2, exercise_name: 'Fly' },
-    { template_id: 't1', template_name: 'Push', order: 1, exercise_name: 'Bench' },
-    { template_id: 't2', template_name: 'Pull', order: 1, exercise_name: 'Pullup' },
-  ];
-  const grouped = groupTemplateRows(rows);
-
-  // Templates come back alphabetically by name.
-  assert.deepEqual(grouped.map((t) => t.name), ['Pull', 'Push']);
-  assert.deepEqual(grouped[0].exercises.map((e) => e.exercise_name), ['Pullup', 'Row']);
-  assert.deepEqual(grouped[1].exercises.map((e) => e.exercise_name), ['Bench', 'Fly']);
-});
-
 // --- set slots ------------------------------------------------------
 // The same exercise can appear in two sections of one workout (a warmup and a
 // primary of the same lift). Those are separate slots with separate set
 // numbering — matching on exercise_id alone made "primary set 1" resolve to
 // the warmup row and overwrite it.
+//
+// Resolution moved to the Apps Script API (#134); grouping stays here because
+// thrive_get_workout and thrive_list_workouts narrate by slot.
 
 const slotSets = [
   { workout_id: 'w1', exercise_id: 'ex_ohp', exercise_name: 'OH Press', section: 'warmup', exercise_order: 1, set_number: 1 },
@@ -94,37 +82,6 @@ test('groupSetsByExercise orders slots by exercise_order and sets by set number'
   assert.deepEqual(slots[1].sets.map((s) => s.set_number), [1, 2, 3]);
 });
 
-test('findSetSlots returns every slot when nothing narrows it', () => {
-  const slots = findSetSlots(slotSets, { workout_id: 'w1', exercise_id: 'ex_ohp' });
-  assert.equal(slots.length, 2);
-});
-
-test('findSetSlots narrows by section', () => {
-  const slots = findSetSlots(slotSets, { workout_id: 'w1', exercise_id: 'ex_ohp', section: 'primary' });
-  assert.equal(slots.length, 1);
-  assert.equal(slots[0].sets.length, 3);
-  assert.equal(slots[0].sets[0].set_number, 1);
-});
-
-test('findSetSlots narrows by exercise_order', () => {
-  const slots = findSetSlots(slotSets, { workout_id: 'w1', exercise_id: 'ex_ohp', exercise_order: 1 });
-  assert.equal(slots.length, 1);
-  assert.equal(slots[0].section, 'warmup');
-});
-
-test('findSetSlots stays inside the given workout', () => {
-  const slots = findSetSlots(slotSets, { workout_id: 'w2', exercise_id: 'ex_ohp' });
-  assert.equal(slots.length, 1);
-  assert.equal(slots[0].sets.length, 1);
-});
-
-test('findSetSlots returns nothing for a section the exercise is not in', () => {
-  assert.equal(
-    findSetSlots(slotSets, { workout_id: 'w1', exercise_id: 'ex_ohp', section: 'cooldown' }).length,
-    0,
-  );
-});
-
 test('slotKey separates the same exercise in two positions', () => {
   assert.notEqual(slotKey(slotSets[0]), slotKey(slotSets[2]));
   assert.equal(slotKey(slotSets[2]), slotKey(slotSets[3]));
@@ -146,33 +103,6 @@ test('secondsToMinutes tells a genuine zero apart from an absent value', () => {
   assert.equal(secondsToMinutes(''), null);
 });
 
-// --- #102: session effort is independent of set effort --------------
-
-test('a workout row carries session effort in column M', () => {
-  const w = {
-    id: 'w1', date: '2026-03-15', time: '07:00', type: 'weight', name: 'Push',
-    template_id: '', notes: '', elapsed_seconds: '3720', created: '', copied_from: '',
-    status: '', moving_seconds: '', effort: 'Hard', distance_m: '', ascent_m: '',
-    descent_m: '', avg_hr: '',
-    sub_type: '', source: '', source_activity_id: '', raw_ref: '', fit_ref: '',
-    fit_fetched_at: '', synced_at: '', started_at_utc: '', calories: '',
-  };
-  const row = workoutRowValues(w);
-  // #128 widened the tab to A:Z; M must not have moved.
-  assert.equal(row.length, 26);
-  assert.equal(row[12], 'Hard', 'effort belongs in column M');
-});
-
-test('an unset session effort writes an empty cell, never a default', () => {
-  const w = {
-    id: 'w1', date: '2026-03-15', time: '07:00', type: 'weight', name: 'Push',
-    template_id: '', notes: '', elapsed_seconds: '', created: '', copied_from: '',
-    status: '', moving_seconds: '', effort: '', distance_m: '', ascent_m: '',
-    descent_m: '', avg_hr: '',
-  };
-  assert.equal(workoutRowValues(w)[12], '');
-});
-
 // --- #103: cardio unit conversions mirror frontend/src/api/units.ts --
 
 test('metersToMiles reads 19956 m back as 12.4 mi', () => {
@@ -191,20 +121,6 @@ test('cardio conversions return null for an unset value, not 0', () => {
 test('cardio conversions keep a deliberate zero distinct from unset', () => {
   assert.equal(metersToMiles('0'), 0);
   assert.equal(metersToFeet('0'), 0);
-});
-
-test('a workout row carries cardio attributes in columns N-Q', () => {
-  const w = {
-    id: 'w1', date: '2026-03-15', time: '07:00', type: 'bike', name: 'Ride',
-    template_id: '', notes: '', elapsed_seconds: '6180', created: '', copied_from: '',
-    status: '', moving_seconds: '', effort: '', distance_m: '19956', ascent_m: '457',
-    descent_m: '', avg_hr: '136',
-  };
-  const row = workoutRowValues(w);
-  assert.equal(row[13], '19956', 'distance belongs in column N');
-  assert.equal(row[14], '457', 'ascent belongs in column O');
-  assert.equal(row[15], '', 'descent stays empty');
-  assert.equal(row[16], '136', 'avg HR belongs in column Q');
 });
 
 // --- #117: agent-supplied durations and undeclared fields ------------
@@ -354,91 +270,8 @@ test('isSetLogged ignores a prescribed weight on a planned workout (AC1)', () =>
 });
 
 // --- #119: bulk set updates ------------------------------------------
-
-const bench = { id: 'ex_bench', name: 'Bench Press BB' };
-const rope = { id: 'ex_rope', name: 'Cable Tricep Pushdown Rope' };
-const bulkLib = [bench, rope];
-const setRow = (o) => ({
-  workout_id: 'w1', planned_reps: '', weight: '', reps: '', effort: '', ...o,
-});
-const bulkSets = [
-  setRow({ exercise_id: 'ex_bench', exercise_name: bench.name, section: 'warmup', exercise_order: 1, set_number: 1, sheetRow: 10 }),
-  ...[1, 2, 3].map((n) => setRow({
-    exercise_id: 'ex_bench', exercise_name: bench.name, section: 'primary', exercise_order: 2,
-    set_number: n, planned_reps: '8', weight: '115', sheetRow: 10 + n,
-  })),
-  setRow({ exercise_id: 'ex_rope', exercise_name: rope.name, section: 'SS2', exercise_order: 3, set_number: 1, planned_reps: '12', weight: '40', sheetRow: 14 }),
-  setRow({ workout_id: 'w2', exercise_id: 'ex_bench', exercise_name: bench.name, section: 'primary', exercise_order: 1, set_number: 1, sheetRow: 20 }),
-];
-
-test('resolveSetTarget keeps thrive_update_set\'s exact wording (AC5)', () => {
-  assert.throws(
-    () => resolveSetTarget(bulkSets, bench, { workout_id: 'w1', set_number: 9, section: 'primary' }),
-    { message: 'No set 9 of Bench Press BB [primary] in workout w1 — that slot has sets 1..3.' },
-  );
-  assert.throws(
-    () => resolveSetTarget(bulkSets, bench, { workout_id: 'w1', set_number: 1 }),
-    /Bench Press BB appears 2 times in workout w1 — \[warmup\] exercise_order 1, 1 sets; \[primary\] exercise_order 2, 3 sets\. Pass section or exercise_order/,
-  );
-  const { target } = resolveSetTarget(bulkSets, bench, { workout_id: 'w1', set_number: '2', section: 'primary' });
-  assert.equal(target.sheetRow, 12, 'a string set number from the wire still matches');
-});
-
-test('planSetUpdates changes only the fields each entry passes (AC1)', () => {
-  const { changes, errors } = planSetUpdates(bulkSets, 'w1', [
-    { exercise: 'Bench Press BB', section: 'primary', set_number: 3, reps: '6', effort: 'Hard' },
-    { exercise: 'Cable Tricep Pushdown Rope', set_number: 1, reps: '10' },
-  ], resolveFrom(bulkLib));
-  assert.deepEqual(errors, []);
-  assert.equal(changes.length, 2);
-  assert.deepEqual(
-    [changes[0].after.weight, changes[0].after.reps, changes[0].after.effort, changes[0].after.planned_reps],
-    ['115', '6', 'Hard', '8'],
-  );
-  assert.equal(changes[0].before.reps, '', 'the fetched row is not mutated');
-  assert.equal(changes[1].after.sheetRow, 14);
-});
-
-test('planSetUpdates lists every bad entry by index (AC2)', () => {
-  const { errors } = planSetUpdates(bulkSets, 'w1', [
-    { exercise: 'Bench Press BB', section: 'primary', set_number: 1, reps: '8' },
-    { exercise: 'Bench Press BB', section: 'primary', set_number: 9, reps: '8' },
-    { exercise: 'Bench Press BB', set_number: 1, reps: '8' },
-    { exercise: 'Skull Crushers', set_number: 1, reps: '8' },
-  ], resolveFrom(bulkLib));
-  assert.equal(errors.length, 3);
-  assert.match(errors[0], /^updates\[1\] "Bench Press BB" set 9: No set 9 of Bench Press BB \[primary\]/);
-  assert.match(errors[1], /^updates\[2\] .*appears 2 times .*Pass section or exercise_order/);
-  assert.match(errors[2], /^updates\[3\] "Skull Crushers" set 1: No exercise matching/);
-});
-
-test('planSetUpdates rejects two entries aimed at the same set (AC3)', () => {
-  const { errors } = planSetUpdates(bulkSets, 'w1', [
-    { exercise: 'Bench Press BB', section: 'primary', set_number: 2, reps: '8' },
-    { exercise: 'ex_bench', exercise_order: 2, set_number: 2, effort: 'Hard' },
-  ], resolveFrom(bulkLib));
-  assert.equal(errors.length, 1);
-  assert.match(errors[0], /^updates\[1\] .*targets the same set as updates\[0\]/);
-});
-
-test('planSetUpdates refuses unknown fields and empty entries', () => {
-  const { errors } = planSetUpdates(bulkSets, 'w1', [
-    { exercise: 'Bench Press BB', section: 'primary', set_number: 1, reps: '6', notes: 'grinder' },
-    { exercise: 'Bench Press BB', section: 'primary', set_number: 2 },
-  ], resolveFrom(bulkLib));
-  assert.match(errors[0], /unknown field "notes"/);
-  assert.match(errors[1], /nothing to change/);
-});
-
-test('findStaleSetRows flags a row that now holds a different set (AC4)', () => {
-  const rows = bulkSets.slice(1, 3);
-  const fresh = rows.map((s) => [s.workout_id, s.exercise_id, s.exercise_name, s.section, String(s.exercise_order), String(s.set_number)]);
-  assert.deepEqual(findStaleSetRows(rows, fresh), []);
-
-  const shifted = [fresh[1], ['w9', 'ex_other', 'Row', 'primary', '1', '1']];
-  assert.deepEqual(findStaleSetRows(rows, shifted), rows);
-  assert.deepEqual(findStaleSetRows(rows, []), rows, 'a row that vanished is stale too');
-});
+// Resolution, the same-set guard and all-or-nothing writes are the API's now
+// (apps-script/tests/sets-*.test.ts). The narration of the result stays here.
 
 test('describeSetState echoes the resulting row', () => {
   assert.equal(
@@ -527,63 +360,8 @@ test('prepareSchedule needs exercises for weight workouts only', () => {
   assert.deepEqual([hike.errors.length, hike.rows.length, hike.workout.type], [0, 0, 'hike']);
 });
 
-// --- #128: Workouts A:Z -------------------------------------------
-
-function bareWorkout(overrides = {}) {
-  return {
-    id: 'w_001', date: '2026-03-15', time: '07:00', type: 'weight',
-    name: 'Upper Push A', template_id: '', notes: '', elapsed_seconds: '3720',
-    created: '2026-03-15T07:00:00.000Z', copied_from: '', status: '',
-    moving_seconds: '', effort: '', distance_m: '', ascent_m: '',
-    descent_m: '', avg_hr: '',
-    sub_type: '', source: '', source_activity_id: '', raw_ref: '',
-    fit_ref: '', fit_fetched_at: '', synced_at: '', started_at_utc: '',
-    calories: '',
-    ...overrides,
-  };
-}
-
-// AC2: sheetsAppend writes every value it is handed regardless of the range,
-// so a short row leaves stale cells and a row of undefined writes "undefined".
-test('a workout row spans all twenty-six columns, A:Z', () => {
-  assert.equal(workoutRowValues(bareWorkout()).length, 26);
-});
-
-test('the nine sync columns write empty strings, never undefined', () => {
-  const row = workoutRowValues(bareWorkout());
-  assert.deepEqual(row.slice(17), ['', '', '', '', '', '', '', '', '']);
-  assert.equal(row.some((cell) => cell === undefined), false);
-});
-
-test('a workout row carries sync provenance in columns R-Z', () => {
-  const row = workoutRowValues(bareWorkout({
-    sub_type: 'gravel',
-    source: 'coros',
-    source_activity_id: '4821',
-    raw_ref: 'drive_raw_1',
-    fit_ref: 'drive_fit_1',
-    fit_fetched_at: '2026-03-15T09:00:00.000Z',
-    synced_at: '2026-03-15T09:01:00.000Z',
-    started_at_utc: '2026-03-15T07:00:00-06:00',
-    calories: '612',
-  }));
-  assert.equal(row[17], 'gravel');                     // R
-  assert.equal(row[18], 'coros');                      // S
-  assert.equal(row[19], '4821');                       // T
-  assert.equal(row[20], 'drive_raw_1');                // U
-  assert.equal(row[21], 'drive_fit_1');                // V
-  assert.equal(row[22], '2026-03-15T09:00:00.000Z');   // W
-  assert.equal(row[23], '2026-03-15T09:01:00.000Z');   // X
-  assert.equal(row[24], '2026-03-15T07:00:00-06:00');  // Y
-  assert.equal(row[25], '612');                        // Z
-});
-
-test('the activity attributes stay at L-Q and do not shift', () => {
-  const row = workoutRowValues(bareWorkout({ effort: 'Hard', sub_type: 'gravel' }));
-  assert.equal(row[8], '2026-03-15T07:00:00.000Z');    // I Created
-  assert.equal(row[12], 'Hard');                       // M Effort
-  assert.equal(row[16], '');                           // Q Avg HR
-});
+// --- #128: started_at_utc, DST-aware ---------------------------------
+// Kept client-side for scripts/migrate-128-workouts-a-to-z.mjs.
 
 // AC4: the offset is resolved per row, for that row's own date.
 test('startedAtUtc applies MST in January and MDT in July', () => {

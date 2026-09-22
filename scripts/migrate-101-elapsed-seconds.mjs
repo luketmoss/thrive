@@ -21,7 +21,7 @@
  *   node scripts/migrate-101-elapsed-seconds.mjs
  */
 
-import { JWT } from '../mcp-server/node_modules/google-auth-library/build/src/index.js';
+import { JWT } from 'google-auth-library';
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const DRY_RUN = process.argv.includes('--dry-run');
