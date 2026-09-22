@@ -127,7 +127,9 @@ async function resolveWorkout(workoutId) {
   try {
     return await fetchWorkout(workoutId);
   } catch (err) {
-    if (err instanceof ApiError && /not found/.test(err.message)) {
+    // Only the API's own missing-workout answer. `Sheet "Workouts" not found`
+    // also says "not found", and must not be passed off as a bad id.
+    if (err instanceof ApiError && /^Workout ".*" not found$/.test(err.message)) {
       throw new Error(`No workout with id "${workoutId}".`);
     }
     throw err;
