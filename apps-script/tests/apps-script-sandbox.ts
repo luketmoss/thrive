@@ -24,13 +24,57 @@ const SRC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..',
 export type Sandbox = Record<string, any>;
 
 /** A value as a Sheets range hands it back. */
-export type CellValue = string | number | boolean | Date;
+export type CellValue = string | number | boolean | Date | SheetFormula;
+
+/** What a cell holds when a write began with `=`: a live formula, not text. */
+export class SheetFormula {
+  constructor(public source: string) {}
+}
+
+// A parsed date remembers how it was typed, because that is what Sheets
+// displays: "2026-03-04" typed into a cell shows as "2026-03-04".
+const typedAs = new WeakMap<Date, string>();
 
 /**
- * A fake Sheet covering the surface `utils.js` and `workouts.js` use.
+ * What Sheets stores when a script writes `value` with appendRow/setValues.
+ *
+ * Those behave like typing into the cell, NOT like the REST API's RAW mode
+ * the SPA uses (#132). A date- or time-shaped string becomes a date, a
+ * number-shaped one a number, a leading `=` a formula. A leading apostrophe is
+ * the escape: the rest is stored as literal text and the apostrophe dropped.
+ *
+ * The fake used to store whatever it was handed, which is how 94 DailySummary
+ * rows went out with real dates in column A and nothing noticed.
+ */
+export function storeAsTyped(value: CellValue): CellValue {
+  if (typeof value !== 'string') return value;
+  if (value.startsWith("'")) return value.slice(1);
+  if (value.startsWith('=')) return new SheetFormula(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value) || /^\d{1,2}:\d{2}(:\d{2})?$/.test(value)) {
+    const d = new Date(/^\d{4}/.test(value) ? `${value}T00:00:00` : `1899-12-30T${value.padStart(5, '0')}`);
+    typedAs.set(d, value);
+    return d;
+  }
+  if (/^-?\d+(\.\d+)?$/.test(value)) return Number(value);
+  return value;
+}
+
+/** What getDisplayValues — and the SPA's FORMATTED_VALUE read — shows. */
+export function displayOf(value: CellValue | undefined): string {
+  if (value === undefined || value === null) return '';
+  if (value instanceof SheetFormula) return '#FORMULA';
+  if (value instanceof Date) return typedAs.get(value) ?? value.toString();
+  return String(value);
+}
+
+/**
+ * A fake Sheet covering the surface the sources use.
  *
  * `rows` is the live backing array, so a test asserts on what the sheet holds
- * afterwards rather than on what the code claims it did.
+ * afterwards rather than on what the code claims it did. Fixture rows stand
+ * for data the SPA already wrote with RAW, so they are kept exactly as given;
+ * every write through the script API goes through `storeAsTyped`, as it would
+ * in Sheets.
  */
 export function makeSheet(rows: CellValue[][], columnCount = 26) {
   return {
@@ -42,7 +86,7 @@ export function makeSheet(rows: CellValue[][], columnCount = 26) {
       return columnCount;
     },
     appendRow(row: CellValue[]) {
-      rows.push(row);
+      rows.push(row.map(storeAsTyped));
     },
     // 1-based sheet row, header included — `deleteRow(2)` removes the first
     // data row. Modelling the shift is the point: a delete that re-used a
@@ -52,18 +96,27 @@ export function makeSheet(rows: CellValue[][], columnCount = 26) {
       rows.splice(rowNum - 2, 1);
     },
     getRange(startRow: number, startCol: number, numRows: number, numCols: number) {
+      const slice = () => rows
+        .slice(startRow - 2, startRow - 2 + numRows)
+        .map((r) => r.slice(startCol - 1, startCol - 1 + numCols));
       return {
+        // Raw stored values: Date objects and numbers where Sheets parsed.
         getValues() {
-          return rows
-            .slice(startRow - 2, startRow - 2 + numRows)
-            .map((r) => r.slice(startCol - 1, startCol - 1 + numCols));
+          return slice();
+        },
+        getDisplayValues() {
+          return slice().map((r) => {
+            const out: string[] = [];
+            for (let c = 0; c < numCols; c++) out.push(displayOf(r[c]));
+            return out;
+          });
         },
         setValues(values: CellValue[][]) {
           for (let i = 0; i < numRows; i++) {
             const target = startRow - 2 + i;
             if (!rows[target]) rows[target] = [];
             for (let c = 0; c < numCols; c++) {
-              rows[target][startCol - 1 + c] = values[i][c];
+              rows[target][startCol - 1 + c] = storeAsTyped(values[i][c]);
             }
           }
         },

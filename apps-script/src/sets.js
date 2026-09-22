@@ -296,7 +296,7 @@ function applySetUpdates(workoutId, updates) {
   var targets = plan.changes.map(function (c) { return c.after; });
 
   var fresh = targets.map(function (t) {
-    return sheet.getRange(t.sheetRow, 1, 1, SET_IDENTITY_COLUMN_COUNT).getValues()[0];
+    return sheet.getRange(t.sheetRow, 1, 1, SET_IDENTITY_COLUMN_COUNT).getDisplayValues()[0];
   });
   var stale = findStaleSetRows(targets, fresh);
   if (stale.length) {
@@ -309,7 +309,7 @@ function applySetUpdates(workoutId, updates) {
   }
 
   for (var i = 0; i < targets.length; i++) {
-    sheet.getRange(targets[i].sheetRow, 1, 1, SET_COLUMN_COUNT).setValues([setToRow(targets[i])]);
+    sheet.getRange(targets[i].sheetRow, 1, 1, SET_COLUMN_COUNT).setValues([asText(setToRow(targets[i]))]);
   }
 
   return { changes: plan.changes, applied: true };
@@ -322,7 +322,7 @@ function appendSets(sets) {
   var appended = [];
   for (var i = 0; i < sets.length; i++) {
     var row = setToRow(sets[i]);
-    sheet.appendRow(row);
+    sheet.appendRow(asText(row));
     appended.push(rowToSet(row, sheet.getLastRow()));
   }
   return appended;

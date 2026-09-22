@@ -97,7 +97,7 @@ function createExercise(data) {
     created: isoNow(),
   };
   var sheet = getSheet(EXERCISES_SHEET);
-  sheet.appendRow(exerciseToRow(ex));
+  sheet.appendRow(asText(exerciseToRow(ex)));
   ex.sheetRow = sheet.getLastRow();
   return ex;
 }
@@ -167,7 +167,7 @@ function updateExercise(id, changes) {
     existing[key] = cell(changes[key]);
   }
 
-  sheet.getRange(rowNum, 1, 1, EXERCISE_COLUMN_COUNT).setValues([exerciseToRow(existing)]);
+  sheet.getRange(rowNum, 1, 1, EXERCISE_COLUMN_COUNT).setValues([asText(exerciseToRow(existing))]);
 
   var cascaded = { templates: 0, sets: 0 };
   if (changes.name !== undefined) {
@@ -196,7 +196,7 @@ function cascadeExerciseName(exerciseId, name) {
   for (var i = 0; i < templateStale.length; i++) {
     templateSheet
       .getRange(templateStale[i].row.sheetRow, TEMPLATE_FIELDS.indexOf('exercise_name') + 1, 1, 1)
-      .setValues([[name]]);
+      .setValues([asText([name])]);
   }
 
   var setsSheet = getSheet(SETS_SHEET);
@@ -205,7 +205,7 @@ function cascadeExerciseName(exerciseId, name) {
   for (var j = 0; j < setsStale.length; j++) {
     setsSheet
       .getRange(setsStale[j].row.sheetRow, SET_FIELDS.indexOf('exercise_name') + 1, 1, 1)
-      .setValues([[name]]);
+      .setValues([asText([name])]);
   }
 
   return { templates: templateStale.length, sets: setsStale.length };

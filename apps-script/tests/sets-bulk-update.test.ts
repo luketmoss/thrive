@@ -117,12 +117,14 @@ describe('AC2: one bad entry rejects the whole batch', () => {
     let resolved = false;
     sheet.getRange = (r: number, c: number, nr: number, nc: number) => {
       const range = realGetRange(r, c, nr, nc);
-      const values = range.getValues;
-      range.getValues = () => {
-        const out = values();
+      // Every read goes through display values (#132), so that is the call
+      // to intercept.
+      const display = range.getDisplayValues;
+      range.getDisplayValues = () => {
+        const out = display();
         // Once the full read has happened, corrupt the identity re-read.
         if (resolved && nc === a.sandbox.SET_IDENTITY_COLUMN_COUNT) {
-          return [['w_other', 'ex_other', '', '', '', 99]];
+          return [['w_other', 'ex_other', '', '', '', '99']];
         }
         resolved = true;
         return out;

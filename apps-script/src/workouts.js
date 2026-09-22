@@ -50,7 +50,7 @@ function getWorkout(id) {
   var sheet = getSheet(WORKOUTS_SHEET);
   var rowNum = findWorkoutRow(sheet, id);
   if (rowNum === -1) return null;
-  var row = sheet.getRange(rowNum, 1, 1, WORKOUT_COLUMN_COUNT).getValues()[0];
+  var row = sheet.getRange(rowNum, 1, 1, WORKOUT_COLUMN_COUNT).getDisplayValues()[0];
   return rowToWorkout(row, rowNum);
 }
 
@@ -122,7 +122,7 @@ function createWorkout(data) {
   if (!workout.created) workout.created = isoNow();
 
   var sheet = getSheet(WORKOUTS_SHEET);
-  sheet.appendRow(workoutToRow(workout));
+  sheet.appendRow(asText(workoutToRow(workout)));
   workout.sheetRow = sheet.getLastRow();
   return workout;
 }
@@ -149,7 +149,7 @@ function updateWorkout(id, changes) {
   }
 
   var existing = rowToWorkout(
-    sheet.getRange(rowNum, 1, 1, WORKOUT_COLUMN_COUNT).getValues()[0],
+    sheet.getRange(rowNum, 1, 1, WORKOUT_COLUMN_COUNT).getDisplayValues()[0],
     rowNum
   );
 
@@ -157,7 +157,7 @@ function updateWorkout(id, changes) {
     if (Object.prototype.hasOwnProperty.call(fields, key)) existing[key] = fields[key];
   }
 
-  sheet.getRange(rowNum, 1, 1, WORKOUT_COLUMN_COUNT).setValues([workoutToRow(existing)]);
+  sheet.getRange(rowNum, 1, 1, WORKOUT_COLUMN_COUNT).setValues([asText(workoutToRow(existing))]);
   return existing;
 }
 
