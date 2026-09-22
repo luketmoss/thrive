@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 
 process.env.THRIVE_API_URL = 'https://example.test/macros/s/DEPLOYMENT/exec';
 process.env.THRIVE_API_KEY = 'test-key';
+process.env.THRIVE_READ_RETRY_DELAYS_MS = '1,1';
 
 const api = await import('./api.js');
 const { chunkByPayload, ApiError, MAX_ENCODED_PAYLOAD } = api;
@@ -71,6 +72,38 @@ test('a web page instead of JSON is explained, not reported as a parse error', a
     assert.doesNotMatch(err.message, /Unexpected token/);
     return true;
   });
+});
+
+// --- transient pages: reads retry, writes never do -------------------------
+
+const PAGE = { status: 404, body: '<html><title>Page Not Found</title></html>' };
+const OK = { body: { success: true, data: [{ id: 'w_1' }] } };
+
+// #132's QA hit a run of these 404 pages that cleared on their own.
+test('a read retries a transient page and then succeeds', async () => {
+  const urls = stubFetch((url, n) => (n === 1 ? PAGE : OK));
+  assert.deepEqual(await api.fetchWorkouts(), [{ id: 'w_1' }]);
+  assert.equal(urls.length, 2);
+});
+
+test('a read gives up after three attempts and explains', async () => {
+  const urls = stubFetch(() => PAGE);
+  await assert.rejects(api.fetchWorkouts(), /returned 404 with a web page instead of JSON/);
+  assert.equal(urls.length, 3);
+});
+
+// A page does not prove the write failed; retrying a create would duplicate it.
+test('a write is sent exactly once, even when the answer is a page', async () => {
+  const urls = stubFetch(() => PAGE);
+  await assert.rejects(api.createWorkout({ type: 'weight', name: 'Push' }), /web page instead of JSON/);
+  assert.equal(urls.length, 1);
+});
+
+// success: false is the script's real answer, not a transport blip.
+test('an API refusal is never retried', async () => {
+  const urls = stubFetch(() => ({ body: { success: false, error: 'Workout "w_x" not found' } }));
+  await assert.rejects(api.fetchWorkout('w_x'), /not found/);
+  assert.equal(urls.length, 1);
 });
 
 // --- chunking (#132 AC5) --------------------------------------------------

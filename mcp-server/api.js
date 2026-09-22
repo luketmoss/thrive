@@ -32,6 +32,21 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * A response that never reached doGet — Google served a page instead of the
+ * script's JSON. Usually misconfiguration, but Apps Script also serves these
+ * transiently under bursts: #132's QA saw a run of 404 pages that cleared on
+ * their own.
+ */
+class NotReachedError extends ApiError {}
+
+/**
+ * Backoff before each read retry. Writes are never retried — see apiWrite.
+ * Overridable only so the tests need not sleep for real.
+ */
+const READ_RETRY_DELAYS_MS = (process.env.THRIVE_READ_RETRY_DELAYS_MS ?? '1000,3000')
+  .split(',').filter(Boolean).map(Number);
+
 /** One request. Every API response is `{ success, data?, error? }`. */
 async function call(action, params = {}, payload) {
   const url = new URL(API_URL);
@@ -52,12 +67,13 @@ async function call(action, params = {}, payload) {
     // Not JSON means the request never reached doGet: a Google sign-in page,
     // an "Access denied" page, or a 404 for a deployment that is not a web
     // app. Each looks nothing like its cause, so name the likely ones.
-    throw new ApiError(
+    throw new NotReachedError(
       action,
       `The Thrive API returned ${res.status} with a web page instead of JSON, so the request ` +
-      'never reached the script. Check that THRIVE_API_URL is the /exec URL of a web-app ' +
-      'deployment with anonymous access, and that its owner has authorized it by opening that ' +
-      'URL once in a browser. See apps-script/README.md.',
+      'never reached the script. If this keeps happening, check that THRIVE_API_URL is the ' +
+      '/exec URL of a web-app deployment with anonymous access, and that its owner has ' +
+      'authorized it by opening that URL once in a browser (apps-script/README.md). Apps ' +
+      'Script also serves these pages briefly under load, so a one-off is usually transient.',
     );
   }
 
@@ -65,7 +81,29 @@ async function call(action, params = {}, payload) {
   return parsed.data;
 }
 
-export const apiGet = (action, params) => call(action, params);
+/**
+ * A read, retried when Google answers with a page instead of the script.
+ *
+ * Safe because a read changes nothing. An API refusal (`success: false`) is
+ * the script's real answer and is never retried.
+ */
+export async function apiGet(action, params) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await call(action, params);
+    } catch (err) {
+      if (!(err instanceof NotReachedError) || attempt >= READ_RETRY_DELAYS_MS.length) throw err;
+      await new Promise((r) => setTimeout(r, READ_RETRY_DELAYS_MS[attempt]));
+    }
+  }
+}
+
+/**
+ * A write, sent exactly once. Never retried automatically: a page instead of
+ * JSON does not prove the write did not land, and retrying a create would
+ * then duplicate it. The error goes back to the agent, which can read before
+ * deciding to try again.
+ */
 export const apiWrite = (action, payload) => call(action, {}, payload);
 
 /**
