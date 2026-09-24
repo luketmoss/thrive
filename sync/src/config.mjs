@@ -38,3 +38,29 @@ export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 export const DRIVE_ROOT_FOLDER = 'Thrive COROS';
 export const APP_PROPERTY_ROOT = { kind: 'thrive-coros-root' };
 export const APP_PROPERTY_TOKEN = { kind: 'coros-token' };
+
+/**
+ * Every date the sync computes is local to this zone, never the runner's
+ * clock: Actions runners are UTC, and 6 pm in Denver is already tomorrow there.
+ */
+export const SYNC_TIME_ZONE = 'America/Denver';
+
+/**
+ * The rolling window (#152): D − 10 days to D + 1 day, where D is the local run
+ * date. Ten days back, not sync plan §6's seven, because a multi-day
+ * backpacking trip reaches the COROS cloud only when the phone gets signal
+ * again (§6, §17 item 2). The extra calls are summary-level, and an unchanged
+ * payload is re-read but never re-written. The day ahead is a time-zone guard.
+ * #153 and #156 inherit these.
+ */
+export const WINDOW_DAYS_BACK = 10;
+export const WINDOW_DAYS_AHEAD = 1;
+
+/** `querySleepHrv` refuses a range longer than this (#133). */
+export const HRV_MAX_DAYS = 7;
+
+/** Well above a 12-day window's worth, so the list is never truncated. */
+export const SPORT_RECORDS_LIMIT = 100;
+
+/** Folders under `Thrive COROS`, found again by this property plus their path. */
+export const APP_PROPERTY_FOLDER_KIND = 'thrive-coros-folder';
