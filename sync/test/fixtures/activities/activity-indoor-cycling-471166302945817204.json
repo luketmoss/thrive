@@ -1,0 +1,22 @@
+{
+  "source": "coros",
+  "activity_id": "471166302945817204",
+  "tool": "getActivityDetail",
+  "args": {
+    "labelId": "471166302945817204",
+    "sportType": 201
+  },
+  "list_entry": {
+    "activityId": "471166302945817204",
+    "sportType": 201,
+    "name": "Indoor Cycling",
+    "date": "2026-09-24",
+    "startTimestamp": 1790270652,
+    "endTimestamp": 1790270749,
+    "text": "1. Indoor Cycling — 2026-09-24\n   Location: Indoor Bike\n   Time Window: startTimestamp=1790270652 | endTimestamp=1790270749\n   Duration: 1:37\n | Avg HR: 79 bpm | Calories: 4 kcal\n   LabelId: 471166302945817204 | SportType: 201"
+  },
+  "payload": "\"🚴 Indoor Cycling Activity Details\\n========================================\\n\\nWorkout Time: 1:37\\nTotal Time: 1:37\\nCalories: 4 kcal\\nAverage Heart Rate: 79 bpm\\nElevation Gain / Loss: 0 m / 0 m\\nEfficiency Factor: 655.35\\nVariation Index: 655.35\\nAerobic TE: 0.0\\nAnaerobic TE: 0.0\\nPerformance: -1\"",
+  "payload_hash": "8899135118cfa4c140bf57b4c3d1cde74d726d877ef8074c56b6b46d4487a023",
+  "fetched_at": "2026-09-24T17:41:03.260Z",
+  "normalized": null
+}

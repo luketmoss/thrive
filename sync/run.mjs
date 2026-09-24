@@ -2,7 +2,8 @@
 // One sync run: get a COROS access token — refreshing and persisting it if it
 // is near expiry (#151) — land the window's raw COROS payloads in the bot
 // account's Drive (#152), then normalize from that archive into the sheet
-// through the Thrive API: DailyHealth (#165), then the DailySummary rollup.
+// through the Thrive API: DailyHealth (#165) and Workouts (#166), then the
+// DailySummary rollup.
 //
 //   node run.mjs [--force-refresh]
 //
@@ -11,7 +12,7 @@
 //
 // Exits non-zero if anything failed, so Actions' failure email fires
 // (sync plan §10) — including a single activity that could not be fetched, or
-// a single date whose health text was in a format the parser did not know.
+// a single date or activity whose text was in a format the parser did not know.
 
 import { createArchive } from './src/archive.mjs';
 import { createDrive } from './src/drive.mjs';
@@ -57,7 +58,9 @@ async function main() {
     const failures = [...summary.failures];
     try {
       const api = createThriveApi(loadThriveApiConfig());
-      const sheet = await writeSheet({ archive, api, window: summary.window, syncedAt });
+      const sheet = await writeSheet({
+        archive, api, window: summary.window, activityIds: summary.activityIds, syncedAt,
+      });
       failures.push(...sheet.failures);
     } catch (err) {
       failures.push(redact(err.message || String(err)));

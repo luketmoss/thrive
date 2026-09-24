@@ -23,6 +23,12 @@
 // DailyHealth rows are addressed by date (#165):
 //   ?action=upsertDailyHealth&key=...&payload={"rows":[{"date":"2026-09-23",
 //     "steps":"2617","raw_ref":"<drive id>"}],"synced_at":"2026-09-24T13:25:32.000Z"}
+//
+// Synced activities are addressed by vendor ID, and merged (#166):
+//   ?action=upsertSyncedWorkout&key=...&payload={"source":"coros",
+//     "source_activity_id":"471166302945817201","incoming":{"date":"2026-09-24",
+//     "type":"bike","sub_type":"gravel","name":"Gravel Bike",...},
+//     "last_written":null,"raw_ref":"<drive id>","synced_at":"2026-09-24T17:41:10.000Z"}
 
 /**
  * Every response uses this shape — success, rejection and thrown error alike
@@ -326,6 +332,21 @@ function doGet(e) {
           break;
         }
         result = { success: true, data: upsertDailyHealth(payload.rows, payload.synced_at) };
+        break;
+
+      // --- Synced workouts (#166) ---
+      // The COROS sync's merge, by (source, source_activity_id). A write, so
+      // key-only: it must never be added to #144's token read allow-list.
+      case 'upsertSyncedWorkout':
+        if (!payload.incoming) {
+          result = fail('payload.incoming field required');
+          break;
+        }
+        if (!Object.prototype.hasOwnProperty.call(payload, 'last_written')) {
+          result = fail('payload.last_written field required (null when nothing was written before)');
+          break;
+        }
+        result = { success: true, data: upsertSyncedWorkout(payload) };
         break;
 
       default:

@@ -6,9 +6,9 @@ It is a plain Node script with no model in the loop. It runs in GitHub Actions
 
 It authorizes against COROS and keeps the rotating token in Drive (#151), lands
 the window's raw COROS payloads in Drive, unmodified (#152), then normalizes
-daily health from that archive into the sheet's `DailyHealth` tab through the
-Thrive API and rebuilds `DailySummary` for the window (#165). Activities are
-#166's.
+daily health (#165) and activities (#166) from that archive into the sheet's
+`DailyHealth` and `Workouts` tabs through the Thrive API, and rebuilds
+`DailySummary` for the window.
 
 ## Credentials
 
@@ -146,10 +146,61 @@ D − 10 to D:
 - Rows go to `upsertDailyHealth` in batches under the API's payload limit
   (11 full dates take two), each row carrying `raw_ref` (the bundle's Drive file
   ID) and the run's single `synced_at`.
-- Then, once and last, `rebuildDailySummary(D − 10, D)`, so `DailySummary!M–Q`
-  pick up the new values. A date with health data and no workouts gets a
-  health-only summary row. #166's activity writes go before it, in
-  `src/sheet.mjs`.
+- Then, once and last, after the activities below, `rebuildDailySummary(D − 10, D)`,
+  so `DailySummary` picks up both. A date with health data and no workouts gets a
+  health-only summary row.
+
+## Activities into the sheet (#166)
+
+Every activity the run's list named is read back from the archive and merged
+into `Workouts`, on every run, not only when its payload changed: the merge is
+idempotent, and a parser fix then re-applies without a replay.
+
+**Type from the sport code** (`src/sport-codes.mjs`):
+
+| Code | `type` | `sub_type` |
+|---|---|---|
+| 100 run, 102 trail run, 103 track run | `run` | `outdoor` |
+| 101 indoor run | `run` | `indoor` |
+| 104 hike | `hike` | blank |
+| 200 bike, 202 e-bike, 299 helmet bike | `bike` | blank: terrain unknown, never defaulted |
+| 201 indoor bike | `bike` | `indoor` |
+| 203 gravel bike | `bike` | `gravel` |
+| 204 mountain bike, 205 mountain e-bike | `bike` | `mountain` |
+| 900 walk | `walk` | `outdoor` if the list entry has `Start Coordinates`, else `indoor` |
+| 402 strength | archived, no row: #155's | |
+| anything else | archived, no row, logged with its ID and code; not a failure | |
+
+**Numbers from the detail prose** (`src/normalize-activity.mjs`), strictly, as
+in #165: an unused label is ignored, a used label with a value or unit the
+parser does not know fails that activity (no row, the line logged, the run
+non-zero), and an absent label is blank, never 0.
+
+| Field | From |
+|---|---|
+| `date`, `time`, `started_at_utc` | the list entry's `startTimestamp`, in `America/Denver`; `started_at_utc` is ISO 8601 with the offset then in effect |
+| `name` | the list entry's name (the detail payload has none) |
+| `elapsed_seconds` | `Total Time`, else the list entry's end − start (a walk has no `Total Time`) |
+| `moving_seconds` | `Workout Time`: timer time with pauses removed, COROS's nearest to moving time |
+| `distance_m` | `Distance: 0.52 km`, ×1000. COROS shows two decimals, so 10 m resolution |
+| `ascent_m`, `descent_m` | `Elevation Gain / Loss: 3 m / 3 m`. No ascent indoors; descent for `hike` only (`cardioFieldsFor()`) |
+| `avg_hr`, `calories` | `Average Heart Rate: 84 bpm`, `Calories: 17 kcal` |
+
+Durations read `m:ss`/`mm:ss`, and `h:mm:ss` **unconfirmed**: nothing archived
+so far ran over an hour.
+
+**The merge runs in the API** (`upsertSyncedWorkout`, see `apps-script/README.md`).
+The sync sends the normalized fields as `incoming` and the archive's
+`normalized` as `last_written`; the action writes a field only while the sheet
+still holds what the sync last wrote, so a rename or a corrected `sub_type`
+made in Thrive survives every later run. What the sheet then holds is written
+back to the archive's `normalized` (only when it changed), with `edited`
+naming the fields the user changed. A row deleted in Thrive is not recreated.
+
+**A rename in COROS** shows only in the list, which #152 archived only when the
+detail changed. The archive now also refreshes an activity's `list_entry` when
+it changed, ignoring its position in the list, so the name follows it (unless
+the name was edited in Thrive).
 
 A missing `THRIVE_API_URL`/`THRIVE_API_KEY` costs the sheet write, never the
 archive: the run archives first, then fails naming both.
@@ -167,6 +218,8 @@ archive: the run archives first, then fails naming both.
 | `health <date>: not written, unrecognized format in <tool>: …` | COROS changed how it words a value the parser reads | Fix `src/normalize-health.mjs` for the quoted line, then re-run. The archive still holds the text |
 | `THRIVE_API_URL and THRIVE_API_KEY not set` | The Actions secrets are missing | `gh secret set THRIVE_API_URL` and `gh secret set THRIVE_API_KEY` |
 | `DailyHealth: …` / `DailySummary rebuild: …` | The Thrive API refused the write or was unreachable | Read the quoted error. The next run re-sends the whole window |
+| `activity <id>: not written, unrecognized format in getActivityDetail: …` | COROS changed how it words a value the activity parser reads | Fix `src/normalize-activity.mjs` for the quoted line, then re-run. The archive still holds the text |
+| `activity <id>: upsertSyncedWorkout: N Workouts rows are coros activity …` | Two rows claim one COROS activity | Delete all but one in Thrive, then re-run |
 
 ## How the token is kept
 

@@ -1,12 +1,13 @@
 // The run's sheet step (#165): after the archive has landed, normalize from it
 // and write to the sheet through the Thrive API, then rebuild the rollup once.
 //
-// Order matters for AC5: `rebuildDailySummary` runs exactly once, after every
-// sheet write in the run. #166's activity writes belong inside
-// `writeSheet`, before the rollup, not after it.
+// Order matters (#165 AC5, #166 AC5): `rebuildDailySummary` runs exactly
+// once, after every sheet write in the run — DailyHealth, then the window's
+// activities (#166).
 
 import { parseHealthBundle } from './normalize-health.mjs';
 import { redact } from './redact.mjs';
+import { syncActivities } from './sync-activities.mjs';
 
 /**
  * Parse the run date's archived health bundle and upsert its rows.
@@ -50,11 +51,13 @@ export async function syncDailyHealth({ archive, api, runDate, syncedAt, log = c
  * dates that did land. The rollup itself failing is recorded the same way.
  *
  * @param {{ archive: object, api: object, window: { start: string, runDate: string },
- *   syncedAt: string, log?: (line: string) => void }} opts
- * @returns {Promise<{ health: object | null, rollup: object | null, failures: string[] }>}
+ *   activityIds?: string[], syncedAt: string, log?: (line: string) => void }} opts
+ *   `activityIds` is every activity the run's list named (ingest's summary).
+ * @returns {Promise<{ health: object | null, activities: object | null,
+ *   rollup: object | null, failures: string[] }>}
  */
-export async function writeSheet({ archive, api, window, syncedAt, log = console.log }) {
-  const out = { health: null, rollup: null, failures: [] };
+export async function writeSheet({ archive, api, window, activityIds = [], syncedAt, log = console.log }) {
+  const out = { health: null, activities: null, rollup: null, failures: [] };
 
   try {
     out.health = await syncDailyHealth({ archive, api, runDate: window.runDate, syncedAt, log });
@@ -65,7 +68,16 @@ export async function writeSheet({ archive, api, window, syncedAt, log = console
     log(`  FAILED ${message}`);
   }
 
-  // #166: activity writes go here, before the rollup.
+  try {
+    out.activities = await syncActivities({ archive, api, activityIds, syncedAt, log });
+    out.failures.push(...out.activities.failures);
+    const a = out.activities;
+    log(`  Workouts: ${a.created} created, ${a.updated} updated, ${a.deleted} deleted in Thrive and left so, ${a.skipped} skipped`);
+  } catch (err) {
+    const message = `Workouts: ${redact(err.message || String(err))}`;
+    out.failures.push(message);
+    log(`  FAILED ${message}`);
+  }
 
   try {
     out.rollup = await api.rebuildDailySummary(window.start, window.runDate, syncedAt);

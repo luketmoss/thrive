@@ -1,0 +1,22 @@
+{
+  "source": "coros",
+  "activity_id": "471166302945817202",
+  "tool": "getActivityDetail",
+  "args": {
+    "labelId": "471166302945817202",
+    "sportType": 900
+  },
+  "list_entry": {
+    "activityId": "471166302945817202",
+    "sportType": 900,
+    "name": "Walk",
+    "date": "2026-09-24",
+    "startTimestamp": 1790269803,
+    "endTimestamp": 1790270084,
+    "text": "3. Walk — 2026-09-24\n   Location: Marshall Walk\n   Start Coordinates: 39.862001, -105.215000\n   Time Window: startTimestamp=1790269803 | endTimestamp=1790270084\n   Duration: 4:41 | Distance: 362 m\n   Average Pace: 12:56 /km | Avg HR: 83 bpm | Calories: 12 kcal\n   LabelId: 471166302945817202 | SportType: 900"
+  },
+  "payload": "\"🚶 Walk Activity Details\\n========================================\\n\\nWorkout Time: 4:41\\nDistance: 0.36 km\\nAverage Pace: 12:56 /km\\nMoving Average Pace: 12:41 /km\\nSteps: 468\\nAverage Heart Rate: 83 bpm\\nAverage Cadence: 100 spm\\nCalories: 12 kcal\"",
+  "payload_hash": "8e21d581514d8af4f8ff3df7f956428a8587a4534619ac83864fd6bb5051ea36",
+  "fetched_at": "2026-09-24T17:41:06.502Z",
+  "normalized": null
+}

@@ -147,13 +147,17 @@ function guardPayload(tool, payload) {
 
 /**
  * @returns {Promise<{ window: object, activities: { created: number, updated: number,
- *   unchanged: number }, failures: string[], health: string | null }>}
+ *   unchanged: number }, activityIds: string[], failures: string[], health: string | null }>}
  *   `failures` is empty on a clean run. The caller exits non-zero otherwise.
+ *   `activityIds` is every activity the list named, fetched or not: #166
+ *   merges each one from whatever the archive holds for it.
  * @throws CorosUnavailableError when the activity list cannot be fetched.
  */
 export async function ingest({ client, archive, now = Date.now(), log = console.log, retry = {} }) {
   const window = syncWindow(now);
-  const summary = { window, activities: { created: 0, updated: 0, unchanged: 0 }, failures: [], health: null };
+  const summary = {
+    window, activities: { created: 0, updated: 0, unchanged: 0 }, activityIds: [], failures: [], health: null,
+  };
   log(`Window ${window.start} to ${window.end} (run date ${window.runDate}, America/Denver).`);
 
   // --- activities ---------------------------------------------------------
@@ -171,6 +175,7 @@ export async function ingest({ client, archive, now = Date.now(), log = console.
     summary.failures.push(`${LIST_TOOL} returned ${entries.length} records, its limit; the list may be truncated`);
   }
   log(`${entries.length} ${entries.length === 1 ? 'activity' : 'activities'} in the window.`);
+  summary.activityIds = entries.map((e) => e.activityId);
 
   for (const entry of entries) {
     const args = { labelId: entry.activityId, sportType: entry.sportType };

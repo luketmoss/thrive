@@ -1,9 +1,9 @@
 name: coros-sync
 
 # The COROS → Thrive sync (epic #163). Manual only for now: #151 authorizes,
-# #152 archives the window's raw payloads in the bot's Drive, #165 normalizes
-# daily health into the sheet through the Thrive API and rebuilds the
-# DailySummary rollup, and #156 adds the schedule.
+# #152 archives the window's raw payloads in the bot's Drive, #165 and #166
+# normalize daily health and activities into the sheet through the Thrive API
+# and rebuild the DailySummary rollup, and #156 adds the schedule.
 on:
   workflow_dispatch:
     inputs:

@@ -804,6 +804,26 @@ be visible somewhere, minimally in `SyncLog`'s counts.
 `raw_ref`, `fit_ref`, `synced_at`, `source` and `source_activity_id` are
 sync-owned and always overwritten. They are not user-editable fields.
 
+**Where the merge runs — decided in thrive#166.** Inside the Apps Script API
+action `upsertSyncedWorkout`, not in `sync/`. Reading the row, comparing and
+writing happen in one execution, so an edit made in the SPA between a
+separate read and write cannot be lost, and §10's identity check (re-read
+`S`/`T` before writing) comes free. The sync sends `incoming` and
+`last_written` (the archive's `normalized`) as domain objects; the merged and
+sync-owned field lists live in `apps-script/src/types.js`. `fit_ref` and
+`fit_fetched_at` are #154's, and the action leaves them alone. Two more
+cases, both from #166:
+
+- `last_written` null while a row exists (a run wrote the sheet but failed to
+  write `normalized` back): fill blanks only, overwrite nothing.
+- `last_written` set but no row: the user deleted it. Not recreated.
+
+**Edits are sticky.** `normalized` records what the sheet holds after the
+merge, so the next run compares against the truth. On its own that would
+make an edited field look untouched on the run after, and overwrite the edit
+a run late. So `normalized.edited` names every field the user has changed,
+and a field named there is never written again for that activity.
+
 ---
 
 ## 9. Scheduling
@@ -1186,10 +1206,6 @@ already answered are not repeated.
 4. Should a mis-detected sport type be correctable in Thrive's UI, given §8
    makes the row editable but `type` and `sub_type` drive which cardio
    fields render?
-5. **[DECIDE §2]** COROS tools return prose, not structured data. Parse the
-   text, or take activity numbers from the FIT file and parse text only for
-   what FIT lacks (daily health has no FIT equivalent)? FIT-first is stabler
-   but spends the 50-file allowance on every activity — fine at 1–2 a day.
 
 ### Settled
 
@@ -1206,6 +1222,14 @@ already answered are not repeated.
   `docs/data-architecture.md` §2 is the normative statement.
 - **§13 — `run` cardio fields.** Outdoor `run` gets distance, ascent and HR.
   No descent. Indoor variants drop ascent entirely.
+- **§2 — Activity numbers come from the detail prose, parsed strictly**
+  (decided in #153, built in #166; formerly item 5). Not FIT-first, so
+  activities do not spend the 50-a-day FIT allowance or wait on #154. A label
+  the parser does not use is ignored; a label it uses with a value or unit
+  it does not recognize fails that activity loudly (no row, the line logged,
+  the run non-zero), and nothing is ever silently blanked. The start time and
+  the name come from the archived `querySportRecords` entry, because the
+  detail payload carries neither.
 
 ---
 

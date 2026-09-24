@@ -1,0 +1,22 @@
+{
+  "source": "coros",
+  "activity_id": "471166302945817203",
+  "tool": "getActivityDetail",
+  "args": {
+    "labelId": "471166302945817203",
+    "sportType": 104
+  },
+  "list_entry": {
+    "activityId": "471166302945817203",
+    "sportType": 104,
+    "name": "Hike",
+    "date": "2026-09-24",
+    "startTimestamp": 1790270198,
+    "endTimestamp": 1790270405,
+    "text": "2. Hike — 2026-09-24\n   Location: Marshall Hike\n   Start Coordinates: 39.861002, -105.212004\n   Time Window: startTimestamp=1790270198 | endTimestamp=1790270405\n   Duration: 3:27 | Distance: 264 m\n   Average Speed: 4.6 km/h | Avg HR: 86 bpm | Calories: 9 kcal\n   LabelId: 471166302945817203 | SportType: 104"
+  },
+  "payload": "\"🏃 Hike Activity Details\\n========================================\\n\\nWorkout Time: 3:27\\nDistance: 0.26 km\\nTotal Time: 3:27\\nAverage Speed: 4.6 km/h\\nMoving Average Speed: 5.0 km/h\\nAverage Heart Rate: 86 bpm\\nElevation Gain / Loss: 4 m / 1 m\\nCalories: 9 kcal\\nAerobic TE: 0.0\\nAnaerobic TE: 0.0\"",
+  "payload_hash": "a538f8b6a4c6e96512bf95184e9f335e99792c6f223684b6338eab8596fb5df9",
+  "fetched_at": "2026-09-24T17:41:04.873Z",
+  "normalized": null
+}

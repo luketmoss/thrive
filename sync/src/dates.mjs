@@ -21,6 +21,35 @@ export function localDate(instant, timeZone = SYNC_TIME_ZONE) {
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
+const clockFormatters = new Map();
+
+/**
+ * An instant as local wall-clock terms in `timeZone` (#166 AC2): the calendar
+ * date, `HH:MM`, and ISO 8601 with the offset in effect then, e.g.
+ * `2026-09-19T14:03:00-06:00`. The offset is measured, not assumed, so an
+ * MST date gets -07:00 and an MDT date -06:00.
+ */
+export function localDateTime(instant, timeZone = SYNC_TIME_ZONE) {
+  if (!clockFormatters.has(timeZone)) {
+    clockFormatters.set(timeZone, new Intl.DateTimeFormat('en-US', {
+      timeZone, hourCycle: 'h23',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    }));
+  }
+  const ms = Math.floor(new Date(instant).getTime() / 1000) * 1000;
+  const p = Object.fromEntries(
+    clockFormatters.get(timeZone).formatToParts(new Date(ms)).map((x) => [x.type, x.value]),
+  );
+  const date = `${p.year}-${p.month}-${p.day}`;
+  const clock = `${p.hour}:${p.minute}:${p.second}`;
+  const offsetMin = Math.round((Date.parse(`${date}T${clock}Z`) - ms) / 60000);
+  const sign = offsetMin < 0 ? '-' : '+';
+  const abs = Math.abs(offsetMin);
+  const offset = `${sign}${String(Math.floor(abs / 60)).padStart(2, '0')}:${String(abs % 60).padStart(2, '0')}`;
+  return { date, time: `${p.hour}:${p.minute}`, iso: `${date}T${clock}${offset}` };
+}
+
 /** `date` moved by `n` calendar days. */
 export function addDays(date, n) {
   return new Date(Date.parse(`${date}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);

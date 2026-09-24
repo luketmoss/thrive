@@ -54,6 +54,34 @@ var WORKOUT_FIELDS = [
 var WORKOUT_TYPES = ['weight', 'stretch', 'bike', 'hike', 'run', 'walk'];
 
 /**
+ * A synced activity's fields, as `upsertSyncedWorkout` treats them (#166,
+ * sync plan §8).
+ *
+ * Merged: three-way. The incoming value is written only while the sheet still
+ * holds what the sync last wrote; once the user edits a field in Thrive, that
+ * field stops tracking the vendor for that activity.
+ *
+ * Sync-owned: always overwritten. Not user-editable.
+ *
+ * Every other column is never set by the action: `effort`, `notes`,
+ * `status`, `template_id`, `copied_from` stay the user's, and `fit_ref` /
+ * `fit_fetched_at` belong to #154's FIT step.
+ */
+var SYNC_MERGED_FIELDS = [
+  'date', 'time', 'type', 'sub_type', 'name',
+  'elapsed_seconds', 'moving_seconds', 'distance_m', 'ascent_m', 'descent_m',
+  'avg_hr', 'calories', 'started_at_utc',
+];
+
+var SYNC_OWNED_FIELDS = ['source', 'source_activity_id', 'raw_ref', 'synced_at'];
+
+/** Merged fields that hold a whole number (seconds, meters, bpm, kcal) or ''. */
+var SYNC_INTEGER_FIELDS = [
+  'elapsed_seconds', 'moving_seconds', 'distance_m', 'ascent_m', 'descent_m',
+  'avg_hr', 'calories',
+];
+
+/**
  * Venue/terrain values the API will accept.
  *
  * Note the tension with #129, which made `sub_type` a free string in the SPA
