@@ -1,0 +1,20 @@
+{
+  "name": "thrive-sync",
+  "version": "1.0.0",
+  "private": true,
+  "description": "COROS → Thrive sync (epic #163). Authorizes against COROS, keeps its rotating token in the bot account's Drive, and — from #152 on — archives and normalizes COROS data.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "google-authorize": "node google-authorize.mjs",
+    "authorize": "node authorize.mjs",
+    "start": "node run.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "google-auth-library": "^9.15.0"
+  }
+}

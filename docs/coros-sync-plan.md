@@ -283,7 +283,7 @@ consumer of a pattern that is already built and tested.
   [ sync job — GitHub Actions, nightly cron ]
       |
       +--- raw JSON payload + .fit blob ------> Google Drive
-      |                                            (service account owns)
+      |                                            (bot account owns — #151)
       +--- normalized rows -------------------> Groundwork sheet
                                                    (service account writes)
                                                         |
@@ -332,8 +332,9 @@ Practical consequences:
   historical import is the only real pressure, and it is already specified
   as a resumable queue rather than one long run.
 - **The sync holds three credentials**: COROS OAuth tokens (stored in
-  Drive), the Google service account (Drive blobs only — no Sheets scope
-  needed any more), and the Thrive API key as a static Actions secret.
+  Drive), the bot account's own Google OAuth credential (Drive only,
+  `drive.file` — *amended by #151*, see Token storage below), and the Thrive
+  API key as a static Actions secret.
 - **CI needs a third job.** `.github/workflows/ci.yml` runs `frontend` and
   `mcp-server` and is deliberately not path-filtered, because `/ship`
   refuses to merge a PR whose checks are absent. A `sync` job follows the
@@ -351,9 +352,20 @@ cannot write back to its own repo secrets without a PAT carrying
 `secrets:write` plus libsodium encryption of the new value.
 
 **Recommended:** keep the rotating refresh token in a **single-purpose Drive
-file** the service account already owns and can rewrite freely. The client
-ID is the only static credential — the client is public, so there is no
-secret — and it can sit in an ordinary Actions secret.
+file** the sync creates and can rewrite freely. The client ID is the only
+static COROS credential — the client is public, so there is no secret — and
+it lives in that same file (#151), so a re-authorization that re-registers
+updates the ID and the tokens in one write.
+
+**Amended by #151: the bot account owns Drive, not the service account.** A
+service account has no Drive storage quota, and the Google account behind
+Thrive is free Gmail (luketmossbot@gmail.com), which has no shared drives. So
+the sync signs in to Drive as the bot account with its own OAuth client,
+scope `drive.file` — it sees only files it created — and everything it
+creates counts against the bot's 15 GB. Google refresh tokens do not rotate
+once the consent screen is published to Production, so that one is an
+ordinary Actions secret. The service account stays with `mcp-server/` and
+`scripts/` for Sheets. Setup is in `sync/README.md`.
 
 Rotation puts three rules on the job:
 

@@ -14,5 +14,10 @@ scripts/.migrate-*-backup-*.json
 # resumable backfill progress (scripts/backfill-*.mjs)
 scripts/.backfill-*-progress.json
 
+# COROS sync (#151) — the bot account's Google credential for local runs,
+# written by sync/google-authorize.mjs. In Actions it comes from secrets.
+sync/.google-credentials.json
+client_secret*.json
+
 # Claude Code per-machine permissions — personal, never shared
 .claude/settings.local.json
