@@ -102,6 +102,17 @@ export function createArchive(drive, { now = () => Date.now() } = {}) {
       });
     },
 
+    /**
+     * The run date's health bundle as archived, with its Drive file ID (the
+     * rows' `raw_ref`), or null if no run has landed one. #165 normalizes from
+     * this rather than from memory, so a re-parse and a run read the same text.
+     */
+    async readHealth(runDate) {
+      const file = await drive.findOne(healthProps(runDate));
+      if (!file) return null;
+      return { fileId: file.id, data: await drive.readJson(file.id) };
+    },
+
     /** The run date's daily-health bundle: every health call, as served. */
     upsertHealth({ runDate, window, calls }) {
       const [yyyy, mm] = runDate.split('-');

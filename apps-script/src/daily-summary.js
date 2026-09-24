@@ -12,7 +12,7 @@
 // Journal scrolls.
 
 var DAILY_SUMMARY_SHEET = 'DailySummary';
-var DAILY_HEALTH_SHEET = 'DailyHealth';
+// DAILY_HEALTH_SHEET is declared in daily-health.js, with the tab's writes.
 
 /**
  * Venue modifiers whose activities are excluded from distance and ascent.
@@ -127,7 +127,13 @@ function summarizeEffort(workouts) {
   };
 }
 
-/** A DailyHealth row by date, or null. The tab may not exist yet. */
+/**
+ * Every DailyHealth row, by date. The tab may not exist yet.
+ *
+ * Mapped through DAILY_HEALTH_FIELDS, never by position: #131 wrote this
+ * against a placeholder layout (steps in B, resting HR in C) before anyone had
+ * seen a payload, and #165 replaced it with sync plan §5's.
+ */
 function getDailyHealth() {
   var spreadsheet = getSpreadsheet();
   var sheet = spreadsheet.getSheetByName(DAILY_HEALTH_SHEET);
@@ -138,15 +144,9 @@ function getDailyHealth() {
   var rows = getAllRows(sheet);
   var byDate = {};
   for (var i = 0; i < rows.length; i++) {
-    var date = cell(rows[i][0]);
-    if (!date) continue;
-    byDate[date] = {
-      steps: cell(rows[i][1]),
-      resting_hr: cell(rows[i][2]),
-      hrv: cell(rows[i][3]),
-      sleep_total_s: cell(rows[i][4]),
-      training_load: cell(rows[i][5]),
-    };
+    var health = rowToDailyHealth(rows[i]);
+    if (!health.date) continue;
+    byDate[health.date] = health;
   }
   return byDate;
 }

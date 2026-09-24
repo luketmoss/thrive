@@ -4,9 +4,11 @@ The COROS → Thrive sync (epic #163, design in `docs/coros-sync-plan.md`).
 It is a plain Node script with no model in the loop. It runs in GitHub Actions
 (`.github/workflows/coros-sync.yml`).
 
-It authorizes against COROS and keeps the rotating token in Drive (#151), then
-lands the window's raw COROS payloads in Drive, unmodified (#152). It writes
-nothing to the sheet yet: #153 normalizes from the archive.
+It authorizes against COROS and keeps the rotating token in Drive (#151), lands
+the window's raw COROS payloads in Drive, unmodified (#152), then normalizes
+daily health from that archive into the sheet's `DailyHealth` tab through the
+Thrive API and rebuilds `DailySummary` for the window (#165). Activities are
+#166's.
 
 ## Credentials
 
@@ -15,6 +17,7 @@ nothing to the sheet yet: #153 normalizes from the archive.
 | Bot account's Google OAuth client ID and secret | Actions secrets `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` | No |
 | Bot account's Drive refresh token (`drive.file`) | Actions secret `GOOGLE_DRIVE_REFRESH_TOKEN` | No, once published to Production |
 | COROS client ID, refresh and access tokens | `Thrive COROS/coros-token.json` in the bot's Drive | **Yes, on every refresh** |
+| Thrive API URL and key | Actions secrets `THRIVE_API_URL` (the Apps Script `/exec` URL) and `THRIVE_API_KEY` (its `API_KEY` script property); environment variables for a local run | No |
 
 **Why Drive, and why the bot account.** COROS rotates its refresh token on every use, and a workflow
 cannot rewrite its own secrets, so the current token lives in a Drive file the sync rewrites. The
@@ -118,6 +121,39 @@ The tools and arguments, from the live `tools/list`:
 `querySportRecords` and `querySleepHrv` mark every argument required in their schemas, but
 accept these subsets. A run checks `tools/list` first and fails naming any tool that has gone.
 
+## Daily health into the sheet (#165)
+
+After the archive lands, the run reads **the run date's health bundle back from
+Drive** and parses it (`src/normalize-health.mjs`) into one row per local date,
+D − 10 to D:
+
+| Field | From |
+|---|---|
+| `resting_hr` | `queryRestingHeartRate` (not `queryDailyHealthData`'s header, a window summary) |
+| `hrv` | `querySleepHrv`'s official daily average, never the raw series |
+| `steps`, `calories`, `sleep_*_s` | `queryDailyHealthData`. `sleep_total_s` includes awake time |
+| `sleep_score`, `bed_time`, `wake_time` | `querySleepOverview`, main sleep window |
+| `training_load` | `queryTrainingLoadAssessment`'s short-term load |
+| `vo2max`, `recovery` | `queryFitnessAssessmentOverview`, `queryRecoveryStatus`: the run date's row only |
+
+- **Blank, never 0.** A value the text does not carry is sent as `''`. A date
+  every tool was silent about gets no row.
+- **Strict.** A label the parser does not use is ignored. A label it does use
+  with a value, unit or shape it does not recognize fails **that date**: the
+  date gets no row, the log names the date, tool and line, the other dates are
+  still written, and the run exits non-zero. The archive is never modified, so
+  the fix is a parser change and a re-run.
+- Rows go to `upsertDailyHealth` in batches under the API's payload limit
+  (11 full dates take two), each row carrying `raw_ref` (the bundle's Drive file
+  ID) and the run's single `synced_at`.
+- Then, once and last, `rebuildDailySummary(D − 10, D)`, so `DailySummary!M–Q`
+  pick up the new values. A date with health data and no workouts gets a
+  health-only summary row. #166's activity writes go before it, in
+  `src/sheet.mjs`.
+
+A missing `THRIVE_API_URL`/`THRIVE_API_KEY` costs the sheet write, never the
+archive: the run archives first, then fails naming both.
+
 ## When a run fails
 
 | Error | Meaning | Fix |
@@ -128,6 +164,9 @@ accept these subsets. A run checks `tools/list` first and fails naming any tool 
 | `CorosUnavailableError` | COROS is down or erroring after 3 attempts | Nothing. The next run retries |
 | `N failure(s): activity …` | One activity's detail, or the health bundle, failed after 3 attempts. Everything else landed | Nothing, if it clears on the next run. If one activity keeps failing, look at its logged error |
 | `COROS no longer offers …` | A tool was renamed or removed | Check `tools/list` and update `src/ingest.mjs` |
+| `health <date>: not written, unrecognized format in <tool>: …` | COROS changed how it words a value the parser reads | Fix `src/normalize-health.mjs` for the quoted line, then re-run. The archive still holds the text |
+| `THRIVE_API_URL and THRIVE_API_KEY not set` | The Actions secrets are missing | `gh secret set THRIVE_API_URL` and `gh secret set THRIVE_API_KEY` |
+| `DailyHealth: …` / `DailySummary rebuild: …` | The Thrive API refused the write or was unreachable | Read the quoted error. The next run re-sends the whole window |
 
 ## How the token is kept
 

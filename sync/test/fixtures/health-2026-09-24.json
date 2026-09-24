@@ -1,0 +1,69 @@
+{
+  "source": "coros",
+  "kind": "health",
+  "run_date": "2026-09-24",
+  "window": {
+    "start": "2026-09-14",
+    "end": "2026-09-25"
+  },
+  "calls": [
+    {
+      "tool": "queryDailyHealthData",
+      "args": {
+        "days": 11
+      },
+      "payload": "\"Daily Health Data — Last 11 days | Resting HR: 58 bpm | HRV Baseline: 39 ms\\nNote: sleep entries are dated by their wake-up day.\\n\\n--- 20260922 ---\\nSteps: 412 | Calories: 38 kcal | Exercise: 3 min\\nStress: Avg 31\\n\\n--- 20260923 ---\\nSteps: 2,617 | Calories: 412 kcal | Exercise: 44 min | Floors: 3\\nStress: Avg 26\\nSleep Summary:\\n  Total: 7h 15min | Deep: 52 min | Light: 4h 22min | REM: 1h 43min | Awake: 18 min\\n  Sleep HR: Avg 57 bpm | Min 46 bpm | Max 84 bpm\""
+    },
+    {
+      "tool": "querySleepOverview",
+      "args": {
+        "startDate": "20260914",
+        "endDate": "20260925"
+      },
+      "payload": "\"Sleep Overview\\n========================\\nNote: each record below is dated by its wake-up day.\\n\\n2026-09-22\\nSleep Score: 0\\nSleep detail for this day is not available yet.\\n\\n2026-09-23\\nSleep Score: 84\\nDaily Sleep: 6h 57min (incl. naps)\\nMain Sleep (asleep): 6h 57min\\nMain Sleep Period (incl. awake): 7h 15min\\nSleep metrics scope: daily\\nDeep Sleep Ratio: 12%\\nLight Sleep Ratio: 60%\\nREM Ratio: 24%\\nAwake Ratio: 4%\\nAwake Time: 18 min\\nAwake Count (>5 min): 1\\nMain Sleep Window: 2026-09-22 22:51 - 2026-09-23 06:06\\nNaps Total: 0 min\\n\\n2026-09-24\\nSleep detail for this day is not available yet.\\n\\n2026-09-25\\nSleep detail for this day is not available yet.\""
+    },
+    {
+      "tool": "queryRestingHeartRate",
+      "args": {
+        "days": 11
+      },
+      "payload": "\"Resting Heart Rate — Last 11 days\\n========================\\n\\n2026-09-23: 57 bpm\\n2026-09-22: No data\""
+    },
+    {
+      "tool": "queryTrainingLoadAssessment",
+      "args": {
+        "days": 11
+      },
+      "payload": "\"Training Load Assessment\\n========================\\n\\n2026-09-24\\nComment: Unknown\\nShort-Term Load: 9\\nLong-Term Load: 2\\n\\n2026-09-23\\nComment: Unknown\\nShort-Term Load: 7\\nLong-Term Load: 2\""
+    },
+    {
+      "tool": "querySleepHrv",
+      "args": {
+        "startDate": "20260914",
+        "endDate": "20260920"
+      },
+      "payload": "\"Sleep HRV — 2026-09-14 to 2026-09-20\\n========================\\nNote: dates are wake-up days (each value comes from the night that ended that morning).\\n\\nNo data found in the last 7 days.\\n\\nNo sleep HRV time series data found in the last 7 days.\""
+    },
+    {
+      "tool": "querySleepHrv",
+      "args": {
+        "startDate": "20260921",
+        "endDate": "20260925"
+      },
+      "payload": "\"Sleep HRV — 2026-09-21 to 2026-09-25\\n========================\\nNote: dates are wake-up days (each value comes from the night that ended that morning).\\n\\nHRV Assessment — Last 5 days\\n========================\\n\\n2026-09-23:\\n  HRV Avg: 41 ms\\n\\nSleep HRV Time Series — Last 5 days\\n========================\\n\\n2026-09-22: no official sleep HRV value for this day; raw HRV points omitted.\\n2026-09-23:\\n  timestamp=1790144870, timezone=-24, hrv=58 ms, status=4, confidence=100000\\n  timestamp=1790145470, timezone=-24, hrv=69 ms, status=4, confidence=100000\\n  timestamp=1790146070, timezone=-24, hrv=39 ms, status=4, confidence=100000\\n  timestamp=1790146670, timezone=-24, hrv=82 ms, status=4, confidence=100000\\n  timestamp=1790147570, timezone=-24, hrv=52 ms, status=4, confidence=100000\\n  timestamp=1790148470, timezone=-24, hrv=22 ms, status=4, confidence=100000\\n  timestamp=1790149070, timezone=-24, hrv=75 ms, status=4, confidence=100000\\n  timestamp=1790149670, timezone=-24, hrv=84 ms, status=4, confidence=100000\\n  timestamp=1790150570, timezone=-24, hrv=55 ms, status=4, confidence=100000\\n  timestamp=1790151170, timezone=-24, hrv=88 ms, status=4, confidence=100000\\n  timestamp=1790151770, timezone=-24, hrv=86 ms, status=4, confidence=100000\\n  timestamp=1790152370, timezone=-24, hrv=36 ms, status=4, confidence=100000\\n  timestamp=1790153270, timezone=-24, hrv=22 ms, status=4, confidence=100000\\n  timestamp=1790153870, timezone=-24, hrv=49 ms, status=4, confidence=100000\\n  timestamp=1790154470, timezone=-24, hrv=63 ms, status=4, confidence=100000\\n  timestamp=1790155070, timezone=-24, hrv=76 ms, status=4, confidence=100000\\n  timestamp=1790155970, timezone=-24, hrv=70 ms, status=4, confidence=100000\\n  timestamp=1790156570, timezone=-24, hrv=67 ms, status=4, confidence=87652\\n  timestamp=1790157170, timezone=-24, hrv=46 ms, status=4, confidence=100000\\n  timestamp=1790157770, timezone=-24, hrv=77 ms, status=4, confidence=100000\\n  timestamp=1790158370, timezone=-24, hrv=52 ms, status=4, confidence=100000\\n  timestamp=1790158970, timezone=-24, hrv=69 ms, status=4, confidence=100000\\n  timestamp=1790159870, timezone=-24, hrv=77 ms, status=4, confidence=93313\\n  timestamp=1790160470, timezone=-24, hrv=45 ms, status=4, confidence=100000\\n  timestamp=1790161070, timezone=-24, hrv=37 ms, status=4, confidence=100000\\n  timestamp=1790161670, timezone=-24, hrv=67 ms, status=4, confidence=100000\\n  timestamp=1790162270, timezone=-24, hrv=26 ms, status=4, confidence=100000\\n  timestamp=1790162870, timezone=-24, hrv=78 ms, status=4, confidence=100000\\n  timestamp=1790163770, timezone=-24, hrv=43 ms, status=4, confidence=100000\\n  timestamp=1790164370, timezone=-24, hrv=46 ms, status=4, confidence=100000\\n  timestamp=1790164970, timezone=-24, hrv=84 ms, status=4, confidence=89302\\n  timestamp=1790165570, timezone=-24, hrv=62 ms, status=4, confidence=100000\\n  timestamp=1790166170, timezone=-24, hrv=83 ms, status=4, confidence=100000\""
+    },
+    {
+      "tool": "queryRecoveryStatus",
+      "args": {},
+      "payload": "\"Recovery Status\\n========================\\n\\nRecovery: 87%\\nLevel: Heavy training allowed\\nEstimated Full Recovery: 3h\""
+    },
+    {
+      "tool": "queryFitnessAssessmentOverview",
+      "args": {},
+      "payload": "\"Fitness Assessment Overview\\n========================\\n\\nThreshold Pace: 5:10 /km\""
+    }
+  ],
+  "payload_hash": "4eb5830bfaf0f76b55115cda5ab27644da686f3f0480721000c2d28307b9a074",
+  "fetched_at": "2026-09-24T13:25:47.000Z",
+  "normalized": null
+}

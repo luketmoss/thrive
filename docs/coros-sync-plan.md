@@ -542,14 +542,26 @@ rows/year is trivial for Sheets.
 | D | `steps` | `queryDailyHealthData` |
 | E | `calories` | `queryDailyHealthData` |
 | F–J | `sleep_*` | total / deep / REM / light / awake, in **seconds**, from `queryDailyHealthData`. Minute precision in practice. `sleep_total` is COROS's "Total", which *includes* awake time |
-| K | `sleep_score` | `querySleepData`, 0–100. Added by #133. Kept apart from almanac's self-reported `sleep_quality` — sleep is double-sourced |
+| K | `sleep_score` | `querySleepOverview` (named `querySleepData` in #133's notes), 0–100. Added by #133. Kept apart from almanac's self-reported `sleep_quality` — sleep is double-sourced. COROS's `Sleep Score: 0` for an unscored night is stored blank |
 | L | `vo2max` | EvoLab. **Current-state only** — a nightly snapshot, blank until the watch has an estimate |
 | M | `recovery` | EvoLab. **Current-state only** — a snapshot at job time, not a daily value |
-| N | `training_load` | EvoLab, per day |
-| O | `raw_ref` | Drive file ID |
-| P | `synced_at` | |
+| N | `training_load` | EvoLab, per day: `queryTrainingLoadAssessment`'s **short-term** load |
+| O | `bed_time` | Local `HH:mm`, start of `querySleepOverview`'s main sleep window. Added by #148/#165 |
+| P | `wake_time` | Local `HH:mm`, end of the main sleep window, on the wake-up day's row. Added by #148/#165 |
+| Q | `raw_ref` | Drive file ID of the health bundle the row was parsed from |
+| R | `synced_at` | The sync run's single timestamp |
 
-Shape verified in #133 (§2 item 4).
+Shape verified in #133 (§2 item 4). `bed_time`/`wake_time` were appended after
+`training_load` rather than placed beside the sleep durations, so B–N did not
+move. **There is no step-goal column:** no COROS tool returns a step goal, in
+any payload or tool description (#133), so #148's goal half does not exist.
+
+Written by #165: `scripts/migrate-165-daily-health-tab.mjs` creates the tab,
+the sync parses each run's archived health bundle (`sync/src/normalize-health.mjs`)
+and writes it through the API's `upsertDailyHealth`, keyed by date. A date
+whose text the parser does not recognize is not written at all, and the run
+exits non-zero. `vo2max` and `recovery` are written on the run date's row
+only; every other row omits them, so an earlier day's snapshot survives.
 
 Same nullable discipline as `Workouts!L–Q`: a day with no sleep data is
 blank, never `0`. A watch left on the charger overnight is not zero sleep.

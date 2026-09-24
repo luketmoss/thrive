@@ -36,7 +36,7 @@ Personal workout tracker: Preact SPA → Google Sheets REST API.
 - Demo mode provides a fake user and skips Google auth. Changes are not persisted.
 
 ## Data Model
-Google Sheet "Groundwork" with 5 tabs:
+Google Sheet "Groundwork" with these tabs:
 - **Exercises** (A:E): id, Name, Tags, Notes, Created
 - **Templates** (A:H): template_id, Template Name, Order, exercise_id, Exercise Name, Section, Sets, Reps
 - **Workouts** (A:Z): id, Date, Time, Type, Name, template_id, Notes, Elapsed (s), Created, copied_from, status,
@@ -44,6 +44,13 @@ Google Sheet "Groundwork" with 5 tabs:
   sub_type, source, source_activity_id, raw_ref, fit_ref, fit_fetched_at, synced_at, started_at_utc, calories
 - **Sets** (A:J): workout_id, exercise_id, Exercise Name, Section, Exercise Order, Set #, Planned Reps, Weight (lbs), Reps, Effort
 - **Labels** (A:D): id, name, color_key, created
+- **DailyHealth** (A:R): date, resting_hr, hrv, steps, calories, sleep_total_s,
+  sleep_deep_s, sleep_rem_s, sleep_light_s, sleep_awake_s, sleep_score, vo2max,
+  recovery, training_load, bed_time, wake_time, raw_ref, synced_at (#165). One
+  row per local date, written only by the COROS sync through `upsertDailyHealth`.
+  Every value is nullable: blank means COROS did not say, never `0`. Sleep is
+  filed under its wake-up day; `sleep_total_s` includes awake time; `vo2max` and
+  `recovery` are current-state snapshots. There is no step goal: COROS sends none.
 - **DailySummary** (A:R) — **derived, never authoritative** (#131). One row per
   local calendar day, rebuildable at any time from `Workouts` + `DailyHealth`.
   Nothing writes here by hand. If it disagrees with `Workouts`, `Workouts` is

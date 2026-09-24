@@ -1,0 +1,22 @@
+{
+  "source": "coros",
+  "activity_id": "471093115402967310",
+  "tool": "getActivityDetail",
+  "args": {
+    "labelId": "471093115402967310",
+    "sportType": 402
+  },
+  "list_entry": {
+    "activityId": "471093115402967310",
+    "sportType": 402,
+    "name": "Strength",
+    "date": "2026-09-23",
+    "startTimestamp": 1790170215,
+    "endTimestamp": 1790170339,
+    "text": "2. Strength — 2026-09-23\n   Location: Strength\n   Time Window: startTimestamp=1790170215 | endTimestamp=1790170339\n   Duration: 2:04 | Sets: 3\n | Avg HR: 88 bpm | Calories: 21 kcal\n   LabelId: 471093115402967310 | SportType: 402"
+  },
+  "payload": "\"🏋️ Strength Activity Details\\n========================================\\n\\nWorkout Time: 2:04\\nTotal Time: 2:04\\nSets: 3\\nAverage Heart Rate: 88 bpm\\nCalories: 21 kcal\\nAerobic TE: 0.4\\nAnaerobic TE: 0.1\"",
+  "payload_hash": "fba8cfb0e1d8f3ee41a89e45372777b756dfe28b27d7c3e99cfca8f8a0b89041",
+  "fetched_at": "2026-09-24T13:26:58.000Z",
+  "normalized": null
+}
