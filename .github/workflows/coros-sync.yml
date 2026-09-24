@@ -1,7 +1,8 @@
 name: coros-sync
 
-# The COROS → Thrive sync (epic #163). Manual only for now: #151 proves
-# authorization, and #156 adds the schedule.
+# The COROS → Thrive sync (epic #163). Manual only for now: #151 authorizes,
+# #152 archives the window's raw payloads in the bot's Drive (no sheet writes,
+# no Thrive API), and #156 adds the schedule.
 on:
   workflow_dispatch:
     inputs:

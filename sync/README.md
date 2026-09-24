@@ -4,8 +4,9 @@ The COROS → Thrive sync (epic #163, design in `docs/coros-sync-plan.md`).
 It is a plain Node script with no model in the loop. It runs in GitHub Actions
 (`.github/workflows/coros-sync.yml`).
 
-So far (#151) it authorizes against COROS, keeps the rotating token in Drive,
-and proves both with one authenticated read. #152 adds ingestion.
+It authorizes against COROS and keeps the rotating token in Drive (#151), then
+lands the window's raw COROS payloads in Drive, unmodified (#152). It writes
+nothing to the sheet yet: #153 normalizes from the archive.
 
 ## Credentials
 
@@ -77,6 +78,46 @@ Actions → **coros-sync** → Run workflow, with **force_refresh** ticked. Then
 unticked. Both should log `Authenticated: …`. The second run authenticates with the token the first
 one rotated in.
 
+## The raw archive (#152)
+
+Each run fetches a rolling window, **D − 10 days to D + 1 day**, where D is today's date in
+`America/Denver` (never the runner's UTC clock). Ten days back, because a multi-day trip reaches
+the COROS cloud only when the phone gets signal again (sync plan §6). Everything lands under
+`Thrive COROS` in the bot's Drive:
+
+| File | Tagged (`appProperties`) | Holds |
+|---|---|---|
+| `activities/<YYYY>/<MM>/<activityId>.json`, foldered by local start date | `source=coros`, `activity_id` | `source`, `activity_id`, `tool`, `args`, `list_entry`, `payload`, `payload_hash`, `fetched_at`, `normalized` |
+| `health/<YYYY>/<MM>/<YYYY-MM-DD>.json`, one per local run date | `source=coros`, `kind=health`, `run_date` | `calls` (each `tool`, `args`, `payload`), `window`, `payload_hash`, `fetched_at` |
+
+- **`payload` is COROS's text byte-for-byte**, JSON string quoting included. COROS answers in
+  prose, and this text is the only way to re-parse after it changes its format.
+- **Idempotent.** A file is found by its `appProperties`, never by name, so moving or renaming it
+  in Drive is harmless. An unchanged `payload_hash` writes nothing; a changed one rewrites the
+  same file, so its Drive ID (the future `Workouts!raw_ref`) never changes, and `normalized`
+  (#153's) is carried over untouched.
+- **Errors are never archived.** A thrown call, an `isError` result, or error text served as a
+  result ("temporarily unavailable", "Tool call anomalies detected") is retried, three attempts in
+  all. A detail that still fails is logged with its activity ID and the run carries on; a failed
+  list call ends the run; a failed health call skips that run's bundle. Any failure exits non-zero.
+- Recovery and fitness take no date, so the bundle holds them as of `fetched_at`.
+- A payload containing a FIT download URL (`s3.coros.com/fit/…`, an unauthenticated secret) is
+  refused rather than archived.
+
+The tools and arguments, from the live `tools/list`:
+
+| Tool | Arguments |
+|---|---|
+| `querySportRecords` | `startDate`, `endDate` (`yyyyMMdd`, the whole window), `limit: 100` |
+| `getActivityDetail` | `labelId` (string), `sportType` (number), both from the list |
+| `querySleepOverview` | `startDate`, `endDate` (the whole window) |
+| `querySleepHrv` | `startDate`, `endDate`, in ranges of at most 7 days |
+| `queryDailyHealthData`, `queryRestingHeartRate`, `queryTrainingLoadAssessment` | `days: 11` (D − 10 through D; they count back from today and cannot reach D + 1) |
+| `queryRecoveryStatus`, `queryFitnessAssessmentOverview` | none |
+
+`querySportRecords` and `querySleepHrv` mark every argument required in their schemas, but
+accept these subsets. A run checks `tools/list` first and fails naming any tool that has gone.
+
 ## When a run fails
 
 | Error | Meaning | Fix |
@@ -85,6 +126,8 @@ one rotated in.
 | `DriveAuthError` | Google refused the bot's Drive credential, or a secret is missing | `node google-authorize.mjs`, then update `GOOGLE_DRIVE_REFRESH_TOKEN` |
 | `TokenPersistError` | A rotated COROS token could not be written to Drive | Re-run the workflow. If it then reports a dead grant, `node authorize.mjs` |
 | `CorosUnavailableError` | COROS is down or erroring after 3 attempts | Nothing. The next run retries |
+| `N failure(s): activity …` | One activity's detail, or the health bundle, failed after 3 attempts. Everything else landed | Nothing, if it clears on the next run. If one activity keeps failing, look at its logged error |
+| `COROS no longer offers …` | A tool was renamed or removed | Check `tools/list` and update `src/ingest.mjs` |
 
 ## How the token is kept
 
