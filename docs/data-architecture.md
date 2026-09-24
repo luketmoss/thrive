@@ -147,8 +147,10 @@ Ambiguities that need stating once rather than being decided three times:
 - **An activity belongs to the day it started**, local. A ride from 23:00 to
   01:00 is Sunday's ride, not Monday's.
 - **Sleep belongs to the wake day.** Sleep from Sunday 23:00 to Monday 07:00
-  is Monday's sleep, because that is the morning it governs. COROS will have
-  its own opinion in the payload; normalize to this one. **[VERIFY]**
+  is Monday's sleep, because that is the morning it governs. COROS agrees:
+  every one of its sleep tools files a night under its wake-up day, and so
+  does the Garmin export's `calendarDate` (verified in #133). Normalizing is
+  a no-op today; the rule stays so that is a checked fact, not a coincidence.
 - **A Hive item belongs to the day it was completed**, not created or due.
 - **Daily health metrics belong to their own calendar day**, already.
 
@@ -286,10 +288,22 @@ differently.
 
 **Venue (`indoor` / `outdoor`) is derived.** Resolve in this order:
 
-1. COROS's sport type code, if it distinguishes them — **[VERIFY]**, and the
-   cheapest signal if present.
+1. COROS's sport type code. Verified in #133: the code carries venue for
+   most families.
+
+   | Venue | Codes |
+   |---|---|
+   | outdoor | 100 run, 102 trail run, 103 track run, 200 bike, 202 e-bike, 203 gravel bike, 204 mountain bike, 205 mountain e-bike, 299 helmet bike, 401 GPS cardio, 700 rowing, 9800–9807 custom outdoor |
+   | indoor | 101 indoor run, 201 indoor bike, 400 gym cardio, 701 indoor row, 9900–9904 custom indoor |
+   | none — falls to rule 2 | 900 walk, 1200 hybrid fitness, 9999 custom common, 10000–10003 multisport |
+
+   Hike (104) and strength (402) need no venue. The full list is in the
+   `querySportRecords` tool description.
 2. Otherwise, the presence of GPS/location data in the activity detail
-   payload. An indoor ride or treadmill run has no track.
+   payload. An indoor ride or treadmill run has no track. *Unverified for
+   outdoor sessions — the test account had none. Indoor sessions echo the
+   sport name into the `Location` field, so test for a track, not for a
+   non-empty location.*
 
 Prefer a field on the *detail* payload over the FIT file. FIT retrieval is
 capped at 50/day and happens after normalization in the sync plan's §6 loop,
@@ -486,9 +500,10 @@ Concretely, rendering a day is:
 ### How the sync writes
 
 **Decided: through the API, like every other non-browser client.** The
-historical backfill paces itself against Apps Script quota the same way it
-already paces against the 50/day FIT cap — it is specified as a resumable
-queue rather than one long run, so the shape already fits.
+historical backfill paces itself against Apps Script quota as a resumable
+queue rather than one long run. It no longer has the FIT cap to pace against
+— #133 found COROS history is a few days and Garmin's FIT files come from the
+export zip — so quota is now the reason for that shape.
 
 Nightly volume (1–2 activities plus a 7–10 day rollup recompute) sits far
 inside any quota. The backfill is the only real pressure, and the failure
@@ -683,12 +698,15 @@ does not change any contract in this document.
 
 ## 11. Open questions
 
-1. **[VERIFY §4]** Whether COROS's sport codes distinguish indoor from
-   outdoor. If they do, venue derivation is a lookup; if not, it falls back
-   to GPS presence in the detail payload. Either way the *rule* is settled —
-   this only decides which signal it reads.
-2. **[VERIFY §2]** COROS's sleep-day attribution, so the wake-day rule can be
-   implemented rather than assumed.
+1. **§4 — should terrain come from the sport code?** §4 holds that terrain
+   is not device-observable and must never be derived. #133 found COROS
+   records it whenever the watch's sport mode is picked: 203 gravel bike,
+   204 mountain bike. That is a user declaration at recording time, not a
+   device inference, so it may be exactly the signal §4 wanted. Not changed
+   here — a reversal of a settled decision is a design call.
+
+*Answered by #133:* whether sport codes distinguish venue (mostly — §4), and
+COROS's sleep-day attribution (wake day — §2).
 
 ---
 

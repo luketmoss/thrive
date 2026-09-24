@@ -237,10 +237,11 @@ disagree, and that disagreement is plausibly the more interesting signal — a
 night the watch scored well and you remember badly is exactly the kind of
 thing this system exists to surface.
 
-Note that `sleep_quality` may end up partially double-sourced too: COROS
-EvoLab produces a sleep score, and whether it appears in the daily payload
-is **[VERIFY]**. If it does, the same rule applies — separate fields, no
-overwriting.
+`sleep_quality` is partially double-sourced too. COROS returns a 0–100 sleep
+score — from `querySleepData`, a separate call from the daily overview
+(verified in #133) — and it lands in `DailyHealth.sleep_score`. The same
+rule applies: separate fields, no overwriting. Garmin's export has no sleep
+score, so before the switch date only the self-report exists.
 
 ### Where it lives
 
@@ -297,9 +298,7 @@ an existing deployment, none of which changes Hive's write path.
 
 ## 9. Open questions
 
-1. **[VERIFY §6]** Does COROS's daily payload carry a sleep score? If so,
-   `sleep_quality` is double-sourced and follows the same store-both rule.
-2. **What is the app called?** Unresolved — "the Journal" is a placeholder
+1. **What is the app called?** Unresolved — "the Journal" is a placeholder
    and nothing downstream depends on it. Thrive, Hive, Forage and Keel are
    all short nouns that are not literal descriptions of what they do, so
    "Journal" would be the first exception to that pattern.

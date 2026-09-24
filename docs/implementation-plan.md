@@ -74,6 +74,7 @@ so it should run alongside B and C rather than ahead of them.
 **Blocks:** Track D entirely, Track E's COROS half.
 **Blocked by:** nothing.
 **Shape:** one focused session, not a project. No production code.
+**Status:** done 23 Sept 2026 (#133). Answers are in sync §2 and §15.
 
 Nothing is set up today — the watch is bought, no OAuth app is registered.
 
