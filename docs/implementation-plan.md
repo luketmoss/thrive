@@ -2,12 +2,14 @@
 
 **Revision 1** — 20 September 2026
 **Scope:** The work in **Thrive** and **Hive** only. The Journal app is
-specified in `docs/journal-spec.md` and is being built elsewhere; this plan
+specified in `almanac/docs/spec.md` (in `luketmoss/keel`) and is being built
+there; this plan
 covers what the existing apps owe it, not the app itself.
 
 **Design references** — this document sequences, it does not re-argue:
 `docs/coros-sync-plan.md` (COROS → Thrive), `docs/data-architecture.md`
-(cross-app contracts), `docs/journal-spec.md` (what the Journal consumes).
+(cross-app contracts). The Journal's own spec now lives in `luketmoss/keel`
+as `almanac/docs/spec.md`; `docs/journal-spec.md` here is a superseded stub.
 
 ---
 
