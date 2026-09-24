@@ -184,8 +184,8 @@ Things nobody asked about that bear on the design.
 
 - **Every tool returns prose, not data.** None of the 34 tools declares an
   `outputSchema` or returns `structuredContent`. A result is a
-  JSON-encoded string of human-formatted text — `Duration: 37:38 | Avg HR:
-  99 bpm` — written for a chat window. The sync must either parse that
+  JSON-encoded string of human-formatted text — `Duration: 41:05 | Avg HR:
+  104 bpm` — written for a chat window. The sync must either parse that
   text, which is brittle against a server that ships tool changes often, or
   take activity numbers from the FIT file, a stable specified format. **New
   open question, §17 item 5.** It also strengthens §5's raw landing zone:

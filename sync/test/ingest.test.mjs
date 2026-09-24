@@ -19,17 +19,17 @@ const LIST = [
   '',
   '1. Gym Cardio — 2026-09-23',
   '   Location: Gym Cardio',
-  '   Time Window: startTimestamp=1790166371 | endTimestamp=1790168672',
-  '   Duration: 37:38',
-  ' | Avg HR: 99 bpm | Calories: 186 kcal',
-  '   LabelId: 480544748954747182 | SportType: 400',
+  '   Time Window: startTimestamp=1790170000 | endTimestamp=1790172465',
+  '   Duration: 41:05',
+  ' | Avg HR: 104 bpm | Calories: 212 kcal',
+  '   LabelId: 700000000000000101 | SportType: 400',
   '',
   '2. Strength — 2026-09-23',
   '   Location: Strength',
-  '   Time Window: startTimestamp=1790165808 | endTimestamp=1790165879',
-  '   Duration: 1:11 | Sets: 2',
-  ' | Avg HR: 51 bpm | Calories: 13 kcal',
-  '   LabelId: 480543998669259351 | SportType: 402',
+  '   Time Window: startTimestamp=1790161200 | endTimestamp=1790161290',
+  '   Duration: 1:30 | Sets: 3',
+  ' | Avg HR: 63 bpm | Calories: 17 kcal',
+  '   LabelId: 700000000000000102 | SportType: 402',
   '',
   // 04:30 UTC on 1 Sept is still 31 Aug in Denver: the folder follows the local date.
   '3. Outdoor Bike — 2026-08-31',
@@ -37,7 +37,7 @@ const LIST = [
   '   LabelId: 999 | SportType: 200',
 ].join('\n');
 
-const detail = (id, extra = '') => corosText(`Activity ${id} Details\n=====\n\nWorkout Time: 37:38${extra}`);
+const detail = (id, extra = '') => corosText(`Activity ${id} Details\n=====\n\nWorkout Time: 41:05${extra}`);
 
 function healthHandlers() {
   const h = {};
@@ -83,23 +83,23 @@ test('every listed activity, strength included, lands as one file keyed by vendo
   assert.deepEqual(
     client.calls.filter((c) => c.name === 'getActivityDetail').map((c) => c.args),
     [
-      { labelId: '480544748954747182', sportType: 400 },
-      { labelId: '480543998669259351', sportType: 402 },
+      { labelId: '700000000000000101', sportType: 400 },
+      { labelId: '700000000000000102', sportType: 402 },
       { labelId: '999', sportType: 200 },
     ],
   );
 
-  const strength = activityFile(drive, '480543998669259351');
-  assert.equal(drive.pathOf(strength.id), 'Thrive COROS/activities/2026/09/480543998669259351.json');
-  assert.deepEqual(strength.props, { source: 'coros', activity_id: '480543998669259351' });
+  const strength = activityFile(drive, '700000000000000102');
+  assert.equal(drive.pathOf(strength.id), 'Thrive COROS/activities/2026/09/700000000000000102.json');
+  assert.deepEqual(strength.props, { source: 'coros', activity_id: '700000000000000102' });
 
-  const payload = detail('480543998669259351').content[0].text;
+  const payload = detail('700000000000000102').content[0].text;
   assert.deepEqual(Object.keys(strength.data).sort(), [
     'activity_id', 'args', 'fetched_at', 'list_entry', 'normalized', 'payload', 'payload_hash', 'source', 'tool',
   ]);
   assert.equal(strength.data.source, 'coros');
   assert.equal(strength.data.tool, 'getActivityDetail');
-  assert.deepEqual(strength.data.args, { labelId: '480543998669259351', sportType: 402 });
+  assert.deepEqual(strength.data.args, { labelId: '700000000000000102', sportType: 402 });
   assert.equal(strength.data.payload, payload, 'the payload is the tool text byte-for-byte, JSON quoting and all');
   assert.equal(strength.data.payload_hash, sha256(payload));
   assert.equal(strength.data.fetched_at, new Date(NOW).toISOString());
@@ -146,21 +146,21 @@ test('a second run with unchanged payloads writes nothing at all', async () => {
 test('a changed payload updates the same file in place and keeps normalized', async () => {
   const drive = memoryDrive();
   await run(coros(), drive);
-  const file = activityFile(drive, '480544748954747182');
+  const file = activityFile(drive, '700000000000000101');
   file.data.normalized = { Name: 'Gym Cardio', 'Elapsed (s)': 2258 }; // #153's, written later
 
   const summary = await run(coros({
-    getActivityDetail: ({ labelId }) => detail(labelId, labelId === '480544748954747182' ? '\nTrimmed' : ''),
+    getActivityDetail: ({ labelId }) => detail(labelId, labelId === '700000000000000101' ? '\nTrimmed' : ''),
   }), drive, LATER);
 
   assert.deepEqual(summary.activities, { created: 0, updated: 1, unchanged: 2 });
-  const after = activityFile(drive, '480544748954747182');
+  const after = activityFile(drive, '700000000000000101');
   assert.equal(after.id, file.id, 'the Drive file ID, the future raw_ref, is unchanged');
   assert.match(after.data.payload, /Trimmed/);
   assert.equal(after.data.payload_hash, sha256(after.data.payload));
   assert.equal(after.data.fetched_at, new Date(LATER).toISOString());
   assert.deepEqual(after.data.normalized, { Name: 'Gym Cardio', 'Elapsed (s)': 2258 });
-  assert.equal([...drive.files.values()].filter((f) => f.props.activity_id === '480544748954747182').length, 1);
+  assert.equal([...drive.files.values()].filter((f) => f.props.activity_id === '700000000000000101').length, 1);
 });
 
 test('a moved and renamed file is found by its app properties, not duplicated', async () => {
@@ -268,19 +268,19 @@ test('a detail that keeps failing is never archived, and the other activities st
   const logs = [];
   const client = coros({
     getActivityDetail: ({ labelId }) =>
-      (labelId === '480544748954747182' ? corosText('COROS API is temporarily unavailable') : detail(labelId)),
+      (labelId === '700000000000000101' ? corosText('COROS API is temporarily unavailable') : detail(labelId)),
   });
   const summary = await ingest({
     client, archive: createArchive(drive, { now: () => NOW }), now: NOW, log: (l) => logs.push(l), retry: noWait,
   });
 
-  assert.equal(activityFile(drive, '480544748954747182'), undefined);
-  assert.ok(activityFile(drive, '480543998669259351'));
+  assert.equal(activityFile(drive, '700000000000000101'), undefined);
+  assert.ok(activityFile(drive, '700000000000000102'));
   assert.ok(activityFile(drive, '999'));
   assert.equal(summary.health, 'created');
   assert.equal(summary.failures.length, 1, 'the run reports a failure, so it exits non-zero');
-  assert.match(summary.failures[0], /480544748954747182/);
-  assert.ok(logs.some((l) => /FAILED activity 480544748954747182/.test(l)));
+  assert.match(summary.failures[0], /700000000000000101/);
+  assert.ok(logs.some((l) => /FAILED activity 700000000000000101/.test(l)));
   for (const f of drive.files.values()) {
     assert.doesNotMatch(JSON.stringify(f.data ?? {}), /temporarily unavailable/);
   }
@@ -329,8 +329,8 @@ test('a payload carrying a FIT download URL is refused, not archived', async () 
 test('the list parser reads every record and its timestamps', () => {
   const entries = parseSportRecords(JSON.stringify(LIST));
   assert.deepEqual(entries.map((e) => [e.activityId, e.sportType, e.name, e.date, e.startTimestamp]), [
-    ['480544748954747182', 400, 'Gym Cardio', '2026-09-23', 1790166371],
-    ['480543998669259351', 402, 'Strength', '2026-09-23', 1790165808],
+    ['700000000000000101', 400, 'Gym Cardio', '2026-09-23', 1790170000],
+    ['700000000000000102', 402, 'Strength', '2026-09-23', 1790161200],
     ['999', 200, 'Outdoor Bike', '2026-08-31', 1788237000],
   ]);
 });
