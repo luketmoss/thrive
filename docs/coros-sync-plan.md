@@ -1111,8 +1111,11 @@ Two traps for the importer:
 
 ## 16. Phasing
 
-Intended to become an epic with one issue per phase, each running through
-`/refine` and `/finish` independently.
+An epic with one issue per phase, each running through `/refine` and
+`/finish` independently: **#163**. Phase 0 was #133; phase 2b was #130 and
+#134. Phases 1–8 are #151–#158, and phases 9–11 are #159–#162, with the
+COROS backfill (#161) and the Garmin wellness import (#160) as separate
+issues. `docs/implementation-plan.md` §5–§6 has the mapping.
 
 | Phase | Deliverable | Done when |
 |---|---|---|
