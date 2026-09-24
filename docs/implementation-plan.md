@@ -15,15 +15,17 @@ as `almanac/docs/spec.md`; `docs/journal-spec.md` here is a superseded stub.
 
 ## 0. Status — 24 September 2026
 
-**Tracks A, B and C are complete. Track D is unblocked.**
+**Tracks A, B and C are complete, closing epic #127. Tracks D and E are filed
+as epic [#163](https://github.com/luketmoss/thrive/issues/163), and D is
+unblocked.**
 
 | Track | State |
 |---|---|
 | **A** — COROS verification | **Complete.** [thrive#133](https://github.com/luketmoss/thrive/issues/133), answers in sync §2 and §15 |
 | **B** — Thrive foundation | **Complete.** All six landed |
 | **C** — Hive additions | **Complete.** All five landed |
-| **D** — COROS sync | **Unblocked** |
-| **E** — History backfill | **Blocked on D** |
+| **D** — COROS sync | **Unblocked.** Eight issues, #151–#158 — §5 |
+| **E** — History backfill | **Blocked on D.** Four issues, #159–#162 — §6 |
 
 ### Track B — delivered
 
@@ -280,21 +282,30 @@ Hive as a bug, found while verifying Track C.
 
 ## 5. Track D — COROS sync
 
-**Blocked by:** Track A (all of it) and Track B (B1, B3).
+**Blocked by:** nothing. Track A answered everything D was gated on, and
+Track B landed B1 and B3. **Epic:** [#163](https://github.com/luketmoss/thrive/issues/163).
 
-Follows `coros-sync-plan.md` §16 phases 1–6. Not re-specified here; the
-sequencing note is that **D1's design depends on A1** and must not start
-before it is answered.
+Follows `coros-sync-plan.md` §16 phases 1–8. Not re-specified here.
 
-| # | Phase | Gate |
-|---|---|---|
-| D1 | OAuth + token storage in Drive | **A1** — rotation decides where the token lives |
-| D2 | Raw ingestion to Drive | |
-| D3 | Normalization + `DailyHealth` | **A4, A5** — sport codes and payload shape |
-| D4 | FIT fetch with budget counter | **A3** |
-| D5 | Strength enrichment | |
-| D6 | Actions cron + `SyncLog` + dead-man | |
-| D7 | Thrive sync UI — provenance badge, last-synced line, demo fixtures | **User-visible** |
+| # | Phase | Issue | Depends on | What #133 settled |
+|---|---|---|---|---|
+| D1 | OAuth + token storage in Drive | [#151](https://github.com/luketmoss/thrive/issues/151) | — | **A1**: tokens rotate, so Drive; public client, no secret |
+| D2 | Raw ingestion to Drive | [#152](https://github.com/luketmoss/thrive/issues/152) | #151 | Tools return prose, which makes the raw archive load-bearing |
+| D3 | Normalization + `DailyHealth` | [#153](https://github.com/luketmoss/thrive/issues/153) | #152 | **A4, A5**: venue from sport codes; payload shape seen |
+| D4 | FIT fetch with budget counter | [#154](https://github.com/luketmoss/thrive/issues/154) | #152 | **A3**: 50 per fixed 24h window; implements #149 |
+| D5 | Strength enrichment | [#155](https://github.com/luketmoss/thrive/issues/155) | #153 | COROS strength has sets, no reps or weight |
+| D6 | Actions cron + `SyncLog` + dead-man | [#156](https://github.com/luketmoss/thrive/issues/156) | #153 | **A3**: no read limit, so cadence is a freshness choice |
+| D7 | Thrive sync UI — provenance badge, last-synced line, demo fixtures | [#157](https://github.com/luketmoss/thrive/issues/157) | #156 | **User-visible** |
+| D8 | MCP server exposure | [#158](https://github.com/luketmoss/thrive/issues/158) | #153 | Sync plan §16 phase 8; not in the original D list |
+
+**#153 carries the open decisions:** prose or FIT for activity numbers
+(sync §17 item 5), terrain from the sport code (arch §11), window length, and
+**`DailyHealth`'s column layout**, which `getDailyHealth()` in
+`apps-script/src/daily-summary.js` and the sync plan's §5 table currently
+define differently. Settle it before anything writes the tab.
+
+**#156 should not slip** behind D7 or D8. An unattended job with no dead-man's
+switch is the failure mode sync §10 exists to prevent.
 
 ---
 
@@ -302,12 +313,12 @@ before it is answered.
 
 **Blocked by:** Track D.
 
-| # | Work | Gate |
-|---|---|---|
-| E1 | Garmin FIT import under `source='garmin_import'` | Export arrival |
-| E2 | Garmin daily wellness import | **A6** — may not exist |
-| E3 | COROS historical backfill | **A2** — API walk or bulk export |
-| E4 | **Re-run `DailySummary` backfill** | E1–E3 |
+| # | Work | Issue | Depends on | What #133 settled |
+|---|---|---|---|---|
+| E1 | Garmin activity import under `source='garmin_import'` | [#159](https://github.com/luketmoss/thrive/issues/159) | #153 | Export arrived: FIT zips plus `summarizedActivities` JSON; no FIT cap applies |
+| E2 | Garmin daily wellness import | [#160](https://github.com/luketmoss/thrive/issues/160) | #153 | **A6**: exists — ~3,200 days; stages sparse; no HRV or sleep score |
+| E3 | COROS historical backfill | [#161](https://github.com/luketmoss/thrive/issues/161) | #153, #154 | **A2**: an API walk, from 22 Sept 2026 only; may be empty if D6 goes live within the window |
+| E4 | **Re-run `DailySummary` backfill** | [#162](https://github.com/luketmoss/thrive/issues/162) | #159–#161 | |
 
 **E4 is not optional and is easy to forget.** Any rollup built before the
 historical imports land is missing them. This is why B4's rebuild takes a
@@ -388,19 +399,24 @@ the FIT cap allows" until it was settled.
 
 ## 8. Where to start
 
-Three things can begin at once, by different efforts:
+*As of 24 September, with A, B and C done.*
 
-1. **B1** — unblocks all other Thrive work and ships nothing, so it wants to
-   be first and quick.
-2. **Track C** — entirely independent, four small changes, and it is in a
-   different repository so it does not contend with Thrive work at all.
-3. **Track A** — a session with the COROS API, no code.
+**#151 (D1) is the only way into Track D**, and everything in epic #163
+follows from it. Refine it first. Its one real design choice is the token
+store's shape (access token alongside refresh token or not), since sync §4
+has already settled where it lives.
 
-**B2 is the first thing that improves the app**, and depends only on B1. If
-early visible progress matters, that is the route.
+**#153 (D3) is where the hard decisions sit.** The prose-or-FIT question
+and the `DailyHealth` layout decide how much of D4–D8 and E1–E2 looks the
+way the issues describe. Refining it early, even before #152 is built,
+would surface that sooner.
 
-**B3 is the critical path** for both the Journal and the sync. Nothing on
-the Thrive side that writes reaches production before it.
+**The almanac issues (#143–#149, §7) run in parallel.** None depends on the
+sync except #147/#148, which settle alongside #153.
+
+*The original plan's starting points were B1, Track C and Track A, in
+parallel, with B2 as the first visible improvement and B3 as the critical
+path. All of them have landed.*
 
 ---
 
@@ -409,8 +425,13 @@ the Thrive side that writes reaches production before it.
 - **B3 and B6 are a refactor of working code.** The API is not additive the
   way the schema work is. This is the largest single risk in the plan and
   the one most likely to be underestimated.
-- **Track A may invalidate design decisions**, not merely fill blanks. A1 in
-  particular could change where credentials live.
+- **COROS returns prose, not data** (#133). Every tool's result is formatted
+  text written for a chat window, and the server ships tool changes often. A
+  wording change can break parsing without any error. The raw Drive archive
+  (#152) and the normalization-failure path (sync §10) are the hedge; taking
+  activity numbers from FIT files (#153) would shrink the exposure. *(This
+  replaces the earlier risk that Track A might invalidate decisions. It
+  didn't: A1 confirmed the Drive-stored token.)*
 - **Track C spans two repositories**, and Hive has its own board and its own
   agent workflow. It needs its own issues, and this session has read-only
   access to that repository.
