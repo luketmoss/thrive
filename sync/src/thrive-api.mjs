@@ -162,6 +162,20 @@ export function createThriveApi({
       return totals;
     },
 
+    /**
+     * One synced activity, merged into Workouts by vendor ID (#166). The
+     * three-way merge runs in the API, so an edit made in Thrive between a
+     * read and a write cannot be lost. Sent once, like every write.
+     *
+     * @param {{ source: string, source_activity_id: string, incoming: object,
+     *   last_written: object | null, raw_ref: string, synced_at: string }} payload
+     * @returns {Promise<{ status: 'created' | 'updated' | 'deleted', id?: string,
+     *   written?: object, kept?: string[] }>}
+     */
+    upsertSyncedWorkout(payload) {
+      return write('upsertSyncedWorkout', payload);
+    },
+
     /** Recompute DailySummary for `from`..`to`, inclusive, stamped `computedAt`. */
     rebuildDailySummary(from, to, computedAt) {
       return write('rebuildDailySummary', { from, to, computed_at: computedAt });

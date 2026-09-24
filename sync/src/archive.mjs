@@ -23,6 +23,22 @@ export const activityProps = (activityId) => ({ source: 'coros', activity_id: St
 export const healthProps = (runDate) => ({ source: 'coros', kind: 'health', run_date: runDate });
 
 /**
+ * A list entry with its position in the list removed. `text` begins "3. ",
+ * and that number moves whenever a newer activity lands, so it is not part of
+ * what the entry says about this activity.
+ */
+const entryIdentity = (entry) =>
+  JSON.stringify(entry ? { ...entry, text: String(entry.text ?? '').replace(/^\d+\. /, '') } : null);
+
+/**
+ * Whether an activity's list entry changed while its detail did not (#166).
+ * A rename in COROS shows only in the list, and the name is normalized from
+ * the archived entry, so the entry has to be refreshed on its own.
+ */
+const listEntryChanged = (current, record) =>
+  record.list_entry !== undefined && entryIdentity(current?.list_entry) !== entryIdentity(record.list_entry);
+
+/**
  * @param {ReturnType<import('./drive.mjs').createDrive>} drive
  * @param {{ now?: () => number }} [opts]
  */
@@ -49,9 +65,10 @@ export function createArchive(drive, { now = () => Date.now() } = {}) {
   }
 
   /**
-   * Creates the file, or updates it in place when `payload_hash` changed.
-   * `normalized` belongs to #153: a new file starts at null, and an update
-   * carries the existing value over untouched.
+   * Creates the file, or updates it in place when `payload_hash` changed or,
+   * for an activity, its list entry did (a rename). `normalized` belongs to
+   * #166: a new file starts at null, and an update carries the existing value
+   * over untouched.
    *
    * @returns {Promise<{ status: 'created' | 'updated' | 'unchanged', fileId: string }>}
    */
@@ -59,7 +76,9 @@ export function createArchive(drive, { now = () => Date.now() } = {}) {
     const existing = await drive.findOne(props);
     if (existing) {
       const current = await drive.readJson(existing.id);
-      if (current?.payload_hash === record.payload_hash) return { status: 'unchanged', fileId: existing.id };
+      if (current?.payload_hash === record.payload_hash && !listEntryChanged(current, record)) {
+        return { status: 'unchanged', fileId: existing.id };
+      }
       await drive.updateJson(existing.id, {
         ...current,
         ...record,
@@ -100,6 +119,27 @@ export function createArchive(drive, { now = () => Date.now() } = {}) {
           payload_hash: sha256(payload),
         },
       });
+    },
+
+    /**
+     * One archived activity with its Drive file ID (the row's `raw_ref`), or
+     * null if no run has landed it. #166 normalizes from this.
+     */
+    async readActivity(activityId) {
+      const file = await drive.findOne(activityProps(String(activityId)));
+      if (!file) return null;
+      return { fileId: file.id, data: await drive.readJson(file.id) };
+    },
+
+    /**
+     * Record what the sheet now holds for this activity (#166 AC4), so the
+     * next run's merge compares against the truth. Nothing else in the file
+     * changes: `payload`, its hash and `fetched_at` are the archive's, and
+     * re-reading first keeps an ingest update from being overwritten.
+     */
+    async writeNormalized(fileId, normalized) {
+      const current = await drive.readJson(fileId);
+      await drive.updateJson(fileId, { ...current, normalized });
     },
 
     /**

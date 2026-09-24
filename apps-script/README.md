@@ -172,6 +172,32 @@ Written by the COROS sync alone, **key only**: it is a write, so it never joins
   non-numeric metric or a clock time not `HH:mm` rejects the whole call.
 - `synced_at` is one value per call, stamped on every row it touches.
 
+### Synced workouts (#166)
+
+| Action | Payload |
+|---|---|
+| `upsertSyncedWorkout` | `{"source":"coros","source_activity_id":"...","incoming":{...},"last_written":null,"raw_ref":"<drive id>","synced_at":"..."}` |
+
+One synced activity, found by `(source, source_activity_id)` and merged with
+sync plan §8's three-way merge **inside the action**, so an edit made in the
+SPA between a read and a write cannot be lost. Key only, like every write.
+`incoming` holds only `SYNC_MERGED_FIELDS` (`src/types.js`); anything else,
+`effort` or `notes` included, is refused.
+
+- **No row:** appended through `createWorkout` (new `w_` id, `created`
+  stamped, every unsent field blank), unless `last_written` is set: then the
+  user deleted it, and the answer is `{"status":"deleted"}` with nothing written.
+- **One row:** re-read and its S/T confirmed, then per merged field the
+  incoming value is written only if the sheet still holds `last_written`'s.
+  `last_written: null` fills blanks only. `source`, `source_activity_id`,
+  `raw_ref` and `synced_at` are always overwritten; `effort`, `notes`,
+  `status`, `template_id`, `fit_ref` and `fit_fetched_at` never are.
+- **Two rows:** refused, naming both ids.
+- Returns `written`, the merged fields as the sheet now holds them plus
+  `edited` (the fields the user changed, which stay kept on every later run),
+  for the sync to store as the next `last_written`; and `kept`, the fields
+  this call declined to overwrite.
+
 ## The shaping principle
 
 **The API accepts domain objects. It never accepts sheet rows or row

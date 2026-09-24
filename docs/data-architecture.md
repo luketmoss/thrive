@@ -301,11 +301,15 @@ differently.
 
    Hike (104) and strength (402) need no venue. The full list is in the
    `querySportRecords` tool description.
-2. Otherwise, the presence of GPS/location data in the activity detail
-   payload. An indoor ride or treadmill run has no track. *Unverified for
-   outdoor sessions — the test account had none. Indoor sessions echo the
-   sport name into the `Location` field, so test for a track, not for a
-   non-empty location.*
+2. Otherwise, the presence of a GPS track. An indoor ride or treadmill run
+   has none. *Settled in thrive#166 from real outdoor sessions:* the detail
+   payload carries no location for any sport, so the test reads the
+   archived `querySportRecords` entry instead, which is prose archived with
+   the activity and never depends on the FIT budget. Every outdoor session
+   has a `Start Coordinates: <lat>, <lon>` line there; indoor sessions have
+   none, and echo the sport name into `Location`, so the test is for the
+   coordinates, not for a non-empty location. Only walk (900) reaches this
+   rule among the mapped codes.
 
 Prefer a field on the *detail* payload over the FIT file. FIT retrieval is
 capped at 50/day and happens after normalization in the sync plan's §6 loop,
@@ -313,10 +317,17 @@ so making venue depend on it would leave `sub_type` blank whenever the budget
 is exhausted, and fill it in on a later night — a value that changes on its
 own is worse than one that was never set.
 
-**Terrain (`mountain` / `gravel`) is never derived.** It is not a
-device-observable property: two rides with identical track, HR and elevation
-differ only in what they were ridden on. The sync leaves it blank and the
-user sets it in Thrive.
+**Terrain (`mountain` / `gravel`) comes from the sport code, and from
+nothing else.** *(Amended by thrive#166, answering §11's former question 1.)*
+It is still not a device-observable property: two rides with identical
+track, HR and elevation differ only in what they were ridden on, so it is
+never inferred from the track, HR, speed or elevation. But when the user
+picks a terrain sport mode on the watch before recording — 203 gravel bike,
+204 mountain bike, 205 mountain e-bike — that is a declaration made at record
+time, by the person who knows, which is exactly the signal this rule wanted.
+The sync writes it: 203 → `gravel`, 204 and 205 → `mountain`. Plain 200
+(and 202 e-bike, 299 helmet bike) says nothing about terrain, so `sub_type`
+stays blank and the user sets it in Thrive.
 
 **Nothing is defaulted.** Defaulting `bike` to `mountain` because most rides
 are was considered and rejected — it is the same move CLAUDE.md forbids for
@@ -746,12 +757,7 @@ does not change any contract in this document.
 
 ## 11. Open questions
 
-1. **§4 — should terrain come from the sport code?** §4 holds that terrain
-   is not device-observable and must never be derived. #133 found COROS
-   records it whenever the watch's sport mode is picked: 203 gravel bike,
-   204 mountain bike. That is a user declaration at recording time, not a
-   device inference, so it may be exactly the signal §4 wanted. Not changed
-   here — a reversal of a settled decision is a design call.
+None open. §4's terrain question moved to §12 (thrive#166).
 
 *Answered by #133:* whether sport codes distinguish venue (mostly — §4), and
 COROS's sleep-day attribution (wake day — §2).
@@ -770,7 +776,13 @@ In the order they were taken.
   expected, so each one must cost a value rather than a code change.
 - **§4 — `sub_type` fill rule.** Venue is derived (sport code, else GPS
   presence); terrain is never derived and stays blank until set by hand.
-  Nothing is defaulted.
+  Nothing is defaulted. *(Terrain amended by the next entry.)*
+- **§4 — terrain comes from the sport code** (thrive#166, formerly §11
+  question 1). A terrain sport mode picked on the watch — 203 gravel, 204
+  and 205 mountain — is a declaration made at record time, not a device
+  inference, so the sync writes it. Plain 200 stays blank. Terrain is still
+  never inferred from track, HR or elevation, and existing hand-logged
+  `bike` rows are not backfilled.
 - **§5 — `DailySummary` columns fixed at A:R.** Carries `max_effort` and
   `effort_counts`, outdoor-only distance and ascent, and per-total coverage
   counts. *(Was A:O; coverage added during thrive#131 refinement.)*
