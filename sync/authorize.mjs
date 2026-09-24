@@ -26,7 +26,7 @@ async function register() {
     return { clientId: await registerClient(fetch, { deviceGrant: true }), deviceGrant: true };
   } catch (err) {
     if (!(err instanceof OAuthError) || err.status >= 500) throw err;
-    console.log(`COROS would not register the device grant (${err.code}); using the browser flow.`);
+    console.log(`COROS would not register the device grant (${redact(err.message)}); using the browser flow.`);
     return { clientId: await registerClient(fetch, { deviceGrant: false }), deviceGrant: false };
   }
 }
@@ -69,7 +69,7 @@ async function main() {
       // A refusal to *start* the device grant falls back; a user who denied
       // it, or a code that expired, does not.
       if (!(err instanceof OAuthError) || ['access_denied', 'expired_token'].includes(err.code)) throw err;
-      console.log(`The device grant was refused (${err.code}); using the browser flow.`);
+      console.log(`The device grant was refused (${redact(err.message)}); using the browser flow.`);
       tokens = await browserFlow(clientId);
     }
   } else {
