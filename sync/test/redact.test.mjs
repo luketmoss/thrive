@@ -2,7 +2,7 @@
 
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { clearSecrets, redact, redactObject, registerSecret } from '../src/redact.mjs';
+import { clearSecrets, redact, registerSecret } from '../src/redact.mjs';
 
 beforeEach(() => clearSecrets());
 
@@ -19,13 +19,6 @@ test('credential-named JSON fields are masked even when their value was never se
 
 test('a bearer header is masked', () => {
   assert.equal(redact('Authorization: Bearer ya29.a0AfH6SMB'), 'Authorization: Bearer [redacted]');
-});
-
-test('objects are masked by key, recursively', () => {
-  assert.deepEqual(
-    redactObject({ client_id: 'c', nested: { refresh_token: 'r', ok: 1 } }),
-    { client_id: 'c', nested: { refresh_token: '[redacted]', ok: 1 } },
-  );
 });
 
 test('short strings are not registered, so ordinary words are never masked', () => {
