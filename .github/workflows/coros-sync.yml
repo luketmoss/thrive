@@ -1,0 +1,45 @@
+name: coros-sync
+
+# The COROS → Thrive sync (epic #163). Manual only for now: #151 proves
+# authorization, and #156 adds the schedule.
+on:
+  workflow_dispatch:
+    inputs:
+      force_refresh:
+        description: Rotate the COROS token even if it is fresh (proves a rotated token survives into the next run)
+        type: boolean
+        default: false
+
+# Never two runs at once. COROS rotates the refresh token on every use, so a
+# second run refreshing concurrently would present a spent token and fail
+# with "Duplicate grant rejected". Queue, never cancel: a cancelled run could
+# die between refresh and persist and lose the grant.
+concurrency:
+  group: coros-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: sync
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: sync/package-lock.json
+      - run: npm ci
+      - name: sync
+        run: node run.mjs
+        env:
+          FORCE_REFRESH: ${{ inputs.force_refresh }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}

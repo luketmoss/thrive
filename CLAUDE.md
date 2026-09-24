@@ -5,6 +5,7 @@ Personal workout tracker: Preact SPA → Google Sheets REST API.
 - **frontend/**: Preact SPA (built with Vite) — deployed to GitHub Pages
 - **mcp-server/**: local MCP server letting AI agents read, analyze, schedule and repair workout data. A thin client of the Apps Script API (#132), configured with `THRIVE_API_URL` + `THRIVE_API_KEY`, exactly as Hive's is. It holds **no row mapping**: `api.js` is its only boundary, and it speaks in domain objects.
 - **apps-script/**: the server-side API over the sheet (#130, #134). Row mapping in `apps-script/src/types.js` mirrors `frontend/src/api/*.ts` — **change both together**. Those are the only two copies, and every consumer arriving later (the COROS sync, the Journal) calls the API rather than adding a third. The SPA still reads Sheets directly, as Hive's does.
+- **sync/**: the COROS → Thrive sync (epic #163), run by `.github/workflows/coros-sync.yml`. Reaches Drive as the bot account (luketmossbot@gmail.com, `drive.file`), **not** the service account — a service account has no Drive storage quota. Keeps COROS's rotating refresh token in a Drive file it owns. Setup and failure modes: `sync/README.md`.
 - **scripts/**: one-time migrations and admin tools. They use the Google service account (`mcp-server/thrive-sa.json`) directly, with their own `google-auth-library`, because schema changes — new columns, new tabs — need Sheets access the API deliberately does not offer.
 
 ## Key Commands
@@ -13,6 +14,7 @@ Personal workout tracker: Preact SPA → Google Sheets REST API.
 - `cd frontend && npm test` — run frontend tests (vitest)
 - `cd frontend && npx tsc --noEmit` — TypeScript type checking
 - `cd mcp-server && npm test` — run MCP server tests (node --test, no network)
+- `cd sync && npm test` — run COROS sync tests (node --test, no network)
 - `cd apps-script && npm test` — run Apps Script tests (vitest, sandboxed `node:vm`)
 - `cd apps-script && npm run typecheck` — TypeScript check for the test harness
 

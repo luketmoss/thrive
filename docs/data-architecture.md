@@ -512,12 +512,18 @@ inside any quota. The backfill is the only real pressure, and the failure
 mode there is a loud quota error on a resumable job, not silent divergence.
 
 The alternative — direct service-account writes — would have reintroduced
-the third row mapping this decision exists to prevent. The sync needs
-service-account credentials anyway for Drive blobs and the rotating COROS
-refresh token, so it ends up holding three credentials: COROS OAuth tokens
-(stored in Drive), the Google service account (Drive only), and the Thrive
-API key. Only the first two are secrets it manages; the API key is a static
-GitHub Actions secret.
+the third row mapping this decision exists to prevent. The sync needs a
+Google credential anyway for Drive blobs and the rotating COROS refresh
+token, so it ends up holding three credentials: COROS OAuth tokens (stored in
+Drive), the bot account's own Google OAuth credential (Drive only,
+`drive.file`), and the Thrive API key. Only the COROS tokens are managed by
+the sync itself; the other two are static GitHub Actions secrets.
+
+*Amended by #151:* the Drive credential was originally the service account.
+A service account has no Drive storage quota, and the Google account behind
+Thrive is free Gmail with no shared drives, so files the sync creates must be
+owned by the bot account (luketmossbot@gmail.com). `sync/README.md` has the
+setup.
 
 **Sequencing consequence:** the API must exist before the sync can write
 anything. This moves it ahead of the sync plan's Phase 3, which is the first
