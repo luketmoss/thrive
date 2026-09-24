@@ -11,34 +11,63 @@ covers what the existing apps owe it, not the app itself.
 
 ---
 
-## 0. Issues
+## 0. Status — 24 September 2026
 
-Created 20 September 2026. Thrive items are sub-issues of the epic; Hive's
-are standalone and cross-referenced, since sub-issue links do not span the
-two boards cleanly.
+**Tracks B and C are complete. Track A has not started, and is now the only
+thing blocking everything else.**
 
-| Item | Issue | Depends on |
+| Track | State |
+|---|---|
+| **A** — COROS verification | **Not started.** [thrive#133](https://github.com/luketmoss/thrive/issues/133) open |
+| **B** — Thrive foundation | **Complete.** All six landed |
+| **C** — Hive additions | **Complete.** All five landed |
+| **D** — COROS sync | **Blocked on A** |
+| **E** — History backfill | **Blocked on D** |
+
+### Track B — delivered
+
+| Item | Issue | Merged as |
 |---|---|---|
-| Epic | [thrive#127](https://github.com/luketmoss/thrive/issues/127) | — |
-| B1 + B5 — `Workouts` A:Z, `started_at_utc` backfill | [thrive#128](https://github.com/luketmoss/thrive/issues/128) | — |
-| B2 — activity taxonomy | [thrive#129](https://github.com/luketmoss/thrive/issues/129) | #128 |
-| B3a — Apps Script API: scaffold + `Workouts` | [thrive#130](https://github.com/luketmoss/thrive/issues/130) | #128 |
-| B3b — API actions: Exercises, Templates, Sets | [thrive#134](https://github.com/luketmoss/thrive/issues/134) | #130 |
-| *(Labels needs no API — `domain.js` has none and no tool touches it)* | — | — |
-| B4 — `DailySummary` | [thrive#131](https://github.com/luketmoss/thrive/issues/131) | #128, #130 |
-| B6 — MCP server → API client | [thrive#132](https://github.com/luketmoss/thrive/issues/132) | #130, #134 |
-| A — COROS verification spike | [thrive#133](https://github.com/luketmoss/thrive/issues/133) | — |
-| C1–C3 — Hive audit log read path | [hive#239](https://github.com/luketmoss/hive/issues/239) | — |
-| C4 — Hive item deep links | [hive#240](https://github.com/luketmoss/hive/issues/240) | — |
+| B1+B5 — `Workouts` A:Z, `started_at_utc` backfill | #128 | #135 |
+| B2 — activity taxonomy | #129 | #136 |
+| B3a — Apps Script API: scaffold + `Workouts` | #130 | #137 |
+| B3b — API actions: Exercises, Templates, Sets | #134 | #138 |
+| B4 — `DailySummary` | #131 | #139 |
+| B6 — MCP server → API client | #132 | #142 |
 
-**Not on the project boards.** This environment has no `gh` CLI, and both
-repos' board tooling shells out to it (`.thrive/board.mjs` uses
-`execFileSync('gh', …)`; Hive's convention is `gh api graphql`). Placement
-needs `node .thrive/board.mjs` run locally, or the project's auto-add
-workflow.
+Plus #140 (Apps Script manifest) and #141 (stop tracking
+`settings.local.json`).
 
-Track D (the sync phases) is deliberately not broken out — those phases
-depend on answers from #133, and specifying them now would be guesswork.
+The API exposes 22 actions, including `getPlannedWorkouts`, `getDailySummary`,
+`rebuildDailySummary` and `previewSetUpdates` — the last added during #134's
+refinement precisely so #132's dry-run would not need to re-derive sheet rows.
+
+**The mirror count went to three before it came back to two.** `apps-script/src/types.js`
+is a third copy of the row layout, as CLAUDE.md now records. It caps the count
+for every consumer arriving *after* it — #131, the sync, almanac — which was
+the point; the SPA keeps its direct Sheets path, as Hive's does.
+
+### Track C — delivered
+
+[hive#239](https://github.com/luketmoss/hive/issues/239) (audit log read path,
+`completed` action, Denver dates), [hive#240](https://github.com/luketmoss/hive/issues/240)
+(item deep links) and [hive#241](https://github.com/luketmoss/hive/issues/241)
+(the due-date passthrough bug) all closed, along with
+[hive#244](https://github.com/luketmoss/hive/issues/244) (dry-run before any
+MCP delete).
+
+Two others closed there are worth noting, because they confirm risks this plan
+named: **hive#252**, where `applyStatusSideEffects` had diverged between its
+two copies, is exactly the mirror-drift the change-both-together rule exists to
+catch — and **hive#247**, "no CI on pull requests", is why #130's AC6 insisted
+the CI job be unfiltered.
+
+### Track A — the whole critical path
+
+[thrive#133](https://github.com/luketmoss/thrive/issues/133) is six questions
+and no code. Until it is answered, Phase D1's design is a guess: §2 [VERIFY]
+item 2 (token rotation) decides where the refresh token lives, and item 3
+(general read limits) now also decides the sync cadence — see §9.
 
 ---
 
@@ -278,7 +307,45 @@ date range.
 
 ---
 
-## 7. Where to start
+## 7. Inbound from almanac
+
+The Journal is named **almanac** and lives as a project folder in the **keel**
+workspace (`luketmoss/keel`), not its own repository. Its spec is at
+`almanac/docs/spec.md` (revision 2) and its nine issues — keel#350–#359 — are
+all refined and waiting at its gate.
+
+Its refinement produced **five new demands on this side** that were not in any
+document here. Three are Thrive work; two are constraints.
+
+| From almanac | What it needs here | Status |
+|---|---|---|
+| Plan action on a day | **Deep link to plan a workout on a date.** `#/workout/new` exists but takes no date | **New, unfiled** |
+| Health rows must be current (its §9.9) | **Several COROS syncs a day**, not one at 03:17 | **Amends §9 of the sync plan** — done, cadence still open |
+| Steps panel | **Step goal in the daily payload** | **[VERIFY]** — folds into #133 |
+| keel#355 | almanac is a browser SPA and **cannot ship Thrive's or Hive's API keys** | Constraint on how it reaches the APIs |
+| keel#360 | **Sync on demand** — a button rather than a wait | Spike, gated on this epic |
+
+**The sync-cadence one is the substantive change.** §9 here anchored a single
+03:17 run on "late enough that the previous day is complete". That was right
+for a retrospective consumer and wrong for a morning driver: the run fires
+before waking, so last night's sleep has not reached the COROS cloud and
+today's steps do not exist yet. Their §9.9 decides a number appears only once a
+sync has brought it — never a stand-in — which makes daytime runs a
+requirement rather than a nicety. §9 is amended; the cadence waits on #133's
+rate-limit answer.
+
+**The API-key constraint is worth watching.** `data-architecture.md` §6 has
+almanac reading through Thrive's and Hive's Apps Script APIs, which are
+API-key authenticated. A public SPA cannot hold those keys. keel#355 owns
+solving it, but if the answer changes what Thrive's API must accept, that
+lands here.
+
+**One Hive item is still unfiled**, per their §8: a deep link that opens Hive's
+create screen with the due date filled in, for the day's "Add" action.
+
+---
+
+## 8. Where to start
 
 Three things can begin at once, by different efforts:
 
@@ -296,7 +363,7 @@ the Thrive side that writes reaches production before it.
 
 ---
 
-## 8. Risks
+## 9. Risks
 
 - **B3 and B6 are a refactor of working code.** The API is not additive the
   way the schema work is. This is the largest single risk in the plan and

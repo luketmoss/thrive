@@ -665,8 +665,16 @@ sync-owned and always overwritten. They are not user-editable fields.
 
 **Local timezone is US Mountain.** MDT is UTC−6, MST is UTC−7.
 
-- **Run at ~03:00 local.** Late enough that the previous day is complete,
-  early enough to be fresh by morning.
+**Amended 24 September 2026: the job runs several times a day, not once.**
+Almanac's §9.9 decides that a health number appears only once a sync has
+brought it — no stand-ins, and running counts like steps show "so far" with
+the time of the sync that brought them. A single 03:17 run cannot serve that:
+it fires *before* waking, so last night's sleep has not reached the COROS
+cloud yet, and today's steps do not exist. The overnight run stays; daytime
+runs are added.
+
+- **Keep the ~03:00 local run.** It closes out the previous day, which is
+  what it was always for.
 - **GitHub Actions cron is UTC, and has no timezone setting.** Anchoring
   03:00 on the offset currently in effect (MDT, UTC−6) gives **`17 9 * * *`
   — 09:17 UTC**.
@@ -692,6 +700,33 @@ sync-owned and always overwritten. They are not user-editable fields.
   wake and the 3am job catches the previous day. Not wearing it means the
   previous day arrives a day late and the lookback handles it. Either works;
   it changes freshness, not correctness.
+
+### Daytime runs
+
+- **Add runs through the waking day**, each at an odd minute, each in UTC and
+  drifting with DST like the overnight one. A morning run after typical wake
+  time is the load-bearing one: it is what makes last night's sleep appear.
+  Later runs keep the running counts current.
+- **Extra runs cannot hurt correctness.** §6's rolling window with
+  upsert-by-vendor-ID is idempotent, so an extra run is wasted calls at worst.
+  This is purely a freshness change.
+- **[DECIDE] the cadence**, and settle it *after* #133. Every added run
+  multiplies ordinary read volume, and **§2 [VERIFY] item 3 — general rate
+  limits — is still unanswered**. The 50/day FIT cap is not the constraint
+  here (FITs are fetched once per new activity, not per run); the unknown is
+  the limit on ordinary reads. Picking five runs a day before knowing that
+  limit is guessing.
+- **Tighten the dead-man's switch.** §10 alerts when the newest `SyncLog` row
+  is older than **36 hours**, which was right for one run a night. At several
+  runs a day that is far too slack — a job that stops at breakfast would go
+  unnoticed until the following evening. The threshold should follow the
+  cadence, not the old daily assumption.
+- **`SyncLog` grows proportionally.** One row per run, so five runs a day is
+  ~1,800 rows a year instead of ~365. Still trivial for Sheets, but worth
+  knowing before someone reads the tab expecting one row per day.
+
+**Not yet decided here:** Almanac also wants sync-on-demand — a button rather
+than a wait — tracked as keel#360, a half-day spike gated on this epic.
 
 ---
 
