@@ -26,11 +26,14 @@ const sameNormalized = (a, b) =>
 /**
  * @param {{ archive: object, api: object, activityIds: string[], syncedAt: string,
  *   log?: (line: string) => void }} opts
- * @returns {Promise<{ created: number, updated: number, deleted: number, skipped: number,
- *   failures: string[] }>}  `failures` fails the run; a skip or a deleted row does not.
+ * @returns {Promise<{ created: number, updated: number, unchanged: number, deleted: number,
+ *   skipped: number, failures: string[] }>}  `failures` fails the run; a skip or a deleted
+ *   row does not. `updated` counts rows whose merged fields changed (SyncLog's
+ *   `n_updated`, #156); the API answers `updated` for every existing row, because
+ *   `synced_at` always moves, so a row that held what it already held is `unchanged`.
  */
 export async function syncActivities({ archive, api, activityIds, syncedAt, log = console.log }) {
-  const out = { created: 0, updated: 0, deleted: 0, skipped: 0, failures: [] };
+  const out = { created: 0, updated: 0, unchanged: 0, deleted: 0, skipped: 0, failures: [] };
   const fail = (message) => {
     out.failures.push(message);
     log(`  FAILED ${message}`);
@@ -80,11 +83,13 @@ export async function syncActivities({ archive, api, activityIds, syncedAt, log 
         log(`  activity ${id}: its row was deleted in Thrive, so it was not recreated`);
         continue;
       }
-      out[result.status] += 1;
+      const changed = !sameNormalized(result.written, lastWritten);
+      const status = result.status === 'updated' && !changed ? 'unchanged' : result.status;
+      out[status] += 1;
       const kept = result.kept?.length ? `; kept Thrive edits to ${result.kept.join(', ')}` : '';
-      log(`  activity ${id} (${incoming.type}${incoming.sub_type ? `/${incoming.sub_type}` : ''}): ${result.status} ${result.id}${kept}`);
+      log(`  activity ${id} (${incoming.type}${incoming.sub_type ? `/${incoming.sub_type}` : ''}): ${status} ${result.id}${kept}`);
 
-      if (!sameNormalized(result.written, lastWritten)) {
+      if (changed) {
         await archive.writeNormalized(file.fileId, result.written);
       }
     } catch (err) {

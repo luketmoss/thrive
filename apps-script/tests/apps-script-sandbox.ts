@@ -173,6 +173,27 @@ export function makeContentService() {
   };
 }
 
+/**
+ * LockService stub (#156): one script lock, counted so a test can assert a
+ * write took it, and refusing re-entry so a nested acquire fails loudly.
+ */
+export function makeLockService(state: { acquired: number; held: boolean }) {
+  return {
+    getScriptLock() {
+      return {
+        waitLock() {
+          if (state.held) throw new Error('Lock timeout: the script lock is already held');
+          state.held = true;
+          state.acquired += 1;
+        },
+        releaseLock() {
+          state.held = false;
+        },
+      };
+    },
+  };
+}
+
 /** PropertiesService stub backed by a plain object of script properties. */
 export function makePropertiesService(properties: Record<string, string>) {
   return {
@@ -214,6 +235,10 @@ export interface LoadedApi {
   summaryRows: CellValue[][];
   /** DailyHealth's backing array, or undefined when the tab does not exist. */
   healthRows?: CellValue[][];
+  /** SyncLog's backing array, or undefined when the tab does not exist (#156). */
+  syncLogRows?: CellValue[][];
+  /** How many times the script lock was taken, and whether it is held now. */
+  lock: { acquired: number; held: boolean };
 }
 
 /** Tab fixtures for `loadApi`. Each defaults to empty. */
@@ -225,6 +250,8 @@ export interface Fixtures {
   dailySummary?: CellValue[][];
   /** Omit entirely to model the tab not existing yet — the pre-sync state. */
   dailyHealth?: CellValue[][];
+  /** As dailyHealth: omit to model the tab not existing yet (#156). */
+  syncLog?: CellValue[][];
 }
 
 /**
@@ -249,6 +276,7 @@ export function loadApi(
   const templateRows = fixtures.templates ?? [];
   const setRows = fixtures.sets ?? [];
   const summaryRows = fixtures.dailySummary ?? [];
+  const lock = { acquired: 0, held: false };
 
   // A fixed clock where one is needed, so `created` and "today" are assertable.
   const FixedDate = options.now
@@ -261,8 +289,9 @@ export function loadApi(
 
   const sandbox = loadSources(
     ['types.js', 'utils.js', 'workouts.js', 'exercises.js', 'templates.js', 'sets.js',
-      'daily-summary.js', 'daily-health.js', 'main.js'],
+      'daily-summary.js', 'daily-health.js', 'sync-log.js', 'main.js'],
     {
+      LockService: makeLockService(lock),
     ContentService: makeContentService(),
     PropertiesService: makePropertiesService({ API_KEY: apiKey, SPREADSHEET_ID: 'sheet-id' }),
       Utilities: makeUtilities(options.uuids),
@@ -282,6 +311,9 @@ export function loadApi(
   if (fixtures.dailyHealth) {
     sheets.DailyHealth = makeSheet(fixtures.dailyHealth, sandbox.DAILY_HEALTH_COLUMN_COUNT);
   }
+  if (fixtures.syncLog) {
+    sheets.SyncLog = makeSheet(fixtures.syncLog, sandbox.SYNC_LOG_COLUMN_COUNT);
+  }
 
   sandbox.getSheet = (name: string) => {
     const sheet = sheets[name];
@@ -296,7 +328,7 @@ export function loadApi(
 
   return {
     sandbox, rows: workoutRows, exerciseRows, templateRows, setRows, summaryRows,
-    healthRows: fixtures.dailyHealth,
+    healthRows: fixtures.dailyHealth, syncLogRows: fixtures.syncLog, lock,
   };
 }
 

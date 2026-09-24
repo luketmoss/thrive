@@ -204,3 +204,27 @@ test('the entry moving down the list is not a change', async () => {
   assert.equal(res.status, 'unchanged');
   assert.deepEqual(drive.writes, []);
 });
+
+const HIKE = byPrefix('Hike');
+
+test('#156 AC2: a re-sync that changes nothing counts as unchanged, not updated', async () => {
+  const { archive } = await archiveWith([GRAVEL, HIKE]);
+  const api = fakeApi();
+  const ids = [GRAVEL.activity_id, HIKE.activity_id];
+  const first = await syncActivities({ archive, api, activityIds: ids, syncedAt: SYNCED, log: () => {} });
+  assert.deepEqual({ created: first.created, updated: first.updated, unchanged: first.unchanged }, { created: 2, updated: 0, unchanged: 0 });
+
+  // The API answers `updated` for both, because synced_at moved; only the
+  // renamed one actually changed.
+  const renamed = { ...GRAVEL };
+  const realUpsert = api.upsertSyncedWorkout;
+  api.upsertSyncedWorkout = async (payload) => {
+    const res = await realUpsert(payload);
+    if (payload.source_activity_id === renamed.activity_id) res.written = { ...res.written, name: 'Renamed' };
+    return res;
+  };
+  const lines = [];
+  const second = await syncActivities({ archive, api, activityIds: ids, syncedAt: '2026-09-25T15:17:02.000Z', log: (l) => lines.push(l) });
+  assert.deepEqual({ created: second.created, updated: second.updated, unchanged: second.unchanged }, { created: 0, updated: 1, unchanged: 1 });
+  assert.ok(lines.some((l) => l.includes(HIKE.activity_id) && /: unchanged w_/.test(l)));
+});

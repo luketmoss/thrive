@@ -143,3 +143,19 @@ function validateDate(field, value) {
   }
   return v;
 }
+
+/**
+ * Run `fn` holding the script lock, so two API callers cannot interleave a
+ * read-then-write (#156). A scheduled sync overlapping a local one would
+ * otherwise both see "no row" and both append. The SPA writes Sheets directly
+ * and is not covered; the sync's writes are the ones that race each other.
+ */
+function withScriptLock(fn) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    return fn();
+  } finally {
+    lock.releaseLock();
+  }
+}

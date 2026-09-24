@@ -2,7 +2,8 @@
 
 The COROS → Thrive sync (epic #163, design in `docs/coros-sync-plan.md`).
 It is a plain Node script with no model in the loop. It runs in GitHub Actions
-(`.github/workflows/coros-sync.yml`).
+(`.github/workflows/coros-sync.yml`), four times a day (#156), and every run
+writes one `SyncLog` row.
 
 It authorizes against COROS and keeps the rotating token in Drive (#151), lands
 the window's raw COROS payloads in Drive, unmodified (#152), then normalizes
@@ -205,6 +206,49 @@ the name was edited in Thrive).
 A missing `THRIVE_API_URL`/`THRIVE_API_KEY` costs the sheet write, never the
 archive: the run archives first, then fails naming both.
 
+## Schedule, SyncLog and the dead-man's switch (#156)
+
+**Four runs a day**, `17 9,13,18,0 * * *`: 03:17, 07:17, 12:17 and 18:17 MDT,
+an hour earlier in MST. DST drift is accepted (sync plan §9). 03:17 closes out
+yesterday; 07:17 brings in last night's sleep. `workflow_dispatch` still works,
+with `force_refresh`. The `coros-sync` concurrency group queues and never
+cancels a running job. GitHub keeps one *pending* run per group, so a newer one
+cancels an older pending one. That run never started and writes no row, and the
+window covers it.
+
+**One `SyncLog` row per run**, written last, whatever happened (`src/sync-run.mjs`):
+
+| Field | Holds |
+|---|---|
+| `run_id` | `schedule-<run id>-<attempt>`, `workflow_dispatch-…`, or `local-<started_at>` |
+| `started_at`, `finished_at` | ISO instants; `started_at` is the run's `synced_at` |
+| `window_start`, `window_end` | D − 10 and D + 1 |
+| `n_seen` | activities the COROS list named |
+| `n_new`, `n_updated` | `Workouts` rows created; rows whose merged fields actually changed |
+| `n_enriched`, `n_fit_fetched` | `0` until #155 and #154 |
+| `n_errors`, `status`, `error_detail` | `ok` (exit 0), `partial` (completed with failures, exit 1), `failed` (aborted, exit 1, detail led by the error class, e.g. `CorosGrantDeadError: …`) |
+
+A row that cannot be written fails the run too.
+
+**The Actions log is public**, because the repo is. The workflow sets
+`SYNC_LOG=summary`. The log then carries counts, dates, `status`, `run_id` and
+error class names, and nothing COROS sent. The detail is in the run's
+`SyncLog.error_detail` in the sheet. Run `node run.mjs` locally, without
+`SYNC_LOG`, for the full step-by-step log.
+
+**The dead-man's switch** is `coros-sync-watchdog.yml`. Every 3 hours it runs
+`node deadman.mjs` and fails when the newest `SyncLog` row, of any status, is
+more than **16 hours** old:
+- The gaps between runs are 9, 4, 5 and 6 h, so one dropped run leaves at most
+  15 h. That never alarms.
+- A stopped job is reported within 19 h.
+- To prove it trips without touching data, run
+  `node deadman.mjs --now <an ISO instant a day ahead>` or `--threshold-hours 0.01`.
+
+It cannot see GitHub's scheduler stopping for the whole repo. That includes
+the auto-disable after 60 days with no activity on a public repo. That layer is
+#157's "last synced" line.
+
 ## When a run fails
 
 | Error | Meaning | Fix |
@@ -216,7 +260,10 @@ archive: the run archives first, then fails naming both.
 | `N failure(s): activity …` | One activity's detail, or the health bundle, failed after 3 attempts. Everything else landed | Nothing, if it clears on the next run. If one activity keeps failing, look at its logged error |
 | `COROS no longer offers …` | A tool was renamed or removed | Check `tools/list` and update `src/ingest.mjs` |
 | `health <date>: not written, unrecognized format in <tool>: …` | COROS changed how it words a value the parser reads | Fix `src/normalize-health.mjs` for the quoted line, then re-run. The archive still holds the text |
-| `THRIVE_API_URL and THRIVE_API_KEY not set` | The Actions secrets are missing | `gh secret set THRIVE_API_URL` and `gh secret set THRIVE_API_KEY` |
+| `THRIVE_API_URL and THRIVE_API_KEY not set`, or `ThriveApiError (config)` in a summary log | The Actions secrets are missing | `gh secret set THRIVE_API_URL` and `gh secret set THRIVE_API_KEY` |
+| `SyncLog row … was not written` | The API refused or missed the run's row. The rest of the run may have landed | Read the quoted error (a local run shows it). A missing tab means `scripts/migrate-156-sync-log-tab.mjs` has not run |
+| `coros-sync-watchdog`: `has not run for N hours` | No sync has recorded a run within 16 h | Actions → coros-sync: is the schedule enabled, and are runs cancelled or timing out? |
+| `Lock timeout` | Another API caller held the script lock for over 30 s | Nothing, if it clears. The next run re-sends the window |
 | `DailyHealth: …` / `DailySummary rebuild: …` | The Thrive API refused the write or was unreachable | Read the quoted error. The next run re-sends the whole window |
 | `activity <id>: not written, unrecognized format in getActivityDetail: …` | COROS changed how it words a value the activity parser reads | Fix `src/normalize-activity.mjs` for the quoted line, then re-run. The archive still holds the text |
 | `activity <id>: upsertSyncedWorkout: N Workouts rows are coros activity …` | Two rows claim one COROS activity | Delete all but one in Thrive, then re-run |
@@ -231,6 +278,10 @@ archive: the run archives first, then fails naming both.
   first. The run re-reads Drive and retries once, but only if the file holds a different token.
 - **Never two at once.** The workflow's `concurrency: coros-sync` group queues runs, and never
   cancels one mid-refresh.
+
+In a summary-mode log, a failure is only counted, and an abort shows only its
+class, e.g. `Aborted by CorosGrantDeadError`. Match the class against the table
+above; the message is in that run's `SyncLog` row.
 
 ## Tests
 

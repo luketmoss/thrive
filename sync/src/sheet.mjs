@@ -72,7 +72,7 @@ export async function writeSheet({ archive, api, window, activityIds = [], synce
     out.activities = await syncActivities({ archive, api, activityIds, syncedAt, log });
     out.failures.push(...out.activities.failures);
     const a = out.activities;
-    log(`  Workouts: ${a.created} created, ${a.updated} updated, ${a.deleted} deleted in Thrive and left so, ${a.skipped} skipped`);
+    log(`  Workouts: ${a.created} created, ${a.updated} updated, ${a.unchanged} unchanged, ${a.deleted} deleted in Thrive and left so, ${a.skipped} skipped`);
   } catch (err) {
     const message = `Workouts: ${redact(err.message || String(err))}`;
     out.failures.push(message);

@@ -1,10 +1,18 @@
 name: coros-sync
 
-# The COROS → Thrive sync (epic #163). Manual only for now: #151 authorizes,
-# #152 archives the window's raw payloads in the bot's Drive, #165 and #166
-# normalize daily health and activities into the sheet through the Thrive API
-# and rebuild the DailySummary rollup, and #156 adds the schedule.
+# The COROS → Thrive sync (epic #163). #151 authorizes, #152 archives the
+# window's raw payloads in the bot's Drive, #165 and #166 normalize daily
+# health and activities into the sheet through the Thrive API and rebuild the
+# DailySummary rollup, and #156 schedules it and writes one SyncLog row a run.
+# coros-sync-watchdog.yml is the dead-man's switch for this schedule.
 on:
+  # 03:17, 07:17, 12:17 and 18:17 MDT (UTC-6); an hour earlier in MST. DST
+  # drift is accepted, not corrected (sync plan §9): one expression, never a
+  # second line, because two would double-run on changeover days. 03:17
+  # closes out yesterday; 07:17 is the run that brings in last night's sleep.
+  # The odd minute dodges the top-of-hour crowd GitHub delays or drops.
+  schedule:
+    - cron: '17 9,13,18,0 * * *'
   workflow_dispatch:
     inputs:
       force_refresh:
@@ -16,6 +24,10 @@ on:
 # second run refreshing concurrently would present a spent token and fail
 # with "Duplicate grant rejected". Queue, never cancel: a cancelled run could
 # die between refresh and persist and lose the grant.
+#
+# GitHub keeps at most one *pending* run per group: a newer one cancels an
+# older pending one. That run never started, so it began no refresh and writes
+# no SyncLog row; the rolling window fetches whatever it would have.
 concurrency:
   group: coros-sync
   cancel-in-progress: false
@@ -41,7 +53,11 @@ jobs:
       - name: sync
         run: node run.mjs
         env:
+          # Empty on a scheduled run, which therefore never forces a rotation.
           FORCE_REFRESH: ${{ inputs.force_refresh }}
+          # The repo is public, and so is this log: counts, dates, status and
+          # run_id only. The detail goes to the run's SyncLog row (#156 AC5).
+          SYNC_LOG: summary
           GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
           GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
           GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
