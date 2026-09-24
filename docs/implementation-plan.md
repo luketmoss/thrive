@@ -307,41 +307,69 @@ date range.
 
 ---
 
-## 7. Inbound from almanac
+## 7. Inbound from almanac — all filed
 
 The Journal is named **almanac** and lives as a project folder in the **keel**
-workspace (`luketmoss/keel`), not its own repository. Its spec is at
-`almanac/docs/spec.md` (revision 2) and its nine issues — keel#350–#359 — are
-all refined and waiting at its gate.
+workspace (`luketmoss/keel`), not its own repository. Its spec is
+`almanac/docs/spec.md` (revision 2); its nine issues, keel#350–#359, are
+refined and waiting at its gate.
 
-Its refinement produced **five new demands on this side** that were not in any
-document here. Three are Thrive work; two are constraints.
+Its refinement produced work on this side, and **all of it already has
+complementary issues in Thrive and Hive** — filed 23 September.
 
-| From almanac | What it needs here | Status |
+### Thrive
+
+| Issue | What | Answers |
 |---|---|---|
-| Plan action on a day | **Deep link to plan a workout on a date.** `#/workout/new` exists but takes no date | **New, unfiled** |
-| Health rows must be current (its §9.9) | **Several COROS syncs a day**, not one at 03:17 | **Amends §9 of the sync plan** — done, cadence still open |
-| Steps panel | **Step goal in the daily payload** | **[VERIFY]** — folds into #133 |
-| keel#355 | almanac is a browser SPA and **cannot ship Thrive's or Hive's API keys** | Constraint on how it reaches the APIs |
-| keel#360 | **Sync on demand** — a button rather than a wait | Spike, gated on this epic |
+| [#143](https://github.com/luketmoss/thrive/issues/143) | Open the workout planner for a given date from a URL | almanac's "Plan" action; `#/workout/new` takes no date |
+| [#144](https://github.com/luketmoss/thrive/issues/144) | Accept an almanac Google access token for read actions | **keel#355** |
+| [#145](https://github.com/luketmoss/thrive/issues/145) | Record an estimated duration for a planned workout | Training panel |
+| [#146](https://github.com/luketmoss/thrive/issues/146) | `getPlannedWorkouts` returns exercise and set counts | Training panel |
+| [#147](https://github.com/luketmoss/thrive/issues/147) | Read `DailyHealth` through the Apps Script API | Health panels |
+| [#148](https://github.com/luketmoss/thrive/issues/148) | `DailyHealth` carries bed and wake times, and a step goal if COROS sends one | Health panels; folds the step-goal **[VERIFY]** into the sync |
+| [#149](https://github.com/luketmoss/thrive/issues/149) | The FIT request budget must be per day, not per run | **Amends §4 and §6 of the sync plan** |
 
-**The sync-cadence one is the substantive change.** §9 here anchored a single
-03:17 run on "late enough that the previous day is complete". That was right
-for a retrospective consumer and wrong for a morning driver: the run fires
-before waking, so last night's sleep has not reached the COROS cloud and
-today's steps do not exist yet. Their §9.9 decides a number appears only once a
-sync has brought it — never a stand-in — which makes daytime runs a
-requirement rather than a nicety. §9 is amended; the cadence waits on #133's
-rate-limit answer.
+### Hive
 
-**The API-key constraint is worth watching.** `data-architecture.md` §6 has
-almanac reading through Thrive's and Hive's Apps Script APIs, which are
-API-key authenticated. A public SPA cannot hold those keys. keel#355 owns
-solving it, but if the answer changes what Thrive's API must accept, that
-lands here.
+| Issue | What |
+|---|---|
+| [#263](https://github.com/luketmoss/hive/issues/263) | Deep-link to create an item with its due date filled in |
+| [#264](https://github.com/luketmoss/hive/issues/264) | Accept an almanac Google access token for read actions |
+| [#265](https://github.com/luketmoss/hive/issues/265) | `getAuditLog` rows carry the item's title and board |
+| [#266](https://github.com/luketmoss/hive/issues/266) | Read every board's statuses in one call |
 
-**One Hive item is still unfiled**, per their §8: a deep link that opens Hive's
-create screen with the due date filled in, for the day's "Add" action.
+### How keel#355 was answered
+
+`data-architecture.md` §6 had almanac reading through Apps Script APIs
+authenticated by a static key. **A browser app on GitHub Pages cannot hold
+one** — anything read from `import.meta.env` is inlined into a public bundle,
+which would hand read *and write* access to anyone viewing source.
+
+thrive#144 and hive#264 solve it the same way: almanac already holds a Google
+access token from its own sign-in, so it sends that instead. The API verifies
+it against `oauth2.googleapis.com/tokeninfo`, checks `aud` and the allowed
+email against script properties, caches the verdict under a SHA-256 of the
+token (never the token itself), and permits an **explicit allow-list of read
+actions only**. The static key is untouched and keeps full access for the MCP
+server and the sync.
+
+Two details worth carrying: `previewSetUpdates` is deliberately excluded from
+the read list even though it writes nothing — it is the dry run of a write and
+takes a write payload. And the envelope gains an optional `code`, additively,
+so almanac can distinguish "reconnect" from "this is set up wrong" without
+matching English.
+
+### What #149 corrects
+
+**It found a contradiction inside `coros-sync-plan.md` rather than a gap.** §4
+and §10 both say the FIT counter is *daily*; §6's pseudocode set
+`fit_budget = 50` inside the run. Those agree only while the job runs once a
+night — which §9 no longer does. Amended: the budget is derived by summing
+`n_fit_fetched` across the day's `SyncLog` rows, so it is shared across runs,
+needs no new state, and survives a crashed run.
+
+This also unblocks keel#360, which could not size "how many extra runs a day
+the FIT cap allows" until it was settled.
 
 ---
 

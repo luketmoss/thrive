@@ -300,6 +300,23 @@ and a failure path into analysis, in exchange for storage that is free here.
 Either way, **track a daily FIT request counter** and have the job stop
 cleanly at the cap rather than erroring through it.
 
+**The counter is per calendar day, shared across runs — thrive#149.** §6's
+pseudocode originally set `fit_budget = 50` *inside* the run, which agreed
+with this section only while the job ran once a night. With several runs a day
+(§9) a per-run budget of 50 permits up to 200–250 requests against a confirmed
+50/day cap.
+
+Steady state is safe mostly by accident — `if row.fit_ref is null` means an
+already-fetched activity is not re-fetched, so later runs usually fetch
+nothing. The exposure is the backlog case: a stretch of days with many
+activities, a recovery after the job has been down, or a FIT fetch that keeps
+failing and leaves `fit_ref` null. Each of those has the next run retry with a
+fresh 50 and spend the daily cap without noticing.
+
+Derive the budget rather than storing it: sum `n_fit_fetched` across the day's
+`SyncLog` rows at the start of a run and begin at `50 - that`. No new tab, no
+new column, and it survives a crashed run.
+
 **Storage:** Google Drive, foldered by year and month, with the Drive file ID
 referenced from the sheet. Not sheet cells — Rev 2 was right about that, and
 a cell could not hold one regardless. Not the git repo either: ~500
@@ -488,7 +505,11 @@ run_nightly_sync():
 
     # --- activities ---
     activities = mcp.list_activities(window_start, window_end)
-    fit_budget = 50
+
+    # FIT budget is per CALENDAR DAY in America/Denver, shared across every
+    # run that day — not per run. Derived, not stored, so it survives a crash.
+    # See thrive#149.
+    fit_budget = 50 - sum(n_fit_fetched for today's SyncLog rows)
 
     for a in activities:
         detail = mcp.get_activity_detail(a.id)
