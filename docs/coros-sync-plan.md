@@ -168,7 +168,9 @@ the consolidated URL routes to.
    each need their own call. Every sleep tool files a night under its
    **wake-up day**. Note the two tools disagree on "total": the daily
    overview's includes awake time (7h 17m on the test night), the sleep
-   tool's "Main Sleep" excludes it (7h 6m).
+   tool's "Main Sleep" excludes it (7h 6m). For #148: `querySleepData`'s
+   main sleep window supplies **bed and wake times**; **no tool returns a
+   step goal**, in any payload or tool description.
 5. **Sport type vocabulary — published.** The full code list is in the
    `querySportRecords` tool description; `docs/data-architecture.md` §4 has
    the venue-bearing subset. Venue is encoded in the code for most families
@@ -383,6 +385,30 @@ and a failure path into analysis, in exchange for storage that is free here.
 Either way, **track a daily FIT request counter** and have the job stop
 cleanly at the cap rather than erroring through it.
 
+**The counter is per calendar day, shared across runs — thrive#149.** §6's
+pseudocode originally set `fit_budget = 50` *inside* the run, which agreed
+with this section only while the job ran once a night. With several runs a day
+(§9) a per-run budget of 50 permits up to 200–250 requests against a confirmed
+50/day cap.
+
+Steady state is safe mostly by accident — `if row.fit_ref is null` means an
+already-fetched activity is not re-fetched, so later runs usually fetch
+nothing. The exposure is the backlog case: a stretch of days with many
+activities, a recovery after the job has been down, or a FIT fetch that keeps
+failing and leaves `fit_ref` null. Each of those has the next run retry with a
+fresh 50 and spend the daily cap without noticing.
+
+Derive the budget rather than storing it: sum `n_fit_fetched` across the
+`SyncLog` rows of the **last 24 hours** at the start of a run and begin at
+`50 - that`. No new tab, no new column, and it survives a crashed run.
+
+*Amended by #133: a rolling 24 hours, not the calendar day.* COROS's
+allowance is a **fixed 24-hour window that opens at the first request**, not a
+Denver calendar day (§2). Counting by calendar day overshoots across midnight
+— 30 fetches at 22:00, and a 06:00 run believes it has 50 left when COROS has
+20. A rolling 24-hour sum always covers the fixed window's own requests, so it
+can only under-spend, never over-spend.
+
 **Storage:** Google Drive, foldered by year and month, with the Drive file ID
 referenced from the sheet. Not sheet cells — Rev 2 was right about that, and
 a cell could not hold one regardless. Not the git repo either: ~500
@@ -504,7 +530,7 @@ rows/year is trivial for Sheets.
 | D | `steps` | `queryDailyHealthData` |
 | E | `calories` | `queryDailyHealthData` |
 | F–J | `sleep_*` | total / deep / REM / light / awake, in **seconds**, from `queryDailyHealthData`. Minute precision in practice. `sleep_total` is COROS's "Total", which *includes* awake time |
-| K | `sleep_score` | `querySleepData`, 0–100. Added by #133. Kept apart from the Journal's self-reported `sleep_quality` — journal-spec §6 |
+| K | `sleep_score` | `querySleepData`, 0–100. Added by #133. Kept apart from almanac's self-reported `sleep_quality` — sleep is double-sourced |
 | L | `vo2max` | EvoLab. **Current-state only** — a nightly snapshot, blank until the watch has an estimate |
 | M | `recovery` | EvoLab. **Current-state only** — a snapshot at job time, not a daily value |
 | N | `training_load` | EvoLab, per day |
@@ -574,7 +600,12 @@ run_nightly_sync():
 
     # --- activities ---
     activities = mcp.list_activities(window_start, window_end)
-    fit_budget = 50
+
+    # FIT budget is a ROLLING 24 HOURS, shared across every run — not per
+    # run, and not per calendar day: COROS's window is a fixed 24h from its
+    # first request (§2). Derived, not stored, so it survives a crash.
+    # See thrive#149, amended by #133.
+    fit_budget = 50 - sum(n_fit_fetched for SyncLog rows in the last 24h)
 
     for a in activities:
         detail = mcp.get_activity_detail(a.id)
@@ -755,8 +786,16 @@ sync-owned and always overwritten. They are not user-editable fields.
 
 **Local timezone is US Mountain.** MDT is UTC−6, MST is UTC−7.
 
-- **Run at ~03:00 local.** Late enough that the previous day is complete,
-  early enough to be fresh by morning.
+**Amended 24 September 2026: the job runs several times a day, not once.**
+Almanac's §9.9 decides that a health number appears only once a sync has
+brought it — no stand-ins, and running counts like steps show "so far" with
+the time of the sync that brought them. A single 03:17 run cannot serve that:
+it fires *before* waking, so last night's sleep has not reached the COROS
+cloud yet, and today's steps do not exist. The overnight run stays; daytime
+runs are added.
+
+- **Keep the ~03:00 local run.** It closes out the previous day, which is
+  what it was always for.
 - **GitHub Actions cron is UTC, and has no timezone setting.** Anchoring
   03:00 on the offset currently in effect (MDT, UTC−6) gives **`17 9 * * *`
   — 09:17 UTC**.
@@ -782,6 +821,34 @@ sync-owned and always overwritten. They are not user-editable fields.
   wake and the 3am job catches the previous day. Not wearing it means the
   previous day arrives a day late and the lookback handles it. Either works;
   it changes freshness, not correctness.
+
+### Daytime runs
+
+- **Add runs through the waking day**, each at an odd minute, each in UTC and
+  drifting with DST like the overnight one. A morning run after typical wake
+  time is the load-bearing one: it is what makes last night's sleep appear.
+  Later runs keep the running counts current.
+- **Extra runs cannot hurt correctness.** §6's rolling window with
+  upsert-by-vendor-ID is idempotent, so an extra run is wasted calls at worst.
+  This is purely a freshness change.
+- **[DECIDE] the cadence** — no longer blocked. The unknown was the limit on
+  ordinary reads, and #133 found none published and none observed (§2 item
+  3). A run is roughly a dozen summary-level calls — one activity list, a
+  detail per new activity, and one range call per daily-health tool — so
+  five runs a day is on the order of 60 calls. The 50-file FIT cap is not the
+  constraint either (FITs are fetched once per new activity, not per run).
+  Choose the cadence on freshness grounds.
+- **Tighten the dead-man's switch.** §10 alerts when the newest `SyncLog` row
+  is older than **36 hours**, which was right for one run a night. At several
+  runs a day that is far too slack — a job that stops at breakfast would go
+  unnoticed until the following evening. The threshold should follow the
+  cadence, not the old daily assumption.
+- **`SyncLog` grows proportionally.** One row per run, so five runs a day is
+  ~1,800 rows a year instead of ~365. Still trivial for Sheets, but worth
+  knowing before someone reads the tab expecting one row per day.
+
+**Not yet decided here:** Almanac also wants sync-on-demand — a button rather
+than a wait — tracked as keel#360, a half-day spike gated on this epic.
 
 ---
 

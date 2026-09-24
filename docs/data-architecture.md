@@ -15,7 +15,9 @@ amendments it forces on the sync plan.
 `docs/implementation-plan.md` sequences the Thrive and Hive work these
 contracts require.
 
-`docs/journal-spec.md` specifies the Journal app itself. **This document
+`docs/journal-spec.md` is **superseded** — the Journal is named **almanac**
+and its live spec is `almanac/docs/spec.md` in `luketmoss/keel`. That stub
+originally specified the Journal app itself. **This document
 holds the contracts; that one holds the product.** Where they overlap, the
 spec is newer and says so explicitly.
 
@@ -54,7 +56,7 @@ becomes concrete rather than hypothetical.
 | System | Repo | Storage | Grain | Read path today |
 |---|---|---|---|---|
 | **Thrive** | `luketmoss/thrive` | Google Sheet "Groundwork" | One row per workout; one row per set | Browser OAuth (SPA), service account (MCP server) |
-| **Hive** | `luketmoss/hive` | Google Sheet "Hive Board" | One row per item | Browser OAuth (SPA), **Apps Script API with API key** |
+| **Hive** | `luketmoss/hive` | Google Sheet "Hive Board" | One row per item | Browser OAuth (SPA), **Apps Script API with API key** (plus a read-only Google-token path — hive#264) |
 | **Journal** | *not started* | — | One row per day | — |
 | **Forage** | `luketmoss/forage` | *incomplete* | Presumably per meal | — |
 
@@ -520,6 +522,46 @@ GitHub Actions secret.
 **Sequencing consequence:** the API must exist before the sync can write
 anything. This moves it ahead of the sync plan's Phase 3, which is the first
 phase that touches the sheet. See that document's §15.
+
+### Amended: almanac authenticates with a Google token, not a key
+
+**This section originally had almanac calling both APIs with their static
+keys. That is not possible and has been superseded by
+[thrive#144](https://github.com/luketmoss/thrive/issues/144) and
+[hive#264](https://github.com/luketmoss/hive/issues/264).**
+
+almanac is a browser app on GitHub Pages. Anything it reads from
+`import.meta.env` is inlined into a public bundle, so shipping
+`THRIVE_API_KEY` would hand **read and write** access to the sheet to anyone
+who opened the page source. The key is not a secret once it is in a bundle.
+
+It already holds a Google access token from its own sign-in, so it sends that
+instead:
+
+- `access_token` present → verified against `oauth2.googleapis.com/tokeninfo`;
+  the caller is a **token caller** and may **read only**
+- `key` present, no token → today's behaviour, full access, for the MCP server
+  and the COROS sync
+- **Both present → token caller.** Privilege must never rise by adding a
+  parameter
+- `aud` must match a `TOKEN_CLIENT_ID` script property and the verified email a
+  `TOKEN_ALLOWED_EMAIL` one; either unset refuses every token call rather than
+  opening the door
+
+The verdict is cached under a SHA-256 of the token — never the token itself,
+which must not reach a cache key, a log line, an error or a response. Reads
+are an **explicit allow-list**, so an action added later is refused for token
+callers until someone names it. `previewSetUpdates` is deliberately excluded
+despite writing nothing: it is the dry run of a write and takes a write
+payload.
+
+The response envelope gains an optional `code`, additively, so a caller can
+tell `token_invalid` (reconnect) from `token_forbidden` (misconfigured)
+without matching English.
+
+The transport also changes: almanac posts form-encoded rather than putting a
+live token in a query string, so it never lands anywhere that logs a URL.
+Apps Script populates `e.parameter` identically either way.
 
 ### Knock-on effects
 

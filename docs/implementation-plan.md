@@ -2,43 +2,79 @@
 
 **Revision 1** — 20 September 2026
 **Scope:** The work in **Thrive** and **Hive** only. The Journal app is
-specified in `docs/journal-spec.md` and is being built elsewhere; this plan
+specified in `almanac/docs/spec.md` (in `luketmoss/keel`) and is being built
+there; this plan
 covers what the existing apps owe it, not the app itself.
 
 **Design references** — this document sequences, it does not re-argue:
 `docs/coros-sync-plan.md` (COROS → Thrive), `docs/data-architecture.md`
-(cross-app contracts), `docs/journal-spec.md` (what the Journal consumes).
+(cross-app contracts). The Journal's own spec now lives in `luketmoss/keel`
+as `almanac/docs/spec.md`; `docs/journal-spec.md` here is a superseded stub.
 
 ---
 
-## 0. Issues
+## 0. Status — 24 September 2026
 
-Created 20 September 2026. Thrive items are sub-issues of the epic; Hive's
-are standalone and cross-referenced, since sub-issue links do not span the
-two boards cleanly.
+**Tracks A, B and C are complete. Track D is unblocked.**
 
-| Item | Issue | Depends on |
+| Track | State |
+|---|---|
+| **A** — COROS verification | **Complete.** [thrive#133](https://github.com/luketmoss/thrive/issues/133), answers in sync §2 and §15 |
+| **B** — Thrive foundation | **Complete.** All six landed |
+| **C** — Hive additions | **Complete.** All five landed |
+| **D** — COROS sync | **Unblocked** |
+| **E** — History backfill | **Blocked on D** |
+
+### Track B — delivered
+
+| Item | Issue | Merged as |
 |---|---|---|
-| Epic | [thrive#127](https://github.com/luketmoss/thrive/issues/127) | — |
-| B1 + B5 — `Workouts` A:Z, `started_at_utc` backfill | [thrive#128](https://github.com/luketmoss/thrive/issues/128) | — |
-| B2 — activity taxonomy | [thrive#129](https://github.com/luketmoss/thrive/issues/129) | #128 |
-| B3a — Apps Script API: scaffold + `Workouts` | [thrive#130](https://github.com/luketmoss/thrive/issues/130) | #128 |
-| B3b — API actions: Exercises, Templates, Sets | [thrive#134](https://github.com/luketmoss/thrive/issues/134) | #130 |
-| *(Labels needs no API — `domain.js` has none and no tool touches it)* | — | — |
-| B4 — `DailySummary` | [thrive#131](https://github.com/luketmoss/thrive/issues/131) | #128, #130 |
-| B6 — MCP server → API client | [thrive#132](https://github.com/luketmoss/thrive/issues/132) | #130, #134 |
-| A — COROS verification spike | [thrive#133](https://github.com/luketmoss/thrive/issues/133) | — |
-| C1–C3 — Hive audit log read path | [hive#239](https://github.com/luketmoss/hive/issues/239) | — |
-| C4 — Hive item deep links | [hive#240](https://github.com/luketmoss/hive/issues/240) | — |
+| B1+B5 — `Workouts` A:Z, `started_at_utc` backfill | #128 | #135 |
+| B2 — activity taxonomy | #129 | #136 |
+| B3a — Apps Script API: scaffold + `Workouts` | #130 | #137 |
+| B3b — API actions: Exercises, Templates, Sets | #134 | #138 |
+| B4 — `DailySummary` | #131 | #139 |
+| B6 — MCP server → API client | #132 | #142 |
 
-**Not on the project boards.** This environment has no `gh` CLI, and both
-repos' board tooling shells out to it (`.thrive/board.mjs` uses
-`execFileSync('gh', …)`; Hive's convention is `gh api graphql`). Placement
-needs `node .thrive/board.mjs` run locally, or the project's auto-add
-workflow.
+Plus #140 (Apps Script manifest) and #141 (stop tracking
+`settings.local.json`).
 
-Track D (the sync phases) is deliberately not broken out — those phases
-depend on answers from #133, and specifying them now would be guesswork.
+The API exposes 22 actions, including `getPlannedWorkouts`, `getDailySummary`,
+`rebuildDailySummary` and `previewSetUpdates` — the last added during #134's
+refinement precisely so #132's dry-run would not need to re-derive sheet rows.
+
+**The mirror count went to three before it came back to two.** `apps-script/src/types.js`
+is a third copy of the row layout, as CLAUDE.md now records. It caps the count
+for every consumer arriving *after* it — #131, the sync, almanac — which was
+the point; the SPA keeps its direct Sheets path, as Hive's does.
+
+### Track C — delivered
+
+[hive#239](https://github.com/luketmoss/hive/issues/239) (audit log read path,
+`completed` action, Denver dates), [hive#240](https://github.com/luketmoss/hive/issues/240)
+(item deep links) and [hive#241](https://github.com/luketmoss/hive/issues/241)
+(the due-date passthrough bug) all closed, along with
+[hive#244](https://github.com/luketmoss/hive/issues/244) (dry-run before any
+MCP delete).
+
+Two others closed there are worth noting, because they confirm risks this plan
+named: **hive#252**, where `applyStatusSideEffects` had diverged between its
+two copies, is exactly the mirror-drift the change-both-together rule exists to
+catch — and **hive#247**, "no CI on pull requests", is why #130's AC6 insisted
+the CI job be unfiltered.
+
+### Track A — delivered
+
+[thrive#133](https://github.com/luketmoss/thrive/issues/133) answered all six
+questions on 23 September. The two that gated Phase D1 came out cleanly:
+refresh tokens **rotate**, so the Drive-stored token stands, and there is
+**no ordinary read limit** published or observed, so the §9 cadence is free
+to choose on freshness grounds.
+
+It also changed three things: COROS tools return **prose, not structured
+data** (a new [DECIDE], sync §17), the FIT allowance is a **fixed 24-hour
+window**, so #149's budget is a rolling 24 hours rather than a calendar day,
+and **COROS sends no step goal**, which settles #148's open question.
 
 ---
 
@@ -279,7 +315,78 @@ date range.
 
 ---
 
-## 7. Where to start
+## 7. Inbound from almanac — all filed
+
+The Journal is named **almanac** and lives as a project folder in the **keel**
+workspace (`luketmoss/keel`), not its own repository. Its spec is
+`almanac/docs/spec.md` (revision 2); its nine issues, keel#350–#359, are
+refined and waiting at its gate.
+
+Its refinement produced work on this side, and **all of it already has
+complementary issues in Thrive and Hive** — filed 23 September.
+
+### Thrive
+
+| Issue | What | Answers |
+|---|---|---|
+| [#143](https://github.com/luketmoss/thrive/issues/143) | Open the workout planner for a given date from a URL | almanac's "Plan" action; `#/workout/new` takes no date |
+| [#144](https://github.com/luketmoss/thrive/issues/144) | Accept an almanac Google access token for read actions | **keel#355** |
+| [#145](https://github.com/luketmoss/thrive/issues/145) | Record an estimated duration for a planned workout | Training panel |
+| [#146](https://github.com/luketmoss/thrive/issues/146) | `getPlannedWorkouts` returns exercise and set counts | Training panel |
+| [#147](https://github.com/luketmoss/thrive/issues/147) | Read `DailyHealth` through the Apps Script API | Health panels |
+| [#148](https://github.com/luketmoss/thrive/issues/148) | `DailyHealth` carries bed and wake times, and a step goal if COROS sends one | Health panels. #133: bed and wake times come from `querySleepData`; COROS sends **no step goal** |
+| [#149](https://github.com/luketmoss/thrive/issues/149) | The FIT request budget must be per day, not per run | **Amends §4 and §6 of the sync plan** |
+
+### Hive
+
+| Issue | What |
+|---|---|
+| [#263](https://github.com/luketmoss/hive/issues/263) | Deep-link to create an item with its due date filled in |
+| [#264](https://github.com/luketmoss/hive/issues/264) | Accept an almanac Google access token for read actions |
+| [#265](https://github.com/luketmoss/hive/issues/265) | `getAuditLog` rows carry the item's title and board |
+| [#266](https://github.com/luketmoss/hive/issues/266) | Read every board's statuses in one call |
+
+### How keel#355 was answered
+
+`data-architecture.md` §6 had almanac reading through Apps Script APIs
+authenticated by a static key. **A browser app on GitHub Pages cannot hold
+one** — anything read from `import.meta.env` is inlined into a public bundle,
+which would hand read *and write* access to anyone viewing source.
+
+thrive#144 and hive#264 solve it the same way: almanac already holds a Google
+access token from its own sign-in, so it sends that instead. The API verifies
+it against `oauth2.googleapis.com/tokeninfo`, checks `aud` and the allowed
+email against script properties, caches the verdict under a SHA-256 of the
+token (never the token itself), and permits an **explicit allow-list of read
+actions only**. The static key is untouched and keeps full access for the MCP
+server and the sync.
+
+Two details worth carrying: `previewSetUpdates` is deliberately excluded from
+the read list even though it writes nothing — it is the dry run of a write and
+takes a write payload. And the envelope gains an optional `code`, additively,
+so almanac can distinguish "reconnect" from "this is set up wrong" without
+matching English.
+
+### What #149 corrects
+
+**It found a contradiction inside `coros-sync-plan.md` rather than a gap.** §4
+and §10 both say the FIT counter is *daily*; §6's pseudocode set
+`fit_budget = 50` inside the run. Those agree only while the job runs once a
+night — which §9 no longer does. Amended: the budget is derived by summing
+`n_fit_fetched` across the day's `SyncLog` rows, so it is shared across runs,
+needs no new state, and survives a crashed run.
+
+**#133 amended the window.** COROS's allowance turned out to be a fixed 24-hour
+window opening at the first request, not a calendar day, so a calendar-day sum
+can overshoot across midnight. The sum now runs over the last 24 hours of
+`SyncLog` rows — same derivation, no new state, and it can only under-spend.
+
+This also unblocks keel#360, which could not size "how many extra runs a day
+the FIT cap allows" until it was settled.
+
+---
+
+## 8. Where to start
 
 Three things can begin at once, by different efforts:
 
@@ -297,7 +404,7 @@ the Thrive side that writes reaches production before it.
 
 ---
 
-## 8. Risks
+## 9. Risks
 
 - **B3 and B6 are a refactor of working code.** The API is not additive the
   way the schema work is. This is the largest single risk in the plan and
