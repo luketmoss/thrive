@@ -58,6 +58,11 @@ Google Sheet "Groundwork" with these tabs:
   `total_distance_m`/`total_ascent_m` are **outdoor only**, so they will not
   equal the sum of a day's activity distances on any day with an indoor
   session — correct, and surprising, so say so wherever it is displayed.
+- **SyncLog** (A:M) — one row per COROS sync run (#156): run_id, started_at,
+  finished_at, window_start, window_end, n_seen, n_new, n_updated, n_enriched,
+  n_fit_fetched, n_errors, status (`ok`/`partial`/`failed`), error_detail.
+  Appended only by the sync; the dead-man's switch
+  (`coros-sync-watchdog.yml`) fails when the newest row is over 16 h old.
 
 `Created` on `Exercises`/`Workouts`/`Labels` is written but never read — a
 deliberate forensic trail, not dead weight to be removed.

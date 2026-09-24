@@ -30,12 +30,13 @@ added to a tab is added in both.
 | `src/sets.js` | `Sets`, slot resolution, atomic bulk update, history |
 | `src/daily-summary.js` | `DailySummary` rollup, rebuild over any range |
 | `src/daily-health.js` | `DailyHealth` upsert by date, for the COROS sync (#165) |
+| `src/sync-log.js` | `SyncLog` append and newest-first read, one row per sync run (#156) |
 | `src/main.js` | `doGet` dispatch, auth, response envelope |
 
 `Labels` is deliberately absent: `domain.js` contains no Labels code and no
 `thrive_*` tool touches it. Tab actions travel with their tabs, so
 `DailySummary`'s are in #131's scope, `DailyHealth`'s write in #165's, and
-`SyncLog` arrives with the sync.
+`SyncLog`'s in #156's.
 
 ## The transport, and its limit
 
@@ -197,6 +198,28 @@ SPA between a read and a write cannot be lost. Key only, like every write.
   `edited` (the fields the user changed, which stay kept on every later run),
   for the sync to store as the next `last_written`; and `kept`, the fields
   this call declined to overwrite.
+
+### SyncLog (#156)
+
+| Action | Parameters / payload |
+|---|---|
+| `appendSyncLog` | `{"row":{"run_id":"schedule-123-1","started_at":"...","finished_at":"...","window_start":"...","window_end":"...","n_seen":2,...,"status":"ok","error_detail":""}}` |
+| `getSyncLog` | `limit` (optional, 1–100, default 10) |
+
+- `appendSyncLog` validates the whole row first: `run_id` required, ISO instants,
+  `YYYY-MM-DD` window, non-negative integer counts, `status` one of `ok`,
+  `partial`, `failed`, no unknown fields. A `run_id` already present answers
+  `{"status":"exists"}` and writes nothing. Key only, like every write.
+- `getSyncLog` returns rows **newest first by `started_at`**, never by position.
+  The dead-man's switch (`sync/deadman.mjs`) reads `limit=1`.
+
+### The script lock
+
+`upsertSyncedWorkout`, `upsertDailyHealth` and `appendSyncLog` run under
+`LockService`'s script lock (`withScriptLock` in `src/utils.js`), so a local
+sync overlapping a scheduled one cannot interleave a read-then-write. A caller
+that waits over 30 s gets `Lock timeout`, and nothing is written. The SPA
+writes Sheets directly and is not covered.
 
 ## The shaping principle
 

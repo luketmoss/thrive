@@ -217,3 +217,30 @@ var DAILY_HEALTH_FIELDS = [
 
 var DAILY_HEALTH_COLUMN_COUNT = 18;
 
+
+// --- SyncLog (A:M) — #156 -------------------------------------------
+//
+// One row per sync run, appended by the COROS sync through appendSyncLog, read
+// newest first by getSyncLog. Layout is sync plan §5. It is also the dead-man's
+// switch: sync/deadman.mjs fails when the newest row is too old (sync plan §10).
+var SYNC_LOG_FIELDS = [
+  'run_id',        // A  <event>-<GITHUB_RUN_ID>-<attempt> in Actions, local-<started_at> otherwise
+  'started_at',    // B  ISO instant, the run's single synced_at
+  'finished_at',   // C  ISO instant
+  'window_start',  // D  local date, D - 10
+  'window_end',    // E  local date, D + 1
+  'n_seen',        // F  activities the COROS list named
+  'n_new',         // G  Workouts rows created
+  'n_updated',     // H  Workouts rows whose merged fields changed
+  'n_enriched',    // I  hand-logged strength rows enriched (#155); 0 until then
+  'n_fit_fetched', // J  FIT files fetched (#154's rolling 24h budget sums this); 0 until then
+  'n_errors',      // K  failures in the run
+  'status',        // L  ok | partial | failed
+  'error_detail',  // M  redacted failures; blank when ok
+];
+
+var SYNC_LOG_COLUMN_COUNT = 13;
+
+var SYNC_LOG_STATUSES = ['ok', 'partial', 'failed'];
+
+var SYNC_LOG_COUNT_FIELDS = ['n_seen', 'n_new', 'n_updated', 'n_enriched', 'n_fit_fetched', 'n_errors'];

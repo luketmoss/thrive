@@ -72,6 +72,31 @@ export function chunkByPayload(items, wrap, limit = MAX_ENCODED_PAYLOAD) {
 }
 
 /**
+ * `row` with `error_detail` shortened, if need be, so `{ row }` fits `limit`
+ * once URL-encoded, marked so a reader knows text is missing. Percent-encoding
+ * grows unevenly, so the cut is found by bisection on the encoded size.
+ */
+export function fitErrorDetail(row, limit = MAX_ENCODED_PAYLOAD) {
+  const size = (r) => encodeURIComponent(JSON.stringify({ row: r })).length;
+  const detail = String(row.error_detail ?? '');
+  if (size(row) <= limit) return row;
+  const withCut = (n) => ({
+    ...row,
+    error_detail: `${detail.slice(0, n)} … [truncated: ${n} of ${detail.length} characters]`,
+  });
+  let lo = 0;
+  let hi = detail.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (size(withCut(mid)) <= limit) lo = mid;
+    else hi = mid - 1;
+  }
+  const out = withCut(lo);
+  if (size(out) > limit) throw new Error('A SyncLog row is too large to send even without its error_detail.');
+  return out;
+}
+
+/**
  * @param {{ url: string, key: string, fetchImpl?: typeof fetch,
  *   readRetryDelaysMs?: number[], wait?: (ms: number) => Promise<void> }} opts
  */
@@ -179,6 +204,21 @@ export function createThriveApi({
     /** Recompute DailySummary for `from`..`to`, inclusive, stamped `computedAt`. */
     rebuildDailySummary(from, to, computedAt) {
       return write('rebuildDailySummary', { from, to, computed_at: computedAt });
+    },
+
+    /**
+     * One run's SyncLog row (#156), keyed by field name. `error_detail` is cut
+     * to fit the payload limit first, so a run with many failures still logs.
+     *
+     * @returns {Promise<{ status: 'appended' | 'exists', run_id: string }>}
+     */
+    appendSyncLog(row) {
+      return write('appendSyncLog', { row: fitErrorDetail(row) });
+    },
+
+    /** The newest `limit` SyncLog rows, newest first by `started_at`. A read, so retried. */
+    getSyncLog(limit = 1) {
+      return get('getSyncLog', { limit });
     },
   };
 }

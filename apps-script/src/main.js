@@ -29,6 +29,11 @@
 //     "source_activity_id":"471166302945817201","incoming":{"date":"2026-09-24",
 //     "type":"bike","sub_type":"gravel","name":"Gravel Bike",...},
 //     "last_written":null,"raw_ref":"<drive id>","synced_at":"2026-09-24T17:41:10.000Z"}
+//
+// One row per sync run (#156):
+//   ?action=appendSyncLog&key=...&payload={"row":{"run_id":"schedule-123-1",
+//     "started_at":"...","finished_at":"...","status":"ok",...}}
+//   ?action=getSyncLog&key=...&limit=1   — newest first by started_at
 
 /**
  * Every response uses this shape — success, rejection and thrown error alike
@@ -331,7 +336,10 @@ function doGet(e) {
           result = fail('payload.synced_at field required');
           break;
         }
-        result = { success: true, data: upsertDailyHealth(payload.rows, payload.synced_at) };
+        result = {
+          success: true,
+          data: withScriptLock(function () { return upsertDailyHealth(payload.rows, payload.synced_at); }),
+        };
         break;
 
       // --- Synced workouts (#166) ---
@@ -346,7 +354,28 @@ function doGet(e) {
           result = fail('payload.last_written field required (null when nothing was written before)');
           break;
         }
-        result = { success: true, data: upsertSyncedWorkout(payload) };
+        result = {
+          success: true,
+          data: withScriptLock(function () { return upsertSyncedWorkout(payload); }),
+        };
+        break;
+
+      // --- SyncLog (#156) ---
+      // One row per sync run. A write, so key-only, like the sync's others.
+      case 'appendSyncLog':
+        if (!payload.row) {
+          result = fail('payload.row field required (the run, keyed by field name)');
+          break;
+        }
+        result = {
+          success: true,
+          data: withScriptLock(function () { return appendSyncLog(payload.row); }),
+        };
+        break;
+
+      // Newest first by started_at. The dead-man's switch reads limit=1.
+      case 'getSyncLog':
+        result = { success: true, data: getSyncLog({ limit: params.limit }) };
         break;
 
       default:

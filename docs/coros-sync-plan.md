@@ -603,6 +603,19 @@ staleness surface for no gain.
 
 This tab is also the dead-man's switch — §10.
 
+**As built (#156).**
+- `run_id` is `<event>-<GITHUB_RUN_ID>-<attempt>`, e.g. `schedule-…` or
+  `workflow_dispatch-…`, or `local-<started_at>`. The prefix tells an unattended
+  run from one a person started.
+- `status` is `ok`, `partial` (the run completed with failures) or `failed`
+  (the run was aborted). `error_detail` leads with the error class on `failed`,
+  e.g. `CorosGrantDeadError: …`.
+- `n_updated` counts rows whose merged fields changed, not every row the merge
+  touched: `synced_at` moves on every run.
+- Every run writes a row, including a failed one. The exception is a job killed
+  from outside Node (timeout, runner loss), which the failure email and the
+  watchdog cover.
+
 **Units.** SI internally (meters, seconds), converted at the presentation
 layer by `frontend/src/api/units.ts` and `duration.ts`, which are already the
 only conversion boundaries. The sync writes SI and touches neither.
@@ -875,6 +888,9 @@ runs are added.
 - **Extra runs cannot hurt correctness.** §6's rolling window with
   upsert-by-vendor-ID is idempotent, so an extra run is wasted calls at worst.
   This is purely a freshness change.
+- **Decided (#156): four runs a day, `17 9,13,18,0 * * *`** — 03:17, 07:17,
+  12:17 and 18:17 MDT, an hour earlier in MST. 07:17 is the load-bearing
+  morning run. The rest of this bullet is the reasoning it replaced.
 - **[DECIDE] the cadence** — no longer blocked. The unknown was the limit on
   ordinary reads, and #133 found none published and none observed (§2 item
   3). A run is roughly a dozen summary-level calls — one activity list, a
@@ -886,7 +902,11 @@ runs are added.
   is older than **36 hours**, which was right for one run a night. At several
   runs a day that is far too slack — a job that stops at breakfast would go
   unnoticed until the following evening. The threshold should follow the
-  cadence, not the old daily assumption.
+  cadence, not the old daily assumption. **Decided (#156): 16 hours.**
+  - The gaps are 9, 4, 5 and 6 h, so a single dropped run leaves at most 15 h
+    (00:17 UTC skipped). Add an hour of scheduler delay and you get 16 h, so one
+    dropped run never alarms.
+  - A stopped job is reported within 16 h plus the watchdog's 3 h interval.
 - **`SyncLog` grows proportionally.** One row per run, so five runs a day is
   ~1,800 rows a year instead of ~365. Still trivial for Sheets, but worth
   knowing before someone reads the tab expecting one row per day.
@@ -908,7 +928,7 @@ than a wait — tracked as keel#360, a half-day spike gated on this epic.
 | Unmapped sport type | Normalization raises | **Keep the raw payload, skip the sheet write for that row, log it.** Never let a normalization failure block raw ingestion |
 | Sheets row-index drift | `WorkoutRowMismatchError` | The frontend already guards this (#95). The sync must verify row identity by id before writing, not trust a cached index |
 | Ambiguous strength match | §7 matching | Not an error. Log and skip; raw payload is retained |
-| Cron didn't fire | No `SyncLog` row for >36h | Dead-man check, below |
+| Cron didn't fire | No `SyncLog` row for >16h (was 36h for one nightly run; §9) | Dead-man check, below |
 
 **Dead-man's switch.** Every failure above is detectable only if something is
 looking. The realistic outcome otherwise is that this works for two months,
@@ -926,6 +946,16 @@ Two layers, both nearly free:
 
 For a single-user system that is proportionate. A push/email alerting
 pipeline is not.
+
+**As built (#156): a third layer between those two.**
+- `coros-sync-watchdog.yml` is its own workflow on its own schedule, every 3
+  hours. It fails, and so sends the same Actions failure email, when the newest
+  `SyncLog` row of any status is more than 16 hours old.
+- It catches the sync workflow alone going quiet: disabled, its schedule
+  broken, runs repeatedly cancelled or timing out, or rows not landing.
+- It cannot catch GitHub's scheduler stopping for the whole repo, including the
+  60-day inactivity auto-disable on a public repo. That stays layer 2's job.
+- It is still GitHub's own email, not a new pipeline.
 
 ### [VERIFY] Is any of this overbuilt?
 
