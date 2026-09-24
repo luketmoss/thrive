@@ -29,12 +29,13 @@ added to a tab is added in both.
 | `src/templates.js` | `Templates`, grouped reads and wholesale replace |
 | `src/sets.js` | `Sets`, slot resolution, atomic bulk update, history |
 | `src/daily-summary.js` | `DailySummary` rollup, rebuild over any range |
+| `src/daily-health.js` | `DailyHealth` upsert by date, for the COROS sync (#165) |
 | `src/main.js` | `doGet` dispatch, auth, response envelope |
 
 `Labels` is deliberately absent: `domain.js` contains no Labels code and no
 `thrive_*` tool touches it. Tab actions travel with their tabs, so
-`DailySummary`'s are in #131's scope, and `DailyHealth` and `SyncLog` arrive
-with the sync.
+`DailySummary`'s are in #131's scope, `DailyHealth`'s write in #165's, and
+`SyncLog` arrives with the sync.
 
 ## The transport, and its limit
 
@@ -136,6 +137,9 @@ by hand.
 | `rebuildDailySummary` | `{"from":"...","to":"...","computed_at":"..."}` |
 | `getHistoryDateRange` | — the span `Workouts` actually covers |
 
+`rebuildDailySummary` reads `DailyHealth` by `DAILY_HEALTH_FIELDS` (#165), never
+by column position.
+
 **The range is a parameter, not a window.** The nightly recompute and the
 historical backfill are the same call with different bounds, so there is no
 second implementation of "catch up" to drift out of step with the one for
@@ -148,6 +152,25 @@ second implementation of "catch up" to drift out of step with the one for
 `total_distance_m` and `total_ascent_m` are **outdoor only**: a treadmill's
 distance is a machine estimate of ground never covered. They will not equal
 the sum of a day's activity distances on any day with an indoor session.
+
+### DailyHealth (#165)
+
+| Action | Payload |
+|---|---|
+| `upsertDailyHealth` | `{"rows":[{"date":"2026-09-23","steps":"2617",...}],"synced_at":"..."}` |
+
+Written by the COROS sync alone, **key only**: it is a write, so it never joins
+#144's token read allow-list. Rows are domain objects keyed by field name
+(`DAILY_HEALTH_FIELDS` in `src/types.js`), addressed by `date`:
+
+- A date with no row is appended; a date with a row is updated in place, after
+  the row is re-read and its column A confirmed to still hold that date.
+- **Only the fields a row names are written.** An omitted field is left alone
+  (the sync omits `vo2max`/`recovery` on every day but the run date); a field
+  sent as `''` is written blank.
+- Every row is validated before anything is written: an unknown field, a
+  non-numeric metric or a clock time not `HH:mm` rejects the whole call.
+- `synced_at` is one value per call, stamped on every row it touches.
 
 ## The shaping principle
 

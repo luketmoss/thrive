@@ -1,0 +1,22 @@
+{
+  "source": "coros",
+  "activity_id": "471093826615208843",
+  "tool": "getActivityDetail",
+  "args": {
+    "labelId": "471093826615208843",
+    "sportType": 400
+  },
+  "list_entry": {
+    "activityId": "471093826615208843",
+    "sportType": 400,
+    "name": "Gym Cardio",
+    "date": "2026-09-23",
+    "startTimestamp": 1790170900,
+    "endTimestamp": 1790173425,
+    "text": "1. Gym Cardio — 2026-09-23\n   Location: Gym Cardio\n   Time Window: startTimestamp=1790170900 | endTimestamp=1790173425\n   Duration: 41:12\n | Avg HR: 104 bpm | Calories: 203 kcal\n   LabelId: 471093826615208843 | SportType: 400"
+  },
+  "payload": "\"🏋️ Gym Cardio Activity Details\\n========================================\\n\\nWorkout Time: 41:12\\nTotal Time: 42:05\\nAverage Heart Rate: 104 bpm\\nCalories: 203 kcal\\nTraining Load: 15\\nAerobic TE: 1.3\\nAnaerobic TE: 0.2\\nTraining Focus: Recovery\"",
+  "payload_hash": "fea75e895eadd89b43c62182d814892dc03c3d6b29e56aa01b6865a0082d7901",
+  "fetched_at": "2026-09-24T13:25:39.000Z",
+  "normalized": null
+}

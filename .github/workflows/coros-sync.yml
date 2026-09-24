@@ -1,8 +1,9 @@
 name: coros-sync
 
 # The COROS → Thrive sync (epic #163). Manual only for now: #151 authorizes,
-# #152 archives the window's raw payloads in the bot's Drive (no sheet writes,
-# no Thrive API), and #156 adds the schedule.
+# #152 archives the window's raw payloads in the bot's Drive, #165 normalizes
+# daily health into the sheet through the Thrive API and rebuilds the
+# DailySummary rollup, and #156 adds the schedule.
 on:
   workflow_dispatch:
     inputs:
@@ -44,3 +45,7 @@ jobs:
           GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
           GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
           GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
+          # The Apps Script web app's /exec URL and its API_KEY script property
+          # (#165). Without them the archive still lands and the run fails loudly.
+          THRIVE_API_URL: ${{ secrets.THRIVE_API_URL }}
+          THRIVE_API_KEY: ${{ secrets.THRIVE_API_KEY }}

@@ -212,6 +212,8 @@ export interface LoadedApi {
   templateRows: CellValue[][];
   setRows: CellValue[][];
   summaryRows: CellValue[][];
+  /** DailyHealth's backing array, or undefined when the tab does not exist. */
+  healthRows?: CellValue[][];
 }
 
 /** Tab fixtures for `loadApi`. Each defaults to empty. */
@@ -259,7 +261,7 @@ export function loadApi(
 
   const sandbox = loadSources(
     ['types.js', 'utils.js', 'workouts.js', 'exercises.js', 'templates.js', 'sets.js',
-      'daily-summary.js', 'main.js'],
+      'daily-summary.js', 'daily-health.js', 'main.js'],
     {
     ContentService: makeContentService(),
     PropertiesService: makePropertiesService({ API_KEY: apiKey, SPREADSHEET_ID: 'sheet-id' }),
@@ -277,7 +279,9 @@ export function loadApi(
   };
   // DailyHealth is absent unless a fixture supplies it, which is the real
   // pre-sync state: the tab does not exist, and that is not a tab of zeros.
-  if (fixtures.dailyHealth) sheets.DailyHealth = makeSheet(fixtures.dailyHealth, 6);
+  if (fixtures.dailyHealth) {
+    sheets.DailyHealth = makeSheet(fixtures.dailyHealth, sandbox.DAILY_HEALTH_COLUMN_COUNT);
+  }
 
   sandbox.getSheet = (name: string) => {
     const sheet = sheets[name];
@@ -290,7 +294,10 @@ export function loadApi(
     getSheetByName: (name: string) => sheets[name] ?? null,
   });
 
-  return { sandbox, rows: workoutRows, exerciseRows, templateRows, setRows, summaryRows };
+  return {
+    sandbox, rows: workoutRows, exerciseRows, templateRows, setRows, summaryRows,
+    healthRows: fixtures.dailyHealth,
+  };
 }
 
 /** A workout as the API returns it. */
@@ -371,4 +378,17 @@ export function setRow(overrides: Record<string, CellValue> = {}): CellValue[] {
   };
   return ['workout_id', 'exercise_id', 'exercise_name', 'section', 'exercise_order',
     'set_number', 'planned_reps', 'weight', 'reps', 'effort'].map((k) => f[k] ?? '');
+}
+
+/** DailyHealth's A:R order (#165). Mirrors DAILY_HEALTH_FIELDS in types.js. */
+export const DAILY_HEALTH_ORDER = [
+  'date', 'resting_hr', 'hrv', 'steps', 'calories',
+  'sleep_total_s', 'sleep_deep_s', 'sleep_rem_s', 'sleep_light_s', 'sleep_awake_s',
+  'sleep_score', 'vo2max', 'recovery', 'training_load',
+  'bed_time', 'wake_time', 'raw_ref', 'synced_at',
+];
+
+/** A DailyHealth row (A:R), with only the named fields set. */
+export function healthRow(overrides: Record<string, CellValue> = {}): CellValue[] {
+  return DAILY_HEALTH_ORDER.map((k) => overrides[k] ?? '');
 }

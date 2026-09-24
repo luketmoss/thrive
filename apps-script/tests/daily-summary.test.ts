@@ -2,7 +2,7 @@
 // from Workouts + DailyHealth, rebuildable over any range.
 
 import { describe, it, expect } from 'vitest';
-import { loadApi, callDoGet, workoutRow, type CellValue } from './apps-script-sandbox';
+import { loadApi, callDoGet, workoutRow, healthRow, type CellValue } from './apps-script-sandbox';
 
 const AT = '2026-09-20T12:00:00.000Z';
 
@@ -189,7 +189,44 @@ describe('AC2: a pre-COROS day is partial, not zeroed', () => {
   it('fills the health columns once DailyHealth has the day', () => {
     const { summaryRows: rows } = rebuild({
       workouts: [workoutRow({ id: 'w_1', date: '2026-09-15', type: 'weight' })],
-      dailyHealth: [['2026-09-15', '8432', '48', '62', '27000', '340']],
+      dailyHealth: [healthRow({
+        date: '2026-09-15', steps: '8432', resting_hr: '48', hrv: '62',
+        sleep_total_s: '27000', training_load: '340',
+      })],
+    }, '2026-09-15', '2026-09-15');
+    expect(rows[0][COL.steps]).toBe('8432');
+    expect(rows[0][COL.resting_hr]).toBe('48');
+    expect(rows[0][COL.hrv]).toBe('62');
+    expect(rows[0][COL.sleep_total_s]).toBe('27000');
+    expect(rows[0][COL.training_load]).toBe('340');
+  });
+
+  // #165 AC1: sync plan §5's layout, read by column letter. #131's placeholder
+  // read B as steps and C as resting HR; every column here holds a distinct
+  // value, so a read from the wrong column cannot pass by coincidence.
+  it('reads steps from D, resting_hr from B, hrv from C, sleep from F and load from N', () => {
+    const { summaryRows: rows } = rebuild({
+      workouts: [],
+      dailyHealth: [[
+        '2026-09-15', // A date
+        '48',         // B resting_hr
+        '62',         // C hrv
+        '8432',       // D steps
+        '2100',       // E calories
+        '27000',      // F sleep_total_s
+        '3600',       // G sleep_deep_s
+        '5400',       // H sleep_rem_s
+        '15000',      // I sleep_light_s
+        '900',        // J sleep_awake_s
+        '84',         // K sleep_score
+        '51',         // L vo2max
+        '87',         // M recovery
+        '340',        // N training_load
+        '22:51',      // O bed_time
+        '06:06',      // P wake_time
+        'file-1',     // Q raw_ref
+        '2026-09-15T13:00:00.000Z', // R synced_at
+      ]],
     }, '2026-09-15', '2026-09-15');
     expect(rows[0][COL.steps]).toBe('8432');
     expect(rows[0][COL.resting_hr]).toBe('48');
@@ -201,7 +238,10 @@ describe('AC2: a pre-COROS day is partial, not zeroed', () => {
   it('writes a row for a health-only day, with the activity columns blank', () => {
     const { summaryRows: rows } = rebuild({
       workouts: [],
-      dailyHealth: [['2026-09-15', '8432', '48', '62', '27000', '340']],
+      dailyHealth: [healthRow({
+        date: '2026-09-15', steps: '8432', resting_hr: '48', hrv: '62',
+        sleep_total_s: '27000', training_load: '340',
+      })],
     }, '2026-09-15', '2026-09-15');
     expect(rows).toHaveLength(1);
     expect(rows[0][COL.steps]).toBe('8432');

@@ -19,6 +19,10 @@
 //   ?action=updateSets&key=...&payload={"workout_id":"w_1","updates":[
 //     {"exercise":"Bench Press","set_number":1,"weight":"185","reps":"6"}]}
 //   ?action=previewSetUpdates&key=...&payload={...}   — resolves, writes nothing
+//
+// DailyHealth rows are addressed by date (#165):
+//   ?action=upsertDailyHealth&key=...&payload={"rows":[{"date":"2026-09-23",
+//     "steps":"2617","raw_ref":"<drive id>"}],"synced_at":"2026-09-24T13:25:32.000Z"}
 
 /**
  * Every response uses this shape — success, rejection and thrown error alike
@@ -307,6 +311,21 @@ function doGet(e) {
 
       case 'getHistoryDateRange':
         result = { success: true, data: historyDateRange() };
+        break;
+
+      // --- DailyHealth (#165) ---
+      // Written by the COROS sync alone. A write, so key-only: it must never be
+      // added to #144's token read allow-list when that lands.
+      case 'upsertDailyHealth':
+        if (!Array.isArray(payload.rows)) {
+          result = fail('payload.rows field required (an array of rows keyed by field name)');
+          break;
+        }
+        if (!payload.synced_at) {
+          result = fail('payload.synced_at field required');
+          break;
+        }
+        result = { success: true, data: upsertDailyHealth(payload.rows, payload.synced_at) };
         break;
 
       default:

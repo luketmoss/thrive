@@ -66,7 +66,7 @@ export async function callTool(client, tool, args, { retry = {} } = {}) {
 }
 
 /** COROS wraps its prose in a JSON string; unwrap it for reading, never for storing. */
-function prose(text) {
+export function prose(text) {
   if (!text.startsWith('"')) return text;
   try { return JSON.parse(text); } catch { return text; }
 }

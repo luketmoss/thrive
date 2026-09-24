@@ -155,3 +155,37 @@ var DAILY_SUMMARY_FIELDS = [
 
 var DAILY_SUMMARY_COLUMN_COUNT = 18;
 
+// --- DailyHealth (A:R) — #165 ---------------------------------------
+//
+// One row per local calendar day, written only by the COROS sync through
+// upsertDailyHealth. Layout is sync plan §5, checked against a real payload in
+// #133, plus #148's bed and wake times. Those two are appended after
+// training_load rather than placed beside the sleep durations, so §5's column
+// letters B-N did not move. There is no step-goal column: COROS sends none.
+//
+// Every value field is nullable. Blank means the payload did not carry it,
+// never zero: a watch left on the charger overnight is not zero sleep.
+// Units are SI: durations in integer seconds, clock times local `HH:mm`.
+var DAILY_HEALTH_FIELDS = [
+  'date',          // A  PK, local calendar date. Sleep is filed under its wake-up day
+  'resting_hr',    // B  bpm, queryRestingHeartRate
+  'hrv',           // C  ms, querySleepHrv's official daily average
+  'steps',         // D  queryDailyHealthData
+  'calories',      // E  kcal, queryDailyHealthData
+  'sleep_total_s', // F  seconds, INCLUDES awake time (COROS's "Total")
+  'sleep_deep_s',  // G
+  'sleep_rem_s',   // H
+  'sleep_light_s', // I
+  'sleep_awake_s', // J
+  'sleep_score',   // K  0-100, querySleepOverview
+  'vo2max',        // L  current state only: written on the run date's row alone
+  'recovery',      // M  % , current state only, as L
+  'training_load', // N  queryTrainingLoadAssessment, per day
+  'bed_time',      // O  local HH:mm, start of the main sleep window (#148)
+  'wake_time',     // P  local HH:mm, end of the main sleep window (#148)
+  'raw_ref',       // Q  Drive file ID of the health bundle it was parsed from
+  'synced_at',     // R  the sync run's single timestamp
+];
+
+var DAILY_HEALTH_COLUMN_COUNT = 18;
+

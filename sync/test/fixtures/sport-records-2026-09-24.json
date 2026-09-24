@@ -1,0 +1,9 @@
+{
+  "tool": "querySportRecords",
+  "args": {
+    "startDate": "20260914",
+    "endDate": "20260925",
+    "limit": 100
+  },
+  "payload": "\"Sport Records — 2026-09-14 to 2026-09-25 (2 records)\\n========================\\n\\n1. Gym Cardio — 2026-09-23\\n   Location: Gym Cardio\\n   Time Window: startTimestamp=1790170900 | endTimestamp=1790173425\\n   Duration: 41:12\\n | Avg HR: 104 bpm | Calories: 203 kcal\\n   LabelId: 471093826615208843 | SportType: 400\\n\\n2. Strength — 2026-09-23\\n   Location: Strength\\n   Time Window: startTimestamp=1790170215 | endTimestamp=1790170339\\n   Duration: 2:04 | Sets: 3\\n | Avg HR: 88 bpm | Calories: 21 kcal\\n   LabelId: 471093115402967310 | SportType: 402\""
+}
