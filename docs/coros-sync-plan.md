@@ -1,6 +1,6 @@
 # COROS → Thrive Activity Sync — Implementation Plan
 
-**Revision 3** — 19 September 2026
+**Revision 3** — 19 September 2026; §2 verification results added 23 September 2026 (#133)
 **Status:** Draft for review. Supersedes Rev 2 in full; do not work from Rev 2.
 **Purpose:** Replace Garmin as the system of record for *recorded activities*
 and *daily health summaries*, pulling both from COROS into Thrive
@@ -114,32 +114,96 @@ COROS publishes three integration paths. The relevant one is the middle tier.
   consolidated into this single one. Official server repo: `coroslab/COROS-MCP`.
   An npm package (`coros-mcp`) also exists.
 - **FIT files available.** Per-workout retrieval of full GPS tracks and
-  second-by-second data. **Capped at 50 file requests per calendar day.**
+  second-by-second data. **Capped at 50 files per fixed 24-hour window** —
+  file downloads and download-URL requests share one allowance, and the
+  window starts at the first request, not at midnight.
 - **No COROS subscription exists.** No fee is documented for the
   self-service tier, and the company's positioning is explicitly
   no-subscription. Soft caveat below.
 
-### Remaining [VERIFY] items
+### Verification results — #133, 23 September 2026
 
-1. **Historical backfill.** Does the API expose activities recorded *before*
-   OAuth authorization? Polar's AccessLink is new-data-only; unknown for
-   COROS. **This gates §11.**
-2. **Token lifetime and refresh semantics.** Specifically whether refresh
-   tokens rotate on use, and whether an absolute expiry forces periodic
-   manual re-authorization. **This now gates a Phase 1 design choice, not
-   just alerting volume — see §4's note on token storage.** Answer it first.
-3. **General rate limits.** The 50/day FIT cap is confirmed; the limit on
-   ordinary read calls is not. A 7-day lookback is low-volume, so this is
-   unlikely to bite in steady state — confirm before the §11 backfill.
-4. **Daily health payload shape.** Which sleep fields actually come back
-   (total / deep / REM / light / awake), and whether steps and HRV arrive on
-   the same call. §5's `DailyHealth` columns are provisional until this is
-   seen. Cheap to answer once Phase 1 lands.
-5. **Sport type vocabulary.** The full set of COROS sport type codes, so
-   §6's normalization table is exhaustive rather than guessed.
-6. **[Soft] Cost.** No pricing is published and no application gate exists to
-   charge at. Absence of a price is not a contractual guarantee. Low risk,
-   worth a glance at terms.
+These were [VERIFY] items. They were answered from an authorized session
+against a real account (APEX 4, one day of data), COROS's own README and
+client code in `coroslab/COROS-MCP`, and the Garmin export. The harness was
+a throwaway script; nothing from it ships.
+
+**Registration** is dynamic client registration — one
+`POST /connect/register`, no portal, no approval. COROS's own client
+registers as a **public client** (`token_endpoint_auth_method: none`, PKCE
+S256), and so did the spike. **There is no client secret.** The server also
+offers the device-code grant, a cleaner way to authorize a headless job the
+first time. US accounts are served from `https://mcpus.coros.com/mcp`, which
+the consolidated URL routes to.
+
+1. **Historical backfill — pre-authorization activities are exposed.**
+   `querySportRecords` returned two activities recorded ~16 hours before
+   authorization, and accepted a 2020–2026 date range without complaint.
+   History is a date-range query over the whole account, not a feed that
+   starts at authorization. How far back it reaches is untested beyond the
+   account's first day — and moot, because the account's history starts
+   22 Sept 2026. See §11.
+2. **Token rotation — refresh tokens rotate on every use.** Each refresh
+   returned a new refresh token, and presenting a superseded one failed with
+   `invalid_grant` / `Duplicate grant rejected`. Replaying the old token did
+   **not** revoke the chain — the newest token still refreshed afterwards —
+   so a lost race costs one failed call, not a re-authorization. Access
+   tokens live **30 days**. Refresh tokens are opaque (128 characters, not
+   JWTs), the token response carries no refresh-token expiry, and
+   introspection needs client authentication a public client does not have,
+   so **whether the grant has an absolute lifetime is still unknown**. Only
+   waiting will show it; §10's "last synced" display is what catches it.
+   §4's Drive-stored token is justified.
+3. **General rate limits — none published, none observed.** No response
+   carried a rate-limit header, ~25 calls in a few minutes drew no
+   throttling, and latency ran 50 ms–3.7 s (the slow one was the six-year
+   range). The only documented limit is FIT's, above. Some tools cap their
+   own window instead: sleep HRV and the stress time series take at most
+   7 days per call.
+4. **Daily health payload shape — seen.** §5's `DailyHealth` table now
+   reflects it. `queryDailyHealthData` returns steps, calories, average
+   stress and sleep total / deep / light / REM / awake as durations at
+   **minute** precision. `querySleepData` separately returns a **sleep
+   score** (0–100), stage ratios and the sleep window. Resting HR and HRV
+   each need their own call. Every sleep tool files a night under its
+   **wake-up day**. Note the two tools disagree on "total": the daily
+   overview's includes awake time (7h 17m on the test night), the sleep
+   tool's "Main Sleep" excludes it (7h 6m). For #148: `querySleepData`'s
+   main sleep window supplies **bed and wake times**; **no tool returns a
+   step goal**, in any payload or tool description.
+5. **Sport type vocabulary — published.** The full code list is in the
+   `querySportRecords` tool description; `docs/data-architecture.md` §4 has
+   the venue-bearing subset. Venue is encoded in the code for most families
+   but not all.
+6. **Cost — free.** COROS's README: "COROS MCP itself is free of charge."
+   The only fees it mentions are the AI platform's, not COROS's.
+
+### Found along the way
+
+Things nobody asked about that bear on the design.
+
+- **Every tool returns prose, not data.** None of the 34 tools declares an
+  `outputSchema` or returns `structuredContent`. A result is a
+  JSON-encoded string of human-formatted text — `Duration: 37:38 | Avg HR:
+  99 bpm` — written for a chat window. The sync must either parse that
+  text, which is brittle against a server that ships tool changes often, or
+  take activity numbers from the FIT file, a stable specified format. **New
+  open question, §17 item 5.** It also strengthens §5's raw landing zone:
+  the stored text is the only way to re-parse after a format change.
+- **FIT download URLs are unauthenticated.** `queryActivityFitFileDownloadUrls`
+  returns a plain, unsigned `https://s3.coros.com/fit/<user>/<activity>.fit`
+  that downloads with no credentials. The URL is a secret: never write it to
+  the sheet, `raw_ref` or `SyncLog`. `fit_ref` stays a Drive file ID.
+- **Strength FIT files carry set structure but not load.** The test
+  session's FIT has a `set` message per active set and rest — duration and a
+  FIT exercise category — and no GPS. No reps or weight. That is §7's
+  premise: COROS enriches the hand-logged row, never replaces it.
+- **Recovery and fitness are current-state only.** `queryRecoveryStatus`
+  and `queryFitnessAssessmentOverview` take no date, so there is no history
+  to backfill and the recorded value depends on when the job runs. VO2max
+  is absent until the watch has outdoor runs to estimate from. Training
+  load *is* per day.
+- **The server is stateless MCP** — no session to keep between calls.
 
 ### Reliability note
 
@@ -150,11 +214,17 @@ Treat server availability as genuinely unreliable rather than assumed. This
 raises §10's retry logic and dead-man's switch from good-practice to
 load-bearing.
 
+Every call in #133's session succeeded. One clean afternoon does not retract
+May's report; the retry logic stays.
+
 ---
 
 ## 3. Endpoint inventory
 
-Fifteen endpoints across five groups. Not all are needed for v1.
+Rev 2 listed fifteen endpoints across five groups. The live server exposed
+34 tools in Sept 2026 (#133), mostly additions: time series for stress, HRV
+and health checks, lap data, direct FIT download, and more planning writes.
+Not all are needed for v1.
 
 **Activities** — the core of v1
 - Query workout records and summaries. Filters: date, sport type code,
@@ -273,24 +343,39 @@ Practical consequences:
   that currently functions; sequence it deliberately rather than folding it
   into the COROS effort.
 
-### Token storage — a Phase 1 fork
+### Token storage — settled by §2
 
-If COROS refresh tokens **rotate on use** (§2 [VERIFY] item 2), GitHub Actions
-secrets are the wrong home for the refresh token: a workflow cannot write
-back to its own repo secrets without a PAT carrying `secrets:write` plus
-libsodium encryption of the new value. That is unpleasant enough to design
-around rather than discover at Phase 5.
+COROS refresh tokens **rotate on use** (§2 item 2, verified in #133), so
+GitHub Actions secrets are the wrong home for the refresh token: a workflow
+cannot write back to its own repo secrets without a PAT carrying
+`secrets:write` plus libsodium encryption of the new value.
 
 **Recommended:** keep the rotating refresh token in a **single-purpose Drive
-file** the service account already owns and can rewrite freely. The static
-client ID and client secret stay as ordinary GitHub Actions secrets, since
-they never change.
+file** the service account already owns and can rewrite freely. The client
+ID is the only static credential — the client is public, so there is no
+secret — and it can sit in an ordinary Actions secret.
 
-Verify item 2 before building Phase 1, not after.
+Rotation puts three rules on the job:
+
+- **Persist before use.** Write the new refresh token to Drive before doing
+  anything else with the access token; §6 already orders it this way. A
+  crash between refresh and persist loses the grant, and recovering needs a
+  manual re-authorization.
+- **Never refresh twice at once.** A second run presenting the same token
+  gets `Duplicate grant rejected`. A workflow-level `concurrency:` group is
+  enough.
+- **A rejected refresh is not proof the grant is dead.** Replay does not
+  revoke the chain, so re-read the Drive file once and retry before logging
+  the account as needing re-linking.
+
+Access tokens live 30 days. Storing the access token beside the refresh
+token and refreshing only when it is within a few days of expiry would cut
+rotations — and the crash window above — from nightly to monthly. Worth
+considering at Phase 1.
 
 ### FIT file strategy
 
-FIT retrieval is capped at 50 requests per calendar day.
+FIT retrieval is capped at 50 files per fixed 24-hour window (§2).
 
 **Decided: fetch-on-ingest.** Normal volume is 1–2 activities/day, so the cap
 is irrelevant in steady state; only the §11 backfill needs pacing.
@@ -313,9 +398,16 @@ activities, a recovery after the job has been down, or a FIT fetch that keeps
 failing and leaves `fit_ref` null. Each of those has the next run retry with a
 fresh 50 and spend the daily cap without noticing.
 
-Derive the budget rather than storing it: sum `n_fit_fetched` across the day's
-`SyncLog` rows at the start of a run and begin at `50 - that`. No new tab, no
-new column, and it survives a crashed run.
+Derive the budget rather than storing it: sum `n_fit_fetched` across the
+`SyncLog` rows of the **last 24 hours** at the start of a run and begin at
+`50 - that`. No new tab, no new column, and it survives a crashed run.
+
+*Amended by #133: a rolling 24 hours, not the calendar day.* COROS's
+allowance is a **fixed 24-hour window that opens at the first request**, not a
+Denver calendar day (§2). Counting by calendar day overshoots across midnight
+— 30 fetches at 22:00, and a 06:00 run believes it has 50 left when COROS has
+20. A rolling 24-hour sum always covers the fixed window's own requests, so it
+can only under-spend, never over-spend.
 
 **Storage:** Google Drive, foldered by year and month, with the Drive file ID
 referenced from the sheet. Not sheet cells — Rev 2 was right about that, and
@@ -432,17 +524,20 @@ rows/year is trivial for Sheets.
 
 | Col | Name | Notes |
 |---|---|---|
-| A | `date` | PK, local calendar date |
-| B | `resting_hr` | |
-| C | `hrv` | |
-| D | `steps` | |
-| E | `calories` | |
-| F–J | `sleep_*` | total / deep / REM / light / awake, in **seconds**. **[VERIFY]** — provisional until the payload is seen |
-| K | `vo2max` | EvoLab |
-| L | `recovery` | EvoLab |
-| M | `training_load` | EvoLab |
-| N | `raw_ref` | Drive file ID |
-| O | `synced_at` | |
+| A | `date` | PK, local calendar date. Sleep is filed under its wake-up day, which is COROS's convention too |
+| B | `resting_hr` | `queryRestingHeartRate`, per day. Not the figure in `queryDailyHealthData`'s header, which is a window summary and was 1 bpm off on the test day |
+| C | `hrv` | `querySleepHrv`'s official daily average, ms. At most 7 days per call |
+| D | `steps` | `queryDailyHealthData` |
+| E | `calories` | `queryDailyHealthData` |
+| F–J | `sleep_*` | total / deep / REM / light / awake, in **seconds**, from `queryDailyHealthData`. Minute precision in practice. `sleep_total` is COROS's "Total", which *includes* awake time |
+| K | `sleep_score` | `querySleepData`, 0–100. Added by #133. Kept apart from almanac's self-reported `sleep_quality` — sleep is double-sourced |
+| L | `vo2max` | EvoLab. **Current-state only** — a nightly snapshot, blank until the watch has an estimate |
+| M | `recovery` | EvoLab. **Current-state only** — a snapshot at job time, not a daily value |
+| N | `training_load` | EvoLab, per day |
+| O | `raw_ref` | Drive file ID |
+| P | `synced_at` | |
+
+Shape verified in #133 (§2 item 4).
 
 Same nullable discipline as `Workouts!L–Q`: a day with no sleep data is
 blank, never `0`. A watch left on the charger overnight is not zero sleep.
@@ -506,10 +601,11 @@ run_nightly_sync():
     # --- activities ---
     activities = mcp.list_activities(window_start, window_end)
 
-    # FIT budget is per CALENDAR DAY in America/Denver, shared across every
-    # run that day — not per run. Derived, not stored, so it survives a crash.
-    # See thrive#149.
-    fit_budget = 50 - sum(n_fit_fetched for today's SyncLog rows)
+    # FIT budget is a ROLLING 24 HOURS, shared across every run — not per
+    # run, and not per calendar day: COROS's window is a fixed 24h from its
+    # first request (§2). Derived, not stored, so it survives a crash.
+    # See thrive#149, amended by #133.
+    fit_budget = 50 - sum(n_fit_fetched for SyncLog rows in the last 24h)
 
     for a in activities:
         detail = mcp.get_activity_detail(a.id)
@@ -530,9 +626,13 @@ run_nightly_sync():
             fit_budget -= 1
 
     # --- daily health + evolab ---
+    # range calls, one per tool, covering the window — not one per day.
+    # querySleepHrv takes <= 7 days, so a 10-day window is two calls.
     for day in window_start..today_local:
-        upsert DailyHealth from mcp.get_daily_data(day)
-                              + mcp.get_evolab(day)
+        upsert DailyHealth[day] from daily overview, sleep, resting HR,
+                                     HRV, training load
+    snapshot recovery + vo2max into DailyHealth[today_local]
+        # current-state only (§2) — there is no history to fetch
 
     # --- aggregate rollup ---
     for day in window_start..today_local:
@@ -731,12 +831,13 @@ runs are added.
 - **Extra runs cannot hurt correctness.** §6's rolling window with
   upsert-by-vendor-ID is idempotent, so an extra run is wasted calls at worst.
   This is purely a freshness change.
-- **[DECIDE] the cadence**, and settle it *after* #133. Every added run
-  multiplies ordinary read volume, and **§2 [VERIFY] item 3 — general rate
-  limits — is still unanswered**. The 50/day FIT cap is not the constraint
-  here (FITs are fetched once per new activity, not per run); the unknown is
-  the limit on ordinary reads. Picking five runs a day before knowing that
-  limit is guessing.
+- **[DECIDE] the cadence** — no longer blocked. The unknown was the limit on
+  ordinary reads, and #133 found none published and none observed (§2 item
+  3). A run is roughly a dozen summary-level calls — one activity list, a
+  detail per new activity, and one range call per daily-health tool — so
+  five runs a day is on the order of 60 calls. The 50-file FIT cap is not the
+  constraint either (FITs are fetched once per new activity, not per run).
+  Choose the cadence on freshness grounds.
 - **Tighten the dead-man's switch.** §10 alerts when the newest `SyncLog` row
   is older than **36 hours**, which was right for one run a night. At several
   runs a day that is far too slack — a job that stops at breakfast would go
@@ -806,21 +907,27 @@ One-time, separate from the nightly job. Both halves feed the same
 
 ### Garmin history
 
-**The Connect account data export has been requested.** It returns FIT files.
-Write an importer targeting `source = 'garmin_import'`, reusing the same
-normalization and the same Drive storage layout. Garmin-sourced rows are
-`synced` for badge purposes but are never re-fetched — there is nothing to
-re-fetch from.
+**The Connect account data export has arrived** (23 Sept 2026, 2017-05-30 to
+2026-09-19). Activities come twice: as FIT files zipped under
+`DI-Connect-Uploaded-Files/`, and as structured JSON in
+`DI-Connect-Fitness/*_summarizedActivities.json`. Write an importer targeting
+`source = 'garmin_import'`, reusing the same normalization and the same Drive
+storage layout. Garmin-sourced rows are `synced` for badge purposes but are
+never re-fetched — there is nothing to re-fetch from. The export also carries
+daily wellness data; see §15.
 
 ### COROS history
 
-Depends on §2 [VERIFY] item 1. If the API exposes pre-authorization
-activities, walk backward in date windows. If not, request a bulk export.
+Answered by §2 item 1: the API exposes pre-authorization activities, so COROS
+history is a walk backward in date windows, not an export request. In
+practice there is almost nothing to walk — the account's history starts
+22 Sept 2026.
 
-Either way, **pace FIT retrieval against the 50/day cap.** A backfill of
-several hundred activities is a multi-day job by design. Build it as a
-resumable queue, not a single long-running script — and not as a GitHub
-Actions job, which has a 6-hour ceiling per run.
+**The 50-file FIT cap therefore never bites a backfill:** COROS history is a
+few days, and Garmin's FIT files come out of the export zip rather than the
+API. Keep the backfill a resumable job all the same — nine years of Garmin
+activities plus ~3,200 `DailyHealth` days still press on Apps Script quota
+(`docs/data-architecture.md` §6), and GitHub Actions caps a run at six hours.
 
 ---
 
@@ -962,17 +1069,33 @@ Two caveats, both acceptable:
 - A row with a blank `Time` has no instant to compute. Leave
   `started_at_utc` blank rather than assuming midnight.
 
-### `DailyHealth` history — **[VERIFY]**
+### `DailyHealth` history — answered (#133)
 
-There is no daily health data before COROS, and it is unclear whether any
-can be recovered. §11 describes the Garmin export as returning FIT files,
-which are per-activity. **Whether that export also contains daily wellness
-data — steps, sleep, resting HR — is unverified**, and it decides whether
-pre-switch days can ever show anything but activities.
+The Garmin export **does** carry daily wellness data, not only FIT files.
+Coverage, 2017-05-30 to 2026-09-19:
 
-This is worth checking against the export as soon as it arrives, because it
-is the difference between a Journal whose history is complete and one whose
-health panel starts abruptly on the switch date.
+| Metric | Where in the export | Coverage |
+|---|---|---|
+| steps, calories, resting HR, floors | `DI-Connect-Aggregator/UDSFile_*.json` | ~3,200 days — essentially complete from mid-2017 |
+| average stress | same | ~2,270 days |
+| sleep window (start / end) | `DI-Connect-Wellness/*_sleepData.json` | ~3,280 nights |
+| sleep stages | same | **~320 nights**, mostly 2018 and 2020; almost none since 2021 |
+| sleep score | — | **none** |
+| HRV | — | **none** |
+
+So pre-switch days get steps, calories and resting HR in full, and sleep as a
+window without stages on most nights. **HRV and sleep score begin on the
+switch date.** The export dates sleep by wake-up day (`calendarDate`), the
+same as COROS.
+
+Two traps for the importer:
+
+- **The export writes missing stages as `0` seconds.** A night with a sleep
+  window and `deepSleepSeconds: 0, lightSleepSeconds: 0` has no stage data,
+  not zero sleep. Import those as blank — the same nullable rule as
+  `Workouts!L–Q`.
+- **20 and 21 Sept 2026 are in neither source.** The export ends on the 19th
+  and COROS's first, partial, day is the 22nd. Those two days stay blank.
 
 ### What needs no migration
 
@@ -1033,17 +1156,20 @@ already answered are not repeated.
    multi-day trips.
 3. **[DECIDE §7]** Strength match tolerance — calibrate at Phase 3 rather
    than guessing ±30 minutes now?
-4. **[VERIFY §2.2]** Token rotation — answer before Phase 1.
-5. **[VERIFY §2.4]** Daily health payload shape — `DailyHealth`'s columns are
-   provisional until seen.
-6. **[VERIFY §2.5]** COROS sport type codes — needed for an exhaustive
-   normalization table.
-7. Should a mis-detected sport type be correctable in Thrive's UI, given §8
+4. Should a mis-detected sport type be correctable in Thrive's UI, given §8
    makes the row editable but `type` and `sub_type` drive which cardio
    fields render?
+5. **[DECIDE §2]** COROS tools return prose, not structured data. Parse the
+   text, or take activity numbers from the FIT file and parse text only for
+   what FIT lacks (daily health has no FIT equivalent)? FIT-first is stabler
+   but spends the 50-file allowance on every activity — fine at 1–2 a day.
 
 ### Settled
 
+- **§2 — COROS API behaviour, verified in #133.** Refresh tokens rotate; the
+  API exposes history from before authorization; no read limit is published
+  or observed; the daily payload shape is seen; sport codes are published;
+  the tier is free.
 - **§4 — `sync/` writes through Thrive's Apps Script API.** A sibling
   workspace holding no row mapping of its own. *(Supersedes the earlier
   decision to import from `mcp-server/`, which assumed a row mapping would

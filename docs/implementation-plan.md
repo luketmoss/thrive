@@ -15,15 +15,14 @@ as `almanac/docs/spec.md`; `docs/journal-spec.md` here is a superseded stub.
 
 ## 0. Status — 24 September 2026
 
-**Tracks B and C are complete. Track A has not started, and is now the only
-thing blocking everything else.**
+**Tracks A, B and C are complete. Track D is unblocked.**
 
 | Track | State |
 |---|---|
-| **A** — COROS verification | **Not started.** [thrive#133](https://github.com/luketmoss/thrive/issues/133) open |
+| **A** — COROS verification | **Complete.** [thrive#133](https://github.com/luketmoss/thrive/issues/133), answers in sync §2 and §15 |
 | **B** — Thrive foundation | **Complete.** All six landed |
 | **C** — Hive additions | **Complete.** All five landed |
-| **D** — COROS sync | **Blocked on A** |
+| **D** — COROS sync | **Unblocked** |
 | **E** — History backfill | **Blocked on D** |
 
 ### Track B — delivered
@@ -64,12 +63,18 @@ two copies, is exactly the mirror-drift the change-both-together rule exists to
 catch — and **hive#247**, "no CI on pull requests", is why #130's AC6 insisted
 the CI job be unfiltered.
 
-### Track A — the whole critical path
+### Track A — delivered
 
-[thrive#133](https://github.com/luketmoss/thrive/issues/133) is six questions
-and no code. Until it is answered, Phase D1's design is a guess: §2 [VERIFY]
-item 2 (token rotation) decides where the refresh token lives, and item 3
-(general read limits) now also decides the sync cadence — see §9.
+[thrive#133](https://github.com/luketmoss/thrive/issues/133) answered all six
+questions on 23 September. The two that gated Phase D1 came out cleanly:
+refresh tokens **rotate**, so the Drive-stored token stands, and there is
+**no ordinary read limit** published or observed, so the §9 cadence is free
+to choose on freshness grounds.
+
+It also changed three things: COROS tools return **prose, not structured
+data** (a new [DECIDE], sync §17), the FIT allowance is a **fixed 24-hour
+window**, so #149's budget is a rolling 24 hours rather than a calendar day,
+and **COROS sends no step goal**, which settles #148's open question.
 
 ---
 
@@ -105,6 +110,7 @@ so it should run alongside B and C rather than ahead of them.
 **Blocks:** Track D entirely, Track E's COROS half.
 **Blocked by:** nothing.
 **Shape:** one focused session, not a project. No production code.
+**Status:** done 23 Sept 2026 (#133). Answers are in sync §2 and §15.
 
 Nothing is set up today — the watch is bought, no OAuth app is registered.
 
@@ -328,7 +334,7 @@ complementary issues in Thrive and Hive** — filed 23 September.
 | [#145](https://github.com/luketmoss/thrive/issues/145) | Record an estimated duration for a planned workout | Training panel |
 | [#146](https://github.com/luketmoss/thrive/issues/146) | `getPlannedWorkouts` returns exercise and set counts | Training panel |
 | [#147](https://github.com/luketmoss/thrive/issues/147) | Read `DailyHealth` through the Apps Script API | Health panels |
-| [#148](https://github.com/luketmoss/thrive/issues/148) | `DailyHealth` carries bed and wake times, and a step goal if COROS sends one | Health panels; folds the step-goal **[VERIFY]** into the sync |
+| [#148](https://github.com/luketmoss/thrive/issues/148) | `DailyHealth` carries bed and wake times, and a step goal if COROS sends one | Health panels. #133: bed and wake times come from `querySleepData`; COROS sends **no step goal** |
 | [#149](https://github.com/luketmoss/thrive/issues/149) | The FIT request budget must be per day, not per run | **Amends §4 and §6 of the sync plan** |
 
 ### Hive
@@ -369,6 +375,11 @@ and §10 both say the FIT counter is *daily*; §6's pseudocode set
 night — which §9 no longer does. Amended: the budget is derived by summing
 `n_fit_fetched` across the day's `SyncLog` rows, so it is shared across runs,
 needs no new state, and survives a crashed run.
+
+**#133 amended the window.** COROS's allowance turned out to be a fixed 24-hour
+window opening at the first request, not a calendar day, so a calendar-day sum
+can overshoot across midnight. The sum now runs over the last 24 hours of
+`SyncLog` rows — same derivation, no new state, and it can only under-spend.
 
 This also unblocks keel#360, which could not size "how many extra runs a day
 the FIT cap allows" until it was settled.
