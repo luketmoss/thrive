@@ -217,7 +217,7 @@ export function ActivitiesScreen() {
                     <span class={`planned-date${dateLabel === 'Today' || dateLabel === 'Tomorrow' ? ' planned-date-imminent' : ''}`}>
                       {dateLabel}
                     </span>
-                    {estimate && ` · ${estimate}`}
+                    {estimate && <>{' · '}<span class="planned-estimate">{estimate}</span></>}
                   </span>
                   {tags.length > 0 && (
                     <div class="workout-card-tags">

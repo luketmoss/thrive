@@ -606,6 +606,11 @@ input, select, textarea {
   font-weight: 600;
 }
 
+/* #145: "about 47 min" wraps as one unit, never "about / 47 min". */
+.planned-estimate {
+  white-space: nowrap;
+}
+
 /* ===== Planned Workout Detail ===== */
 .planned-detail-start {
   padding: var(--space-md) var(--space-md) 0;
