@@ -383,9 +383,11 @@ function upsertSyncedWorkout(payload) {
  *    None: `unmatched`, reason `no match`. Several, even if one is nearer:
  *    `unmatched`, reason `ambiguous`. Neither writes anything.
  *
- * A row that lost its link (deleted, or overwritten by a stale SPA save) is
+ * A row that lost its link (deleted, or its link cells cleared by hand) is
  * simply not linked any more, so step 2 runs afresh, with no `filled` carried
- * over: the fields are blank again because the link went with them.
+ * over: the fields are blank again because the link went with them. A stale
+ * SPA save no longer does this: the SPA writes only the fields it changed
+ * (#172).
  *
  * Only ENRICH_FIELDS and ENRICH_LINK_FIELDS are ever written; `source` stays
  * ''. Two rows carrying the activity ID are refused, naming them.

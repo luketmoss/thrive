@@ -232,7 +232,7 @@ write happen in one execution. Sync plan §7 is the design.
 - **Once filled, a field is the user's.** The archive's `normalized` is
   `{ enrichment: { workout_id, filled } }`, and a field named there is never
   written again, even after an edit or a clearing in Thrive. A re-run with
-  nothing new writes nothing. A row that loses its link (a stale SPA save) is
+  nothing new writes nothing. A row whose link cells are cleared by hand is
   matched afresh.
 - **No FIT** is requested for strength.
 - `SYNC_LOG=summary` prints only `Strength: N enriched, M unmatched`. The IDs

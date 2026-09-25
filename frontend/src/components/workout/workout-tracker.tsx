@@ -16,7 +16,7 @@ import { applyCopyDown } from './copy-down';
 import { isWarmupExercise } from './warmup';
 import { applyChangeSection, applyMoveUp, applyMoveDown } from './section-management';
 import { buildExerciseList, mergeWarmups } from './build-exercise-list';
-import { secondsToMinutesInput, minutesToSeconds } from '../../api/duration';
+import { workoutToEditInputs, editInputsToPatch } from '../shared/edit-patch';
 import { EffortToggle } from '../shared/effort-toggle';
 
 interface Props {
@@ -39,10 +39,12 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
   const finishBtnRef = useRef<HTMLButtonElement>(null);
 
   // Edit mode metadata
-  const [editDate, setEditDate] = useState(workout?.date || '');
-  const [editName, setEditName] = useState(workout?.name || '');
-  const [editDuration, setEditDuration] = useState(secondsToMinutesInput(workout?.elapsed_seconds ?? ''));
-  const [editEffort, setEditEffort] = useState<Effort | ''>(workout?.effort || '');
+  // Pre-filled values, fixed at mount: a save writes only what differs (#172).
+  const [editInitial] = useState(() => workoutToEditInputs(workout));
+  const [editDate, setEditDate] = useState(editInitial.date);
+  const [editName, setEditName] = useState(editInitial.name);
+  const [editDuration, setEditDuration] = useState(editInitial.duration);
+  const [editEffort, setEditEffort] = useState<Effort | ''>(editInitial.effort);
   const [finishEffort, setFinishEffort] = useState<Effort | ''>('');
 
   // Auto-sync on reconnect (AC3)
@@ -501,17 +503,11 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
 
       await saveWorkoutEdits(
         workoutId,
-        {
-          date: editDate, name: editName.trim(), notes: notes.trim(),
-          elapsed_seconds: minutesToSeconds(editDuration), effort: editEffort,
-          // weight workouts have no cardio UI and no venue; carry the stored
-          // values through untouched rather than writing '' over them.
-          sub_type: workout?.sub_type ?? '',
-          distance_m: workout?.distance_m ?? '',
-          ascent_m: workout?.ascent_m ?? '',
-          descent_m: workout?.descent_m ?? '',
-          avg_hr: workout?.avg_hr ?? '',
-        },
+        // Weight workouts have no cardio or venue inputs, so those fields are
+        // left out and never written; nor is any input left untouched.
+        editInputsToPatch(editInitial, {
+          date: editDate, name: editName, duration: editDuration, notes, effort: editEffort,
+        }),
         editedSets,
         token,
       );
@@ -644,8 +640,9 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
       {editMode && (
         <div class="finish-form" style={{ marginBottom: 'var(--space-md)' }}>
           <div class="form-group">
-            <label class="form-label">Name</label>
+            <label class="form-label" htmlFor="tracker-edit-name">Name</label>
             <input
+              id="tracker-edit-name"
               class="form-input"
               type="text"
               value={editName}
@@ -653,8 +650,9 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
             />
           </div>
           <div class="form-group">
-            <label class="form-label">Date</label>
+            <label class="form-label" htmlFor="tracker-edit-date">Date</label>
             <input
+              id="tracker-edit-date"
               class="form-input"
               type="date"
               value={editDate}
@@ -662,8 +660,9 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
             />
           </div>
           <div class="form-group">
-            <label class="form-label">Duration (minutes)</label>
+            <label class="form-label" htmlFor="tracker-edit-duration">Duration (minutes)</label>
             <input
+              id="tracker-edit-duration"
               class="form-input"
               type="number"
               inputMode="numeric"
@@ -682,8 +681,9 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
             />
           </div>
           <div class="form-group">
-            <label class="form-label">Notes</label>
+            <label class="form-label" htmlFor="tracker-edit-notes">Notes</label>
             <textarea
+              id="tracker-edit-notes"
               class="form-textarea"
               placeholder="How did it go?"
               rows={3}
