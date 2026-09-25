@@ -276,6 +276,11 @@ function upsertSyncedWorkout(payload) {
     raw_ref: rawRef,
     synced_at: syncedAt,
   };
+  var fit = normalizeSyncedFit(payload);
+  if (fit) {
+    owned.fit_ref = fit.fit_ref;
+    owned.fit_fetched_at = fit.fit_fetched_at;
+  }
 
   var sheet = getSheet(WORKOUTS_SHEET);
   var rows = getAllRows(sheet);
@@ -352,6 +357,34 @@ function upsertSyncedWorkout(payload) {
     status: 'updated', id: current.id, sheetRow: rowNum,
     written: pickSynced(current, edited), kept: kept,
   };
+}
+
+/**
+ * The FIT step's two sync-owned fields (#154), or null when the payload sends
+ * neither, so a caller that predates them leaves V and W alone. When sent they
+ * are always overwritten, never merged, and they travel together.
+ *
+ * `fit_ref` is a Drive file ID and nothing else. A FIT download URL is an
+ * unauthenticated secret (sync plan §2), so a value with `:`, `/` or `.` in it
+ * is refused before it can reach the sheet, and the refusal does not echo it.
+ * `fit_fetched_at` set with `fit_ref` blank means "no FIT will be fetched";
+ * both blank means "not yet".
+ */
+function normalizeSyncedFit(payload) {
+  var hasRef = payload.fit_ref !== undefined;
+  var hasAt = payload.fit_fetched_at !== undefined;
+  if (!hasRef && !hasAt) return null;
+  if (hasRef !== hasAt) throw new Error('fit_ref and fit_fetched_at are sent together or not at all');
+  var ref = cell(payload.fit_ref);
+  var at = cell(payload.fit_fetched_at);
+  if (ref && !/^[A-Za-z0-9_-]+$/.test(ref)) {
+    throw new Error('fit_ref must be a Drive file ID (letters, digits, "-" and "_"); the value sent was not one');
+  }
+  if (at && !ISO_INSTANT.test(at)) {
+    throw new Error('fit_fetched_at must be an ISO 8601 instant or blank, got "' + at + '"');
+  }
+  if (ref && !at) throw new Error('fit_ref needs fit_fetched_at');
+  return { fit_ref: ref, fit_fetched_at: at };
 }
 
 /** `last_written.edited`: merged field names, or nothing. */

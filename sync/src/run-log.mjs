@@ -52,7 +52,9 @@ export function buildSyncLogRow({ runId, startedAt, finishedAt, window, counts =
     n_seen: counts.seen ?? 0,
     n_new: counts.created ?? 0,
     n_updated: counts.updated ?? 0,
-    // #155 and #154 fill these; until then nothing enriches or fetches a FIT.
+    // #155 fills n_enriched. n_fit_fetched is FIT requests made (#154), failed
+    // ones included, because each may have spent COROS's allowance; the next
+    // run's budget is summed from it.
     n_enriched: counts.enriched ?? 0,
     n_fit_fetched: counts.fitFetched ?? 0,
     n_errors: failures.length + (fatal ? 1 : 0),
@@ -105,6 +107,7 @@ export function summaryLine(row) {
   return (
     `Run ${row.run_id}: ${row.status}. Window ${row.window_start} to ${row.window_end}. ` +
     `${row.n_seen} activities listed; Workouts ${row.n_new} created, ${row.n_updated} updated; ` +
+    `${row.n_fit_fetched} FIT requested; ` +
     `${row.n_errors} failure(s).`
   );
 }

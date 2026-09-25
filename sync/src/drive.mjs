@@ -5,6 +5,7 @@
 // or a stored ID: a renamed or moved file is still found, and no file ID has to
 // be kept in step with a secret. #152 builds its archive on the same helper.
 
+import { randomBytes } from 'node:crypto';
 import { DriveAuthError } from './errors.mjs';
 
 const API = 'https://www.googleapis.com/drive/v3/files';
@@ -103,6 +104,30 @@ export function createDrive({ getToken, fetchImpl = fetch }) {
     return created.id;
   }
 
+  /**
+   * A binary file (a FIT, #154), in one multipart upload. The boundary is
+   * random, and checked against the bytes, so it cannot occur inside them.
+   */
+  async function createBinary({ name, parentId, props, bytes, mimeType = 'application/octet-stream' }) {
+    let boundary;
+    do boundary = `thrive-sync-${randomBytes(12).toString('hex')}`;
+    while (bytes.includes(boundary));
+    const metadata = { name, mimeType, appProperties: props, parents: [parentId] };
+    const body = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
+        `--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`,
+      ),
+      bytes,
+      Buffer.from(`\r\n--${boundary}--`),
+    ]);
+    const created = JSON.parse(await request('POST', `${UPLOAD}?uploadType=multipart&fields=id`, {
+      body,
+      headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+    }));
+    return created.id;
+  }
+
   async function readJson(fileId) {
     return JSON.parse(await request('GET', `${API}/${encodeURIComponent(fileId)}?alt=media`));
   }
@@ -115,5 +140,5 @@ export function createDrive({ getToken, fetchImpl = fetch }) {
     });
   }
 
-  return { findFiles, findOne, ensureFolder, createJson, readJson, updateJson };
+  return { findFiles, findOne, ensureFolder, createJson, createBinary, readJson, updateJson };
 }

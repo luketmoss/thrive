@@ -24,6 +24,10 @@ export function redact(text) {
     '$1[redacted]$2',
   );
   out = out.replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]+/g, '$1[redacted]');
+  // A FIT download URL downloads with no credentials (sync plan §2), so it is
+  // a secret, and the sync never asks for one (#154). Masked anyway, in case
+  // COROS ever puts one in an error or a payload.
+  out = out.replace(/(?:https?:\/\/)?s3\.coros\.com\/fit\/[^\s"'<>)\]]*/gi, '[fit-url redacted]');
   return out;
 }
 

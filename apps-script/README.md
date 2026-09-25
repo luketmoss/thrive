@@ -192,7 +192,12 @@ SPA between a read and a write cannot be lost. Key only, like every write.
   incoming value is written only if the sheet still holds `last_written`'s.
   `last_written: null` fills blanks only. `source`, `source_activity_id`,
   `raw_ref` and `synced_at` are always overwritten; `effort`, `notes`,
-  `status`, `template_id`, `fit_ref` and `fit_fetched_at` never are.
+  `status` and `template_id` never are.
+- **`fit_ref` / `fit_fetched_at`** (#154) are sync-owned and optional: sent (both,
+  at top level), they are always overwritten; sent as neither, V and W are left
+  alone. `fit_ref` must be a Drive file ID (letters, digits, `-`, `_`), so a FIT
+  download URL can never land in the sheet, and `fit_fetched_at` an ISO instant.
+  `fit_fetched_at` set with `fit_ref` blank means "no FIT will be fetched".
 - **Two rows:** refused, naming both ids.
 - Returns `written`, the merged fields as the sheet now holds them plus
   `edited` (the fields the user changed, which stay kept on every later run),

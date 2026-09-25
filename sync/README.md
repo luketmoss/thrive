@@ -9,7 +9,8 @@ It authorizes against COROS and keeps the rotating token in Drive (#151), lands
 the window's raw COROS payloads in Drive, unmodified (#152), then normalizes
 daily health (#165) and activities (#166) from that archive into the sheet's
 `DailyHealth` and `Workouts` tabs through the Thrive API, and rebuilds
-`DailySummary` for the window.
+`DailySummary` for the window. Each synced activity's FIT file is stored in
+Drive too, within COROS's 50-a-day allowance (#154).
 
 ## Credentials
 
@@ -206,6 +207,57 @@ the name was edited in Thrive).
 A missing `THRIVE_API_URL`/`THRIVE_API_KEY` costs the sheet write, never the
 archive: the run archives first, then fails naming both.
 
+## FIT files (#154)
+
+Every activity that gets a `Workouts` row gets its FIT file, indoor ones
+included: an indoor ride's FIT still carries its second-by-second heart rate.
+Strength (402) is §7's and gets none, and an unmapped code (400 gym cardio
+included) has no row to record one on. `src/fit.mjs`:
+
+- **The tool is `downloadActivityFitFiles`**, with `{ labelId, sportType }` from
+  the list. It returns the file as a base64 `resource` blob
+  (`coros://activity-fit-files/<labelId>.fit`). `queryActivityFitFileDownloadUrls`
+  would return an unauthenticated S3 URL instead, a secret, so the sync never
+  calls it and the URL never exists in the process. `redact()` masks one
+  anyway.
+- **Stored, not parsed.** The bytes are checked for being whole FIT files
+  (header, declared size, header and file CRC), then stored as they came in
+  `Thrive COROS/fit/<YYYY>/<MM>/<activityId>.fit`, foldered by local start
+  date and tagged `{ source: coros, kind: fit, fit_activity_id }`. The tag is
+  not `activity_id`, which would make the activity JSON's lookup match two
+  files.
+- **On the row**, through the same `upsertSyncedWorkout` call, as sync-owned
+  fields: `fit_ref` is the FIT's Drive file ID, and `fit_fetched_at` the run
+  that fetched it. Both blank means not fetched yet. `fit_fetched_at` set
+  with `fit_ref` blank means the sync gave up: no FIT will be fetched.
+- **The archive remembers.** Each activity's archive file carries a `fit`
+  record (`status`, `file_id`, `fetched_at`, `attempts`, `last_error`), which
+  an ingest update carries over like `normalized`. A FIT on record is never
+  requested again, and is re-sent to the row on every run, so a row write
+  that failed heals. A FIT that is in Drive while the record is missing (a
+  run died between the two) is adopted without a request.
+
+**The budget** is `50 − sum(n_fit_fetched)` over the `SyncLog` rows that
+started in the 24 hours before this run. It is derived, never stored. COROS's
+allowance is a fixed 24-hour window opening at its first request, and a rolling
+24 hours always covers it, so the sync can under-spend but never over-spend.
+
+- The budget is read (`getSyncLog`, 100 rows) only when an activity needs a
+  request, oldest activity first. At 0 the run stops asking, logs how many
+  activities are waiting, and carries on. That is not a failure; the next run
+  resumes.
+- If it cannot be read, nothing is requested, and the run records why.
+- `n_fit_fetched` counts **requests**, failed ones included, because COROS may
+  have counted each.
+- **A FIT that keeps failing** is requested once a run, with no retry inside
+  the run, and each failure is a run failure. After **3** failed requests the
+  sync gives up on it for good. A Drive failure after a good download does
+  not use up an attempt.
+- `THRIVE_FIT_BUDGET=<n>` lowers a run's budget to `n`, never raises it. It is
+  for testing the cap without spending the real allowance.
+- A request made outside the sync (a probe, another client) does not appear
+  in `SyncLog`, so the sync cannot count it.
+
 ## Schedule, SyncLog and the dead-man's switch (#156)
 
 **Four runs a day**, `17 9,13,18,0 * * *`: 03:17, 07:17, 12:17 and 18:17 MDT,
@@ -225,7 +277,8 @@ window covers it.
 | `window_start`, `window_end` | D − 10 and D + 1 |
 | `n_seen` | activities the COROS list named |
 | `n_new`, `n_updated` | `Workouts` rows created; rows whose merged fields actually changed |
-| `n_enriched`, `n_fit_fetched` | `0` until #155 and #154 |
+| `n_enriched` | `0` until #155 |
+| `n_fit_fetched` | FIT requests made, failed ones included (#154). The next run's FIT budget is summed from it |
 | `n_errors`, `status`, `error_detail` | `ok` (exit 0), `partial` (completed with failures, exit 1), `failed` (aborted, exit 1, detail led by the error class, e.g. `CorosGrantDeadError: …`) |
 
 A row that cannot be written fails the run too.
@@ -267,6 +320,11 @@ the auto-disable after 60 days with no activity on a public repo. That layer is
 | `DailyHealth: …` / `DailySummary rebuild: …` | The Thrive API refused the write or was unreachable | Read the quoted error. The next run re-sends the whole window |
 | `activity <id>: not written, unrecognized format in getActivityDetail: …` | COROS changed how it words a value the activity parser reads | Fix `src/normalize-activity.mjs` for the quoted line, then re-run. The archive still holds the text |
 | `activity <id>: upsertSyncedWorkout: N Workouts rows are coros activity …` | Two rows claim one COROS activity | Delete all but one in Thrive, then re-run |
+| `activity <id>: FIT request n of 3 failed` | COROS errored, or sent something that is not one whole FIT file for that activity | Nothing. The next run tries again, up to 3 requests in all |
+| `activity <id>: FIT request failed 3 times, so the sync has stopped asking for it` | It gave up. The row gets `fit_fetched_at` with `fit_ref` blank | Read `fit.last_error` in the activity's archive file. To retry, delete its `fit` record there |
+| `FIT budget unknown, so no FIT was requested this run` | `getSyncLog` failed, or 100 rows of the last 24 h leave older ones unread | Read the quoted reason. The next run tries again |
+| `activity <id>: FIT downloaded but not stored in Drive` | The Drive upload failed | Nothing. The next run requests it again, which spends one more of the allowance |
+| `COROS no longer offers downloadActivityFitFiles` | The FIT tool was renamed or removed. Everything else still ran | Check `tools/list` and update `src/fit.mjs` |
 
 ## How the token is kept
 

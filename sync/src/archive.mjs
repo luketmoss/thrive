@@ -2,6 +2,7 @@
 //
 //   Thrive COROS/activities/<YYYY>/<MM>/<activityId>.json   one per activity
 //   Thrive COROS/health/<YYYY>/<MM>/<YYYY-MM-DD>.json      one per local run date
+//   Thrive COROS/fit/<YYYY>/<MM>/<activityId>.fit          one per activity (#154)
 //
 // Every file and folder is found again by its `appProperties`, never by name,
 // so a moved or renamed file is updated rather than duplicated. A file is only
@@ -21,6 +22,14 @@ export const bundleHash = (calls) =>
 
 export const activityProps = (activityId) => ({ source: 'coros', activity_id: String(activityId) });
 export const healthProps = (runDate) => ({ source: 'coros', kind: 'health', run_date: runDate });
+
+/**
+ * A FIT file's tags (#154). Deliberately not `activity_id`: Drive matches
+ * every file that has the queried properties, so a FIT tagged
+ * `{ source, activity_id }` would also answer the activity JSON's query, and
+ * that lookup would then refuse with "2 files match".
+ */
+export const fitProps = (activityId) => ({ source: 'coros', kind: 'fit', fit_activity_id: String(activityId) });
 
 /**
  * A list entry with its position in the list removed. `text` begins "3. ",
@@ -140,6 +149,35 @@ export function createArchive(drive, { now = () => Date.now() } = {}) {
     async writeNormalized(fileId, normalized) {
       const current = await drive.readJson(fileId);
       await drive.updateJson(fileId, { ...current, normalized });
+    },
+
+    /**
+     * Record the activity's FIT state (#154) in its archive file. This is the
+     * sync's own memory of what it asked COROS for, so a FIT is never
+     * requested twice and one that keeps failing stops being asked for.
+     * Every other field is left as it is, like writeNormalized, and an ingest
+     * update carries `fit` over the same way it carries `normalized`.
+     */
+    async writeFit(fileId, fit) {
+      const current = await drive.readJson(fileId);
+      await drive.updateJson(fileId, { ...current, fit });
+    },
+
+    /** The activity's FIT file in Drive, or null. Found by tag, never by name. */
+    findFit(activityId) {
+      return drive.findOne(fitProps(activityId));
+    },
+
+    /**
+     * Store an activity's FIT bytes, foldered by its local start date like its
+     * JSON. Never parsed: `docs/data-architecture.md` §4 keeps FIT out of
+     * normalization. Returns the Drive file ID, which is the row's `fit_ref`.
+     */
+    async storeFit({ activityId, localDate, bytes }) {
+      const id = String(activityId);
+      const [yyyy, mm] = localDate.split('-');
+      const parentId = await folderFor(['fit', yyyy, mm]);
+      return drive.createBinary({ name: `${id}.fit`, parentId, props: fitProps(id), bytes });
     },
 
     /**
