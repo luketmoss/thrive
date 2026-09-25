@@ -57,9 +57,10 @@
   --color-border-light: #e8eaed;
   --color-text: #1f1f1f;
   --color-text-secondary: #5f6368;
-  /* Muted text meets AA (#182): 4.64:1 on --color-bg, 5.20:1 on the card,
-     4.69:1 on --color-primary-light. Still under --color-text-secondary. */
-  --color-text-muted: #636e79;
+  /* Muted text meets AA (#182) everywhere it is drawn. The tightest is
+     --color-border-light, the theme toggle track and row hover: 4.51:1.
+     4.85:1 on --color-bg, 5.44:1 on the card. Still under --color-text-secondary. */
+  --color-text-muted: #606b76;
   --color-primary: #FF6B35;
   --color-primary-hover: #D4400A;
   --color-primary-light: #fff0eb;

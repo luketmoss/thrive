@@ -81,6 +81,17 @@ describe.each(THEMES)('AC1-AC3: text tokens meet AA on every background (%s)', (
   }
 });
 
+// --color-border-light is a background too. It is the theme toggle's track
+// and the hover state of settings rows, list rows and icon buttons. Only the
+// neutral and accent text tokens are drawn on it; the status colours are not.
+describe.each(THEMES)('AC1: text on the toggle track and row hover meets AA (%s)', (theme) => {
+  for (const fg of ['--color-text', '--color-text-secondary', '--color-text-muted', '--color-primary-text']) {
+    it(`${fg} on --color-border-light`, () => {
+      expect(contrast(token(theme, fg), token(theme, '--color-border-light'))).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+});
+
 describe.each(THEMES)('AC1: the text hierarchy holds (%s)', (theme) => {
   it('muted < secondary < text, measured on the card', () => {
     const surface = token(theme, '--color-surface');
