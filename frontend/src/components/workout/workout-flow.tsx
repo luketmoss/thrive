@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'preact/hooks';
+import { useState, useEffect, useRef } from 'preact/hooks';
 import { workouts, activeWorkoutId, activeWorkoutSets, activeWarmupExercises, sets, templates } from '../../state/store';
 import { startWorkout, saveWorkoutForLater } from '../../state/actions';
 import { useAuth } from '../../auth/auth-context';
@@ -9,6 +9,7 @@ import { TemplatePicker } from './template-picker';
 import { WorkoutTracker } from './workout-tracker';
 import { SimpleWorkout } from './simple-workout';
 import { WorkoutPlanner } from './workout-planner';
+import { validPlanDate } from './plan-date';
 import type { WorkoutType, BuilderExercise } from '../../api/types';
 import type { PlannerExercise } from './workout-planner';
 
@@ -17,21 +18,45 @@ type Intent = 'track' | 'plan';
 
 interface Props {
   workoutId?: string;
+  /**
+   * Raw `?plan=` value from `#/workout/new?plan=YYYY-MM-DD` (#143). When present
+   * — even empty or malformed — the flow starts in plan mode at the template
+   * step. Only a valid date reaches the planner; anything else means today.
+   */
+  planDate?: string;
 }
 
-export function WorkoutFlow({ workoutId }: Props) {
+export function WorkoutFlow({ workoutId, planDate }: Props) {
   const { token } = useAuth();
-  const [step, setStep] = useState<FlowStep>('type');
+  const linkedPlan = planDate !== undefined;
+  const [step, setStep] = useState<FlowStep>(linkedPlan ? 'template' : 'type');
   const [selectedType, setSelectedType] = useState<WorkoutType>('weight');
   const [activeId, setActiveId] = useState<string | null>(workoutId || null);
   const [workoutName, setWorkoutName] = useState('');
-  const [intent, setIntent] = useState<Intent>('track');
+  const [intent, setIntent] = useState<Intent>(linkedPlan ? 'plan' : 'track');
   const [starting, setStarting] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Planner state: exercises to pre-populate when user picks a template for "plan for later"
   const [plannerName, setPlannerName] = useState('');
   const [plannerExercises, setPlannerExercises] = useState<PlannerExercise[]>([]);
+
+  // A query-only change while mounted (`?plan=A` → `?plan=B`) starts the flow
+  // afresh rather than keeping the old date (#143 AC5). Done here rather than by
+  // keying the component on the hash, because the Track Now hand-off from
+  // `/workout/new` to `/workout/:id` relies on this instance surviving.
+  const lastPlanDate = useRef(planDate);
+  useEffect(() => {
+    if (planDate === lastPlanDate.current) return;
+    lastPlanDate.current = planDate;
+    if (workoutId) return; // moved on to /workout/:id — the tracker owns the screen
+    const plan = planDate !== undefined;
+    setStep(plan ? 'template' : 'type');
+    setSelectedType('weight');
+    setIntent(plan ? 'plan' : 'track');
+    setPlannerName('');
+    setPlannerExercises([]);
+  }, [planDate, workoutId]);
 
   // If resuming an existing workout, jump to the correct step
   useEffect(() => {
@@ -206,6 +231,7 @@ export function WorkoutFlow({ workoutId }: Props) {
         <WorkoutPlanner
           initialName={plannerName}
           initialExercises={plannerExercises}
+          initialDate={validPlanDate(planDate)}
           onSave={handlePlannerSave}
           onDiscard={() => setStep('template')}
           saving={saving}

@@ -23,7 +23,7 @@ function Router() {
     case 'activities':
       return <ActivitiesScreen />;
     case 'workout-new':
-      return <WorkoutFlow />;
+      return <WorkoutFlow planDate={route.params.plan} />;
     case 'workout-active':
       return <WorkoutFlow workoutId={route.params.id} />;
     case 'workout-detail':

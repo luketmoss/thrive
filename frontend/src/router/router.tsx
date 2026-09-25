@@ -7,7 +7,13 @@ export interface ParsedRoute {
 }
 
 function parseHash(hash: string): ParsedRoute {
-  const path = hash.replace(/^#/, '') || '/';
+  const full = hash.replace(/^#/, '') || '/';
+
+  // Match on the path alone (#143): `/workout/new?plan=…` must not fall through
+  // to `/workout/:id`, and a query on any route must not end up inside an `:id`.
+  const queryAt = full.indexOf('?');
+  const path = (queryAt === -1 ? full : full.slice(0, queryAt)) || '/';
+  const query = new URLSearchParams(queryAt === -1 ? '' : full.slice(queryAt + 1));
 
   // Match routes
   // /history/:id/edit
@@ -18,8 +24,12 @@ function parseHash(hash: string): ParsedRoute {
   match = path.match(/^\/history\/([^/]+)$/);
   if (match) return { name: 'workout-detail', params: { id: match[1] }, hash: path };
 
-  // /workout/new
-  if (path === '/workout/new') return { name: 'workout-new', params: {}, hash: path };
+  // /workout/new, optionally ?plan=YYYY-MM-DD (#143). `plan` is passed through
+  // raw, and only when the key is present; WorkoutFlow validates it.
+  if (path === '/workout/new') {
+    const plan = query.get('plan');
+    return { name: 'workout-new', params: plan === null ? {} : { plan }, hash: full };
+  }
 
   // /workout/:id
   match = path.match(/^\/workout\/([^/]+)$/);

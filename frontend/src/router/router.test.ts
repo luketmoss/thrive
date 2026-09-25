@@ -105,6 +105,53 @@ describe('router', () => {
     expect(currentRoute.value.params).toEqual({ id: 'tpl_demo001' });
   });
 
+  // #143: `#/workout/new?plan=YYYY-MM-DD` is almanac's Plan link.
+  describe('workout-new ?plan= (#143 AC5)', () => {
+    async function parse(hash: string) {
+      const { currentRoute } = await import('./router');
+      window.location.hash = hash;
+      window.dispatchEvent(new Event('hashchange'));
+      return currentRoute.value;
+    }
+
+    it('parses ?plan=<date> as workout-new with the raw plan param', async () => {
+      const route = await parse('/workout/new?plan=2026-09-24');
+      expect(route.name).toBe('workout-new');
+      expect(route.params).toEqual({ plan: '2026-09-24' });
+    });
+
+    it('keeps an empty or malformed plan raw — validation belongs to the flow', async () => {
+      expect((await parse('/workout/new?plan=')).params).toEqual({ plan: '' });
+      expect((await parse('/workout/new?plan=tomorrow')).params).toEqual({ plan: 'tomorrow' });
+    });
+
+    it('has no plan param when the key is absent', async () => {
+      expect((await parse('/workout/new')).params).toEqual({});
+      expect((await parse('/workout/new?type=bike')).params).toEqual({});
+    });
+
+    it('never resolves /workout/new?… to workout-active (the old bounce to Activities)', async () => {
+      for (const hash of ['/workout/new?plan=2026-09-24', '/workout/new?plan=', '/workout/new?']) {
+        const route = await parse(hash);
+        expect(route.name).toBe('workout-new');
+        expect(route.params.id).toBeUndefined();
+      }
+    });
+
+    it('carries the query in route.hash, so ?plan=A and ?plan=B are distinct routes', async () => {
+      const a = await parse('/workout/new?plan=2026-09-24');
+      const b = await parse('/workout/new?plan=2026-09-25');
+      expect(a.hash).toBe('/workout/new?plan=2026-09-24');
+      expect(b.hash).toBe('/workout/new?plan=2026-09-25');
+    });
+
+    it('matches other routes on their path, ignoring a query', async () => {
+      const route = await parse('/history/w_abc123?from=almanac');
+      expect(route.name).toBe('workout-detail');
+      expect(route.params).toEqual({ id: 'w_abc123' });
+    });
+  });
+
   it('falls back to activities for unknown routes', async () => {
     const { currentRoute } = await import('./router');
     window.location.hash = '/nonexistent/path';
