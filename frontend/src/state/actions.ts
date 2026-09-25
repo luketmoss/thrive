@@ -322,12 +322,8 @@ export async function startPlannedWorkout(
     const date = toLocalDateStr(now);
     const time = now.toTimeString().slice(0, 5);
 
-    const updated = { ...workout, status: 'active', date, time };
-
-    await updateWorkoutApi(workout.sheetRow, updated, token);
-    workouts.value = workouts.value.map((w) =>
-      w.id === workoutId ? { ...updated, sheetRow: workout.sheetRow } : w,
-    );
+    const updated = await updateWorkoutApi(workout, { status: 'active', date, time }, token);
+    workouts.value = workouts.value.map((w) => (w.id === workoutId ? updated : w));
 
     activeWorkoutId.value = workoutId;
     activeWorkoutSets.value = sets.value.filter((s) => s.workout_id === workoutId);
@@ -647,19 +643,14 @@ export async function finishWorkout(
     const startTime = new Date(`${workout.date}T${workout.time || '00:00'}`);
     const elapsedSeconds = Math.round((Date.now() - startTime.getTime()) / 1000);
 
-    const updated = {
-      ...workout,
+    const updated = await updateWorkoutApi(workout, {
       notes,
       status: '',
       elapsed_seconds: String(elapsedSeconds > 0 ? elapsedSeconds : ''),
       effort,
-    };
+    }, token);
 
-    await updateWorkoutApi(workout.sheetRow, updated, token);
-
-    workouts.value = workouts.value.map((w) =>
-      w.id === workoutId ? { ...updated, sheetRow: workout.sheetRow } : w,
-    );
+    workouts.value = workouts.value.map((w) => (w.id === workoutId ? updated : w));
     activeWorkoutId.value = null;
     activeWorkoutSets.value = [];
     showToast('Workout saved', 'success');
@@ -897,22 +888,19 @@ export function exitEditMode(): void {
   isEditMode.value = false;
 }
 
-export interface EditWorkoutData {
-  date: string;
-  name: string;
-  notes: string;
-  /** Seconds, as stored. Forms convert from typed minutes at their boundary. */
-  elapsed_seconds: string;
-  /** '' is unset, and a legitimate permanent state — never defaulted. */
-  effort: Effort | '';
-  /** Canonical integer meters / bpm, as stored. Forms convert on save. */
-  distance_m: string;
-  ascent_m: string;
-  descent_m: string;
-  avg_hr: string;
-  /** `Workouts!R`. '' is unspecified and a legitimate permanent state (#129). */
-  sub_type: string;
-}
+/**
+ * The workout fields an edit form changed, as stored: seconds, integer meters,
+ * bpm. Forms convert from what was typed at their boundary (`edit-patch.ts`).
+ *
+ * A field is present only when its input differs from what it was pre-filled
+ * with (#172). An absent field is left exactly as the sheet holds it; `''` is
+ * a deliberate clearing. The pre-fills are lossy (whole minutes, tenths of a
+ * mile), so re-sending an untouched field would round a synced value and stop
+ * it tracking COROS.
+ */
+export type EditWorkoutData = Partial<Pick<Workout,
+  'date' | 'name' | 'notes' | 'elapsed_seconds' | 'effort'
+  | 'distance_m' | 'ascent_m' | 'descent_m' | 'avg_hr' | 'sub_type'>>;
 
 export interface EditSetData {
   exercise_id: string;
@@ -937,21 +925,8 @@ export async function saveWorkoutEdits(
     const workout = workouts.value.find((w) => w.id === workoutId);
     if (!workout) throw new Error('Workout not found');
 
-    // Update workout row (type, template, etc. preserved from original)
-    const updatedWorkout = {
-      ...workout,
-      date: metadata.date,
-      name: metadata.name,
-      notes: metadata.notes,
-      elapsed_seconds: metadata.elapsed_seconds,
-      effort: metadata.effort,
-      distance_m: metadata.distance_m,
-      ascent_m: metadata.ascent_m,
-      descent_m: metadata.descent_m,
-      avg_hr: metadata.avg_hr,
-      sub_type: metadata.sub_type,
-    };
-    await updateWorkoutApi(workout.sheetRow, updatedWorkout, token);
+    // Only the changed fields; every other column stays as the sheet holds it.
+    const updatedWorkout = await updateWorkoutApi(workout, metadata, token);
 
     // Determine original sets for this workout
     const originalSets = sets.value.filter((s) => s.workout_id === workoutId);
@@ -1031,9 +1006,7 @@ export async function saveWorkoutEdits(
     }
 
     // Update workout in local signal
-    workouts.value = workouts.value.map((w) =>
-      w.id === workoutId ? { ...updatedWorkout, sheetRow: workout.sheetRow } : w,
-    );
+    workouts.value = workouts.value.map((w) => (w.id === workoutId ? updatedWorkout : w));
 
     // Clear edit mode
     exitEditMode();
@@ -1058,24 +1031,10 @@ export async function saveSimpleWorkoutEdits(
     const workout = workouts.value.find((w) => w.id === workoutId);
     if (!workout) throw new Error('Workout not found');
 
-    const updatedWorkout = {
-      ...workout,
-      date: metadata.date,
-      name: metadata.name,
-      notes: metadata.notes,
-      elapsed_seconds: metadata.elapsed_seconds,
-      effort: metadata.effort,
-      distance_m: metadata.distance_m,
-      ascent_m: metadata.ascent_m,
-      descent_m: metadata.descent_m,
-      avg_hr: metadata.avg_hr,
-      sub_type: metadata.sub_type,
-    };
-    await updateWorkoutApi(workout.sheetRow, updatedWorkout, token);
+    // Only the changed fields; every other column stays as the sheet holds it.
+    const updatedWorkout = await updateWorkoutApi(workout, metadata, token);
 
-    workouts.value = workouts.value.map((w) =>
-      w.id === workoutId ? { ...updatedWorkout, sheetRow: workout.sheetRow } : w,
-    );
+    workouts.value = workouts.value.map((w) => (w.id === workoutId ? updatedWorkout : w));
 
     showToast('Workout updated', 'success');
   } catch (err) {

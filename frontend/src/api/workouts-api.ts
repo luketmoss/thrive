@@ -25,38 +25,46 @@ export async function fetchWorkouts(token: string): Promise<WorkoutWithRow[]> {
 
   return withReauth(token, async (t) => {
     const rows = await sheetsGet('Workouts!A2:Z', t);
-    return rows.map((row, i) => ({
-      id: row[0] || '',
-      date: row[1] || '',
-      time: row[2] || '',
-      type: (row[3] || 'weight') as WorkoutType,
-      name: row[4] || '',
-      template_id: row[5] || '',
-      notes: row[6] || '',
-      elapsed_seconds: row[7] || '',
-      created: row[8] || '',
-      copied_from: row[9] || '',
-      status: row[10] || '',
-      moving_seconds: row[11] || '',
-      effort: (row[12] || '') as Workout['effort'],
-      distance_m: row[13] || '',
-      ascent_m: row[14] || '',
-      descent_m: row[15] || '',
-      avg_hr: row[16] || '',
-      // #128 R-Z. A row written before the migration has no cells here at
-      // all, so `|| ''` is what keeps them blank rather than undefined.
-      sub_type: row[17] || '',
-      source: row[18] || '',
-      source_activity_id: row[19] || '',
-      raw_ref: row[20] || '',
-      fit_ref: row[21] || '',
-      fit_fetched_at: row[22] || '',
-      synced_at: row[23] || '',
-      started_at_utc: row[24] || '',
-      calories: row[25] || '',
-      sheetRow: i + 2,
-    }));
+    return rows.map((row, i) => rowToWorkout(row, i + 2));
   });
+}
+
+/**
+ * Reads a `Workouts!A:Z` row. The Sheets API drops trailing empty cells, so a
+ * short row is normal and every missing cell reads as `''`.
+ */
+export function rowToWorkout(row: string[], sheetRow: number): WorkoutWithRow {
+  return {
+    id: row[0] || '',
+    date: row[1] || '',
+    time: row[2] || '',
+    type: (row[3] || 'weight') as WorkoutType,
+    name: row[4] || '',
+    template_id: row[5] || '',
+    notes: row[6] || '',
+    elapsed_seconds: row[7] || '',
+    created: row[8] || '',
+    copied_from: row[9] || '',
+    status: row[10] || '',
+    moving_seconds: row[11] || '',
+    effort: (row[12] || '') as Workout['effort'],
+    distance_m: row[13] || '',
+    ascent_m: row[14] || '',
+    descent_m: row[15] || '',
+    avg_hr: row[16] || '',
+    // #128 R-Z. A row written before the migration has no cells here at
+    // all, so `|| ''` is what keeps them blank rather than undefined.
+    sub_type: row[17] || '',
+    source: row[18] || '',
+    source_activity_id: row[19] || '',
+    raw_ref: row[20] || '',
+    fit_ref: row[21] || '',
+    fit_fetched_at: row[22] || '',
+    synced_at: row[23] || '',
+    started_at_utc: row[24] || '',
+    calories: row[25] || '',
+    sheetRow,
+  };
 }
 
 /**
@@ -163,24 +171,50 @@ export async function createWorkout(
   return workout;
 }
 
-export async function updateWorkout(
-  sheetRow: number,
-  workout: Workout,
-  token: string,
-): Promise<void> {
-  if (isDemo()) return;
+/**
+ * The fields a write changes. Anything absent is left as the sheet holds it.
+ * `id` is how the row is found, so it is never part of a patch.
+ */
+export type WorkoutPatch = Partial<Omit<Workout, 'id'>>;
 
-  await withReauth(token, async (t) => {
-    // Verify the row still belongs to this workout before overwriting it —
-    // a stale sheetRow (e.g. after a delete shifted rows) would otherwise
-    // silently clobber a different workout's data (see issue #95).
-    const idCell = await sheetsGet(`Workouts!A${sheetRow}:A${sheetRow}`, t);
-    const rowId = idCell[0]?.[0];
-    if (rowId !== workout.id) {
+/**
+ * Writes `patch` over the row as the sheet holds it **now**, not over the
+ * app's cached copy (#172).
+ *
+ * The cached copy can be hours old. Writing it back whole reverts every column
+ * the COROS sync wrote since the app loaded: an enrichment's `moving_seconds`,
+ * `avg_hr` and `calories`, the `source_activity_id`/`raw_ref`/`synced_at`
+ * link, a synced row's `fit_ref`. On a synced row the sync then reads that
+ * revert as a user edit and stops updating the field. So the row is read
+ * fresh, only the patched fields change, and the whole row goes back.
+ * Apps Script's `updateWorkout` does the same.
+ *
+ * The fresh read is also the #95 check: a row that no longer holds this
+ * workout's id is refused instead of written.
+ *
+ * An empty patch writes nothing and returns `workout` unchanged.
+ *
+ * @returns the row as written, for the caller to put back in the store.
+ */
+export async function updateWorkout(
+  workout: WorkoutWithRow,
+  patch: WorkoutPatch,
+  token: string,
+): Promise<WorkoutWithRow> {
+  const { sheetRow } = workout;
+  if (Object.keys(patch).length === 0) return workout;
+  if (isDemo()) return { ...workout, ...patch, id: workout.id, sheetRow };
+
+  return withReauth(token, async (t) => {
+    const range = `Workouts!A${sheetRow}:Z${sheetRow}`;
+    const current = await sheetsGet(range, t);
+    if (!current[0] || (current[0][0] || '') !== workout.id) {
       throw new WorkoutRowMismatchError(workout.id);
     }
 
-    await sheetsUpdate(`Workouts!A${sheetRow}:Z${sheetRow}`, [workoutToRow(workout)], t);
+    const written: WorkoutWithRow = { ...rowToWorkout(current[0], sheetRow), ...patch, id: workout.id, sheetRow };
+    await sheetsUpdate(range, [workoutToRow(written)], t);
+    return written;
   });
 }
 

@@ -196,7 +196,7 @@ describe('Edit workout - duration editing', () => {
       sub_type: '', distance_m: '', ascent_m: '', descent_m: '', avg_hr: '',
     };
     expect(metadata.elapsed_seconds).toBe('2700');
-    expect(secondsToMinutes(metadata.elapsed_seconds)).toBe(45);
+    expect(secondsToMinutes(metadata.elapsed_seconds!)).toBe(45);
   });
 
   it('EditWorkoutData allows an empty duration, which stays empty not zero', () => {
@@ -209,7 +209,7 @@ describe('Edit workout - duration editing', () => {
       sub_type: '', distance_m: '', ascent_m: '', descent_m: '', avg_hr: '',
     };
     expect(metadata.elapsed_seconds).toBe('');
-    expect(secondsToMinutes(metadata.elapsed_seconds)).toBeNull();
+    expect(secondsToMinutes(metadata.elapsed_seconds!)).toBeNull();
   });
 
   it('non-weight workout has its duration accessible for editing', () => {
