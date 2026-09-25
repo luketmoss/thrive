@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
 import { activeWorkoutSets, activeWarmupExercises, isEditMode, workouts, pendingSyncCount, isSyncing, showToast } from '../../state/store';
 import { saveSet, removeSet, finishWorkout, deleteWorkout, saveWorkoutEdits, exitEditMode } from '../../state/actions';
 import { flushQueue } from '../../api/sync-queue';
-import type { EditSetData } from '../../state/actions';
 import { useAuth } from '../../auth/auth-context';
 import { navigate } from '../../router/router';
 import { AddExerciseModal } from '../exercises/add-exercise-modal';
@@ -16,6 +15,7 @@ import { applyCopyDown } from './copy-down';
 import { isWarmupExercise } from './warmup';
 import { applyChangeSection, applyMoveUp, applyMoveDown } from './section-management';
 import { buildExerciseList, mergeWarmups } from './build-exercise-list';
+import { collectEditedSets } from './edited-sets';
 import { workoutToEditInputs, editInputsToPatch } from '../shared/edit-patch';
 import { EffortToggle } from '../shared/effort-toggle';
 
@@ -481,25 +481,8 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
     if (!token) return;
     setFinishing(true);
     try {
-      // Collect all sets from exercise list (skip warmup)
-      const editedSets: EditSetData[] = [];
-      for (const ex of exerciseList) {
-        if (isWarmupExercise(ex)) continue;
-        for (const set of ex.sets) {
-          editedSets.push({
-            exercise_id: ex.exercise_id,
-            exercise_name: ex.exercise_name,
-            section: ex.section,
-            exercise_order: ex.exercise_order,
-            set_number: set.set_number,
-            planned_reps: set.planned_reps,
-            weight: set.weight,
-            reps: set.reps,
-            effort: set.effort,
-            sheetRow: set.sheetRow,
-          });
-        }
-      }
+      // Every set, warmups included: a stored set left out is deleted (#177).
+      const editedSets = collectEditedSets(exerciseList);
 
       await saveWorkoutEdits(
         workoutId,

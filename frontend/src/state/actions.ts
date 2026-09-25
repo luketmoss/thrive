@@ -929,27 +929,44 @@ export async function saveWorkoutEdits(
     // Only the changed fields; every other column stays as the sheet holds it.
     const updatedWorkout = await updateWorkoutApi(workout, metadata, token);
 
-    // Determine original sets for this workout
+    // A stored set is identified by its row, not by exercise/order/set: a
+    // reorder changes exercise_order without making the row a different set
+    // (#177). Only this workout's own rows can be kept; an edited set carrying
+    // any other row is written as new rather than over someone else's row.
     const originalSets = sets.value.filter((s) => s.workout_id === workoutId);
+    const ownRows = new Set(originalSets.map((s) => s.sheetRow).filter((r) => r > 0));
+    const existingSets = editedSets.filter((s) => ownRows.has(s.sheetRow));
+    const newSets = editedSets.filter((s) => !ownRows.has(s.sheetRow));
+    const keptRows = new Set(existingSets.map((s) => s.sheetRow));
+    const removedSets = originalSets.filter((s) => s.sheetRow > 0 && !keptRows.has(s.sheetRow));
 
-    // Find removed sets (in original but not in edited)
-    const editedKeys = new Set(
-      editedSets.map((s) => `${s.exercise_id}__${s.exercise_order}__${s.set_number}`),
-    );
-    const removedSets = originalSets.filter(
-      (s) => !editedKeys.has(`${s.exercise_id}__${s.exercise_order}__${s.set_number}`),
-    );
+    // Update kept rows first, while every cached sheetRow still points at its
+    // own row. Deleting first shifted each row below up by one, so the
+    // updates landed a row low per deletion: stale copies above, and the next
+    // workout's first sets overwritten below (#177).
+    for (const s of existingSets) {
+      await updateSetApi(s.sheetRow, {
+        workout_id: workoutId,
+        exercise_id: s.exercise_id,
+        exercise_name: s.exercise_name,
+        section: s.section,
+        exercise_order: s.exercise_order,
+        set_number: s.set_number,
+        planned_reps: s.planned_reps,
+        weight: s.weight,
+        reps: s.reps,
+        effort: s.effort as SetWithRow['effort'],
+      }, token);
+    }
 
-    // Delete removed sets bottom-to-top
-    const toDelete = removedSets
-      .filter((s) => s.sheetRow > 0)
-      .sort((a, b) => b.sheetRow - a.sheetRow);
+    // Then delete removed rows bottom-to-top, so each delete leaves the rows
+    // still to be deleted where they were.
+    const toDelete = [...removedSets].sort((a, b) => b.sheetRow - a.sheetRow);
     for (const s of toDelete) {
       await deleteSetRow(s.sheetRow, token);
     }
 
-    // Find new sets (no sheetRow or sheetRow <= 0)
-    const newSets = editedSets.filter((s) => s.sheetRow <= 0);
+    // New sets append at the end, so they never touch an existing row.
     if (newSets.length > 0) {
       const toAppend: WorkoutSet[] = newSets.map((s) => ({
         workout_id: workoutId,
@@ -964,23 +981,6 @@ export async function saveWorkoutEdits(
         effort: s.effort as SetWithRow['effort'],
       }));
       await appendSetsApi(toAppend, token);
-    }
-
-    // Update existing sets that may have changed
-    const existingSets = editedSets.filter((s) => s.sheetRow > 0);
-    for (const s of existingSets) {
-      await updateSetApi(s.sheetRow, {
-        workout_id: workoutId,
-        exercise_id: s.exercise_id,
-        exercise_name: s.exercise_name,
-        section: s.section,
-        exercise_order: s.exercise_order,
-        set_number: s.set_number,
-        planned_reps: s.planned_reps,
-        weight: s.weight,
-        reps: s.reps,
-        effort: s.effort as SetWithRow['effort'],
-      }, token);
     }
 
     // Re-fetch sets to get correct sheetRow values
@@ -1001,7 +1001,7 @@ export async function saveWorkoutEdits(
         weight: s.weight,
         reps: s.reps,
         effort: s.effort as SetWithRow['effort'],
-        sheetRow: s.sheetRow > 0 ? s.sheetRow : 1000 + i,
+        sheetRow: ownRows.has(s.sheetRow) ? s.sheetRow : 1000 + i,
       }));
       sets.value = [...nonWorkoutSets, ...updatedSets];
     }
