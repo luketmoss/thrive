@@ -67,6 +67,9 @@ var TOKEN_REFUSAL_MESSAGES = {
     'Access token is not permitted: it was issued to a different OAuth client or a ' +
     'different Google account than TOKEN_CLIENT_ID / TOKEN_ALLOWED_EMAIL allow.',
   token_unavailable: 'Could not reach Google to verify the access token. Try again.',
+  unauthorized_scope:
+    'The script is not yet allowed to call Google to verify tokens: its owner must ' +
+    're-authorize it for the script.external_request scope.',
   unconfigured:
     'Token access is not configured: TOKEN_CLIENT_ID and TOKEN_ALLOWED_EMAIL must both ' +
     'be set in script properties.',
@@ -90,7 +93,9 @@ function resolveCaller(params) {
   if (params.access_token !== undefined && params.access_token !== null) {
     var verdict = verifyAccessToken(params.access_token);
     if (verdict === 'ok') return { mode: 'token' };
-    var code = verdict === 'unconfigured' ? 'token_forbidden' : verdict;
+    // Both are the owner's to fix, and reconnecting cannot: "set up wrong".
+    var code = verdict === 'unconfigured' || verdict === 'unauthorized_scope'
+      ? 'token_forbidden' : verdict;
     return { refusal: fail(TOKEN_REFUSAL_MESSAGES[verdict], code) };
   }
   if (!validateApiKey(params.key)) return { refusal: fail('Invalid or missing API key') };
@@ -108,7 +113,8 @@ function trimmedProperty(props, name) {
 
 /**
  * Verify a Google access token. Returns `'ok'`, `'token_invalid'`,
- * `'token_forbidden'`, `'token_unavailable'` or `'unconfigured'`.
+ * `'token_forbidden'`, `'token_unavailable'`, `'unconfigured'` or
+ * `'unauthorized_scope'`.
  *
  * Either property unset refuses every token call before anything is fetched,
  * exactly as validateApiKey treats a missing API_KEY: unconfigured is an
@@ -132,8 +138,9 @@ function verifyAccessToken(token) {
   }
 
   var checked = checkTokenInfo(token, clientId, allowedEmail);
-  // Unreachable is not a verdict on the token, so it is never remembered.
-  if (checked.verdict !== 'token_unavailable' && checked.ttl > 0) {
+  // Unreachable is not a verdict on the token, and a missing scope is the
+  // owner's to fix, so neither is remembered.
+  if (checked.ttl > 0) {
     cache.put(cacheKey, checked.verdict, checked.ttl);
   }
   return checked.verdict;
@@ -155,8 +162,15 @@ function checkTokenInfo(token, clientId, allowedEmail) {
       { muteHttpExceptions: true }
     );
   } catch (err) {
-    // UrlFetchApp's own message quotes the URL, and so the token. Dropped
-    // deliberately: the caller is told only that Google was unreachable.
+    // UrlFetchApp's own message quotes the URL, and so the token. It is only
+    // inspected here, never passed on: the caller gets fixed text.
+    //
+    // appsscript.json pins no scopes, so UrlFetchApp's arrived inferred, and
+    // until the owner re-authorizes the script every fetch is refused. That
+    // is a setup fault, not an outage, and it should say so.
+    if (/permission/i.test(String((err && err.message) || err))) {
+      return { verdict: 'unauthorized_scope', ttl: 0 };
+    }
     return { verdict: 'token_unavailable', ttl: 0 };
   }
 

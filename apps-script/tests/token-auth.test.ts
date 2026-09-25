@@ -180,6 +180,22 @@ describe('AC2: verifying the token', () => {
     });
   }
 
+  // Until the owner re-authorizes for script.external_request, every fetch
+  // throws this. It is the owner's to fix, so it is token_forbidden, not an
+  // outage, and it is never cached.
+  it('refuses as token_forbidden, uncached, when the script lacks the fetch scope', () => {
+    const api = load(() => ({
+      throws: 'Exception: You do not have permission to call UrlFetchApp.fetch. Required ' +
+        'permissions: https://www.googleapis.com/auth/script.external_request',
+    }));
+    const { res } = callEntry(api.sandbox, 'doPost', tokenRead);
+    expect(res.code).toBe('token_forbidden');
+    expect(res.error).toMatch(/owner must re-authorize/);
+    callEntry(api.sandbox, 'doPost', tokenRead);
+    expect(api.cache.size).toBe(0);
+    expect(api.fetches).toHaveLength(2);
+  });
+
   it('accepts a token with no azp', () => {
     const { sandbox } = load(() => info({ azp: undefined }));
     expect(callEntry(sandbox, 'doGet', tokenRead).res.success).toBe(true);

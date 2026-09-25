@@ -127,7 +127,7 @@ it writes nothing, but it is the dry run of a write and takes a write payload.
 | `code` | Meaning | almanac does |
 |---|---|---|
 | `token_invalid` | Google rejected the token: expired, revoked or bogus alike | asks for a reconnect |
-| `token_forbidden` | wrong OAuth client or account, or the two properties unset | shows an error; reconnecting cannot fix it |
+| `token_forbidden` | wrong OAuth client or account, the two properties unset, or the script not yet re-authorized for `UrlFetchApp` | shows an error; reconnecting cannot fix it |
 | `token_unavailable` | tokeninfo unreachable or erroring; not a verdict, never cached | shows an error |
 | `read_only` | a token caller asked for anything off the list; it did not run | shows an error |
 
