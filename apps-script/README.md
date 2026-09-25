@@ -31,7 +31,8 @@ added to a tab is added in both.
 | `src/daily-summary.js` | `DailySummary` rollup, rebuild over any range |
 | `src/daily-health.js` | `DailyHealth` upsert by date, for the COROS sync (#165) |
 | `src/sync-log.js` | `SyncLog` append and newest-first read, one row per sync run (#156) |
-| `src/main.js` | `doGet` dispatch, auth, response envelope |
+| `src/auth.js` | Who is calling: the key, the Google-token check, its cache, the token read allow-list (#144) |
+| `src/main.js` | `doGet`/`doPost` dispatch, response envelope |
 
 `Labels` is deliberately absent: `domain.js` contains no Labels code and no
 `thrive_*` tool touches it. Tab actions travel with their tabs, so
@@ -40,9 +41,19 @@ added to a tab is added in both.
 
 ## The transport, and its limit
 
-**Everything goes through `doGet`, including writes.** Apps Script answers
-`POST` with a redirect, which breaks anonymous callers, so writes pass their
-data as a URL-encoded `payload` query parameter.
+**Key callers send everything through `doGet`, including writes.** Apps Script
+answers every call with a 302 to `script.googleusercontent.com`, and a client
+that does not follow a `POST`'s redirect never sees the answer, so writes pass
+their data as a URL-encoded `payload` query parameter.
+
+**`doPost` exists too (#144), and behaves identically.** Both entry points run
+one handler over `e.parameter`, which Apps Script fills from a form-encoded
+body exactly as from a query string. almanac, a browser app, POSTs so a live
+Google token never sits in a URL. A browser `fetch` follows the 302 as a `GET`,
+and both hops carry `Access-Control-Allow-Origin: *`, so it works provided the
+request stays CORS-simple: a `URLSearchParams` body, no headers set by hand.
+There is no `doOptions`, so a request that needs a preflight fails before it
+starts.
 
 That caps a request at the URL length Apps Script accepts — roughly 8KB for the
 whole URL, shared with the action, the key, and percent-encoding overhead that
@@ -76,7 +87,54 @@ interprets writes the way Sheets does, so a write that skips `asText()` fails th
 ## Actions
 
 Every response — success, rejection or thrown error — is
-`{ success, data?, error? }`.
+`{ success, data?, error?, code? }`. `code` appears only on the failures in
+the next section, so a key caller's envelope is exactly what it was before it
+existed.
+
+### Token callers (#144)
+
+almanac cannot hold the key: a key in a public bundle is not a secret. It
+sends `access_token`, a Google access token from its own sign-in, instead.
+
+| Sent | Caller | May run |
+|---|---|---|
+| `key` only | key caller | everything, as before |
+| `access_token`, with or without `key` | token caller | the reads below, only |
+| neither | refused | nothing |
+
+`access_token` present makes a token caller whatever else is sent: privilege
+never rises by adding a parameter.
+
+The token is checked against `https://oauth2.googleapis.com/tokeninfo`: `aud`
+(and `azp`, when present) must equal the `TOKEN_CLIENT_ID` property, `email`
+must equal `TOKEN_ALLOWED_EMAIL` (trimmed, case-insensitive) with
+`email_verified` true, and `expires_in` must be positive. **Either property
+unset refuses every token call.** The verdict is cached under the SHA-256 of
+`token|TOKEN_CLIENT_ID|TOKEN_ALLOWED_EMAIL` — accepted until a minute before
+the token expires (at most an hour), refused for five minutes, never when
+Google could not be reached. The raw token is in no cache key, log line, error
+or response.
+
+A token caller may run `getWorkouts`, `getWorkout`, `getPlannedWorkouts`,
+`getExercises`, `getExercise`, `getExerciseHistory`, `getTemplates`,
+`getTemplate`, `getSets`, `getWorkoutSets`, `getDailySummary`,
+`getHistoryDateRange`, `getDailyHealth` and `getSyncLog` — `TOKEN_READ_ACTIONS`
+in `src/auth.js`. It is an allow-list: **an action added later is refused to
+token callers until someone names it there**, and a test fails until every
+`case` in `main.js` is classified. `previewSetUpdates` is deliberately off it:
+it writes nothing, but it is the dry run of a write and takes a write payload.
+
+| `code` | Meaning | almanac does |
+|---|---|---|
+| `token_invalid` | Google rejected the token: expired, revoked or bogus alike | asks for a reconnect |
+| `token_forbidden` | wrong OAuth client or account, or the two properties unset | shows an error; reconnecting cannot fix it |
+| `token_unavailable` | tokeninfo unreachable or erroring; not a verdict, never cached | shows an error |
+| `read_only` | a token caller asked for anything off the list; it did not run | shows an error |
+
+```
+POST <exec url>        body: action=getWorkouts&access_token=...&from=2026-09-21&to=2026-09-27
+GET  <exec url>?action=getWorkouts&access_token=...       (from a terminal)
+```
 
 ### Reads
 
@@ -312,8 +370,18 @@ presentation concern, not a data one.
 2. Set **script properties** — never put either in source, this repo is public:
    - `API_KEY` — a long random string
    - `SPREADSHEET_ID` — the Groundwork sheet id
+   - `TOKEN_CLIENT_ID` — almanac's OAuth client ID (#144)
+   - `TOKEN_ALLOWED_EMAIL` — the one Google account allowed to call with a
+     token (#144)
+
+   Leaving either `TOKEN_*` property unset refuses every token call and
+   leaves key callers untouched.
 3. Deploy as a web app: execute as **me**, access **anyone**. Anonymous access
-   is what makes the API key load-bearing.
+   is what makes the API key and the token check load-bearing — "anyone with a
+   Google account" would answer a browser `fetch` with a login page.
+   The token check's `UrlFetchApp` call needs the `script.external_request`
+   scope; `appsscript.json` pins no scopes, so they are inferred, and the owner
+   must re-authorize once whenever a new one appears.
 4. The deployment URL and key become `THRIVE_API_URL` / `THRIVE_API_KEY` for
    consumers, and GitHub Actions secrets for the sync.
 
