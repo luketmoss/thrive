@@ -59,6 +59,52 @@ function slotKey(s) {
   return s.exercise_id + '__' + s.exercise_order;
 }
 
+/**
+ * A warmup row is a placeholder (set 1, usually no data), so counting it would
+ * overstate the session (#146). Only `warmup` is excluded: a row with a blank
+ * or unrecognised section is still work, and still counts.
+ */
+function isWarmupSet(s) {
+  return String(s.section).trim().toLowerCase() === 'warmup';
+}
+
+/**
+ * `{ exercise_count, set_count }` per workout_id, warmups excluded (#146).
+ *
+ * A slot is what `slotKey` says it is — the same exercise in two sections is
+ * two slots, exactly as `groupSetsByExercise` groups them. Takes every set in
+ * one pass, so a caller reads the tab once however many workouts it answers
+ * for. A workout with no non-warmup rows is simply absent here; the caller
+ * reports that as zero.
+ */
+function countSetsByWorkout(sets) {
+  var counts = {};
+  var seen = {};
+  for (var i = 0; i < sets.length; i++) {
+    var s = sets[i];
+    if (isWarmupSet(s)) continue;
+    // Prefixed so a workout id can never collide with an Object.prototype key.
+    var wkey = 'w:' + s.workout_id;
+    if (!Object.prototype.hasOwnProperty.call(counts, wkey)) {
+      counts[wkey] = { exercise_count: 0, set_count: 0 };
+    }
+    counts[wkey].set_count += 1;
+    var skey = wkey + '|' + slotKey(s);
+    if (!Object.prototype.hasOwnProperty.call(seen, skey)) {
+      seen[skey] = true;
+      counts[wkey].exercise_count += 1;
+    }
+  }
+  return {
+    get: function (workoutId) {
+      var wkey = 'w:' + workoutId;
+      return Object.prototype.hasOwnProperty.call(counts, wkey)
+        ? counts[wkey]
+        : { exercise_count: 0, set_count: 0 };
+    },
+  };
+}
+
 /** Group a workout's sets into slots, ordered by exercise_order. */
 function groupSetsByExercise(sets) {
   var order = [];

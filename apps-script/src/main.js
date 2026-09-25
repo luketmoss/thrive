@@ -22,7 +22,7 @@
 //   ?action=getWorkouts&key=...
 //   ?action=getWorkouts&key=...&from=2026-09-01&to=2026-09-30&type=bike
 //   ?action=getWorkout&key=...&id=w_1a2b3c4d
-//   ?action=getPlannedWorkouts&key=...&date=2026-09-21
+//   ?action=getPlannedWorkouts&key=...&date=2026-09-21   — adds exercise_count/set_count (#146)
 //   ?action=getWorkoutPayload&key=...&id=w_1a2b3c4d&offset=0   — key only (#179)
 //
 // Write examples:

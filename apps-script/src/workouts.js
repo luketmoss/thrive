@@ -60,10 +60,27 @@ function getWorkout(id) {
  * Defaults to today in TIMEZONE. A date with nothing planned returns `[]` —
  * an empty day is a normal answer, not an error, and the Journal's day view
  * depends on being able to ask about any date.
+ *
+ * Each workout also carries `exercise_count` and `set_count` (#146): its
+ * non-warmup exercise slots and set rows, so a caller can say "5 exercises ·
+ * 20 sets" without a `getWorkoutSets` per workout. One read of `Sets` answers
+ * every workout on the date, and none happens when nothing is planned. A
+ * workout with no non-warmup rows reports 0 and 0 — a true answer.
+ * `getWorkouts` deliberately does not count: over a range, it would be the
+ * cost this avoids.
  */
 function getPlannedWorkouts(date) {
   var target = date ? validateDate('date', date) : todayLocal();
-  return getWorkouts({ date: target, status: 'planned' });
+  var planned = getWorkouts({ date: target, status: 'planned' });
+  if (!planned.length) return planned;
+
+  var counts = countSetsByWorkout(getSets());
+  for (var i = 0; i < planned.length; i++) {
+    var c = counts.get(planned[i].id);
+    planned[i].exercise_count = c.exercise_count;
+    planned[i].set_count = c.set_count;
+  }
+  return planned;
 }
 
 /**
