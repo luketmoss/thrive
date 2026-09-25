@@ -179,7 +179,7 @@ var SECTIONS = ['warmup', 'primary', 'SS1', 'SS2', 'SS3', 'burnout', 'cooldown']
 /** The fields a set correction may change. Mirrors SET_UPDATE_FIELDS. */
 var SET_UPDATE_FIELDS = ['weight', 'reps', 'planned_reps', 'effort'];
 
-// --- DailySummary (A:R) — #131 --------------------------------------
+// --- DailySummary (A:T) — #131, #181 --------------------------------
 //
 // One row per local calendar day. Derived, never authoritative: if this tab
 // and Workouts disagree, Workouts is right and this is stale.
@@ -188,12 +188,15 @@ var SET_UPDATE_FIELDS = ['weight', 'reps', 'planned_reps', 'effort'];
 // the end. A sum over nullable fields is incomplete information without its
 // coverage, so they belong together; readable ordering is free while the tab
 // does not exist yet, and a migration later.
+//
+// The duration coverage (S, T) came later (#181) and is appended instead:
+// almanac (luketmoss/keel) reads this tab by column, so no letter A:R may move.
 var DAILY_SUMMARY_FIELDS = [
   'date',                  // A  PK, America/Denver local calendar date
   'activity_count',        // B  all activities, indoor and outdoor
   'activity_types',        // C  e.g. "bike:mountain,weight"
-  'total_moving_s',        // D
-  'total_elapsed_s',       // E
+  'total_moving_s',        // D  blank when no activity recorded it; S is its coverage
+  'total_elapsed_s',       // E  blank when no activity recorded it; T is its coverage
   'total_distance_m',      // F  OUTDOOR ONLY
   'total_ascent_m',        // G  OUTDOOR ONLY
   'cardio_activity_count', // H  the `of` — outdoor cardio that day
@@ -207,9 +210,11 @@ var DAILY_SUMMARY_FIELDS = [
   'sleep_total_s',         // P
   'training_load',         // Q
   'computed_at',           // R
+  'moving_withdata',       // S  #181: how many of B contributed to D
+  'elapsed_withdata',      // T  #181: how many of B contributed to E
 ];
 
-var DAILY_SUMMARY_COLUMN_COUNT = 18;
+var DAILY_SUMMARY_COLUMN_COUNT = 20;
 
 // --- DailyHealth (A:R) — #165 ---------------------------------------
 //

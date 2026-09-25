@@ -292,14 +292,14 @@ tool(
 tool(
   'thrive_daily_summary',
   'One line per day rolled up across workouts and health: activity count and types, moving and elapsed ' +
-    'time, outdoor distance and ascent with how many sessions were measured, session effort, and the ' +
+    'time with how many of the day\'s sessions recorded them, outdoor distance and ascent with how many ' +
+    'outdoor sessions were measured, session effort, and the ' +
     "day's steps, resting HR, HRV, sleep and training load. Use it for volume and load across days. " +
     'Default range: the 7 days ending today. Distance and ascent are OUTDOOR ONLY, so on a day with an ' +
     "indoor session they will not equal the sum of that day's activity distances. The rollup is derived " +
     'from the workouts and daily health, rebuilt on every COROS sync run: if it disagrees with ' +
-    'thrive_list_workouts, the workouts are right. "—" means unknown, never zero. Moving and elapsed ' +
-    'time are plain sums: a session that recorded no moving time adds nothing, so "moving 0 min" on a ' +
-    'day with activities means unrecorded, not stationary.',
+    'thrive_list_workouts, the workouts are right. "—" means unknown, never zero: "moving — (recorded ' +
+    'on 0 of 2 sessions)" means nobody recorded it, not that you stood still.',
   RANGE_SHAPE,
   async (args) => {
     const range = resolveRange(args, normalizeDate);

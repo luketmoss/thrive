@@ -51,10 +51,18 @@ Google Sheet "Groundwork" with these tabs:
   Every value is nullable: blank means COROS did not say, never `0`. Sleep is
   filed under its wake-up day; `sleep_total_s` includes awake time; `vo2max` and
   `recovery` are current-state snapshots. There is no step goal: COROS sends none.
-- **DailySummary** (A:R) — **derived, never authoritative** (#131). One row per
+- **DailySummary** (A:T) — **derived, never authoritative** (#131). One row per
   local calendar day, rebuildable at any time from `Workouts` + `DailyHealth`.
   Nothing writes here by hand. If it disagrees with `Workouts`, `Workouts` is
   right and this is stale.
+  date, activity_count, activity_types, total_moving_s, total_elapsed_s,
+  total_distance_m, total_ascent_m, cardio_activity_count, distance_withdata,
+  ascent_withdata, max_effort, effort_counts, steps, resting_hr, hrv,
+  sleep_total_s, training_load, computed_at, moving_withdata, elapsed_withdata.
+  Every total carries its coverage: `total_moving_s`/`total_elapsed_s` are blank
+  when no activity recorded them, and S/T count those that did out of
+  `activity_count` (#181). S/T are appended, not beside D/E, because almanac
+  (luketmoss/keel) reads this tab by column: never move a column here.
   `total_distance_m`/`total_ascent_m` are **outdoor only**, so they will not
   equal the sum of a day's activity distances on any day with an indoor
   session — correct, and surprising, so say so wherever it is displayed.

@@ -132,18 +132,27 @@ const listTypes = (s) => String(s).split(',').map((t) => t.trim()).filter(Boolea
 /** "Hard:1,Medium:2" -> "Hard 1, Medium 2". */
 const listEfforts = (s) => String(s).split(',').filter(Boolean).map((p) => p.replace(':', ' ')).join(', ');
 
+const OUTDOOR = { verb: 'measured', noun: 'outdoor cardio session' };
+const SESSIONS = { verb: 'recorded', noun: 'session' };
+
 /**
- * One outdoor total with its coverage: "12.4 mi (measured on 1 of 2 outdoor
- * cardio sessions)". A sum over nullable fields is incomplete information
- * without how many values it summed.
+ * One total with its coverage: "12.4 mi (measured on 1 of 2 outdoor cardio
+ * sessions)", "42 min (recorded on 1 of 2 sessions)". A sum over nullable
+ * fields is incomplete information without how many values it summed.
+ *
+ * A blank coverage count is a row written before that count existed (#181's
+ * S and T, until the rebuild): it shows as "?", never as 0 of n.
  */
-function coveredTotal(total, withData, of, render) {
+function coveredTotal(total, withData, of, render, { verb, noun }) {
   const n = Number(of);
+  const known = !isBlank(withData);
   const w = Number(withData);
-  const cover = `measured on ${isBlank(withData) ? '?' : w} of ${n} outdoor cardio session${n === 1 ? '' : 's'}`;
-  if (isBlank(total) || w === 0) return `${BLANK} (${cover})`;
+  const cover = `${verb} on ${known ? w : '?'} of ${n} ${noun}${n === 1 ? '' : 's'}`;
+  if (isBlank(total) || (known && w === 0)) return `${BLANK} (${cover})`;
   return `${render(total)} (${cover})`;
 }
+
+const minutes = (s) => `${secondsToMinutes(s)} min`;
 
 /** One DailySummary object -> one line. */
 export function describeSummaryDay(s) {
@@ -153,15 +162,15 @@ export function describeSummaryDay(s) {
   } else {
     const n = Number(s.activity_count);
     parts.push(`${n} activit${n === 1 ? 'y' : 'ies'} (${listTypes(s.activity_types) || BLANK})`);
-    const moving = secondsToMinutes(s.total_moving_s);
-    const elapsed = secondsToMinutes(s.total_elapsed_s);
-    parts.push(`· moving ${moving === null ? BLANK : `${moving} min`}`);
-    parts.push(`· elapsed ${elapsed === null ? BLANK : `${elapsed} min`}`);
+    // Coverage is against every activity that day (B), not just outdoor
+    // cardio: every activity type has a duration (#181).
+    parts.push(`· moving ${coveredTotal(s.total_moving_s, s.moving_withdata, n, minutes, SESSIONS)}`);
+    parts.push(`· elapsed ${coveredTotal(s.total_elapsed_s, s.elapsed_withdata, n, minutes, SESSIONS)}`);
     if (isBlank(s.cardio_activity_count) || Number(s.cardio_activity_count) === 0) {
       parts.push('· outdoor distance/ascent: no outdoor cardio');
     } else {
-      parts.push(`· outdoor distance ${coveredTotal(s.total_distance_m, s.distance_withdata, s.cardio_activity_count, (m) => `${metersToMiles(m)} mi`)}`);
-      parts.push(`· outdoor ascent ${coveredTotal(s.total_ascent_m, s.ascent_withdata, s.cardio_activity_count, (m) => `${fmtCount(metersToFeet(m))} ft`)}`);
+      parts.push(`· outdoor distance ${coveredTotal(s.total_distance_m, s.distance_withdata, s.cardio_activity_count, (m) => `${metersToMiles(m)} mi`, OUTDOOR)}`);
+      parts.push(`· outdoor ascent ${coveredTotal(s.total_ascent_m, s.ascent_withdata, s.cardio_activity_count, (m) => `${fmtCount(metersToFeet(m))} ft`, OUTDOOR)}`);
     }
     parts.push(`· max effort ${isBlank(s.max_effort) ? BLANK : `${s.max_effort} (${listEfforts(s.effort_counts)})`}`);
   }
@@ -183,8 +192,8 @@ export function describeSummaryRange(rows, { from, to }) {
     'thrive_list_workouts, the workouts are right and this row is stale. "—" means unknown, never zero.',
   );
   out.push(
-    'Moving and elapsed are plain sums with no coverage count: a session that recorded no moving time ' +
-    'adds nothing, so "moving 0 min" on a day with activities means unrecorded, not stationary.',
+    "Moving and elapsed say how many of the day's sessions recorded them: \"recorded on 1 of 2\" means " +
+    'the total covers one session and the other is unknown, not zero.',
   );
   const stamps = sorted.map((r) => r.computed_at).filter((v) => !isBlank(v)).sort();
   if (stamps.length) out.push(`Oldest row computed at ${stamps[0]}.`);

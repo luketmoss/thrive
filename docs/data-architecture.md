@@ -378,8 +378,8 @@ scrolls, and Sheets reads are whole-range fetches.
 | A | `date` | PK, America/Denver |
 | B | `activity_count` | All activities, indoor and outdoor |
 | C | `activity_types` | e.g. `bike:mountain,weight` |
-| D | `total_moving_s` | |
-| E | `total_elapsed_s` | |
+| D | `total_moving_s` | Blank when no activity recorded it, never `0` (thrive#181). S is its coverage |
+| E | `total_elapsed_s` | Blank when no activity recorded it, never `0` (thrive#181). T is its coverage |
 | F | `total_distance_m` | **Outdoor only** — see below |
 | G | `total_ascent_m` | **Outdoor only** |
 | H | `cardio_activity_count` | The `of` — outdoor cardio activities that day |
@@ -393,6 +393,21 @@ scrolls, and Sheets reads are whole-range fetches.
 | P | `sleep_total_s` | |
 | Q | `training_load` | Duplicated from `DailyHealth` — see below |
 | R | `computed_at` | |
+| S | `moving_withdata` | **New in thrive#181.** How many of B contributed to D |
+| T | `elapsed_withdata` | **New in thrive#181.** How many of B contributed to E |
+
+**S and T are new and additive (thrive#181), for almanac.** They are appended
+after `computed_at` rather than placed beside D and E, so **no column A–R
+moved** and a reader that addresses this tab by column keeps working. What did
+change in A–R is D and E's values: a day where no activity recorded moving (or
+elapsed) time is now **blank**, where it used to be `0`. All history was
+rebuilt with the new rule. A reader that treated `0` as "no data" should now
+treat blank that way, and can show coverage as " · 1/2 sessions" when S or T
+is less than B.
+
+Duration's `of` is `activity_count` (B), **not** `cardio_activity_count` (H):
+every activity type has a duration, indoor and weight sessions included.
+Distance and ascent keep H, because they are outdoor-only totals.
 
 **Coverage (H–J) was added during refinement of thrive#131.** `#111`
 established that a sum over nullable fields is incomplete information without
@@ -785,7 +800,14 @@ In the order they were taken.
   `bike` rows are not backfilled.
 - **§5 — `DailySummary` columns fixed at A:R.** Carries `max_effort` and
   `effort_counts`, outdoor-only distance and ascent, and per-total coverage
-  counts. *(Was A:O; coverage added during thrive#131 refinement.)*
+  counts. *(Was A:O; coverage added during thrive#131 refinement. Grown to
+  A:T by the next entry.)*
+- **§5 — duration totals blank-never-zero, with coverage** (thrive#181).
+  `total_moving_s`/`total_elapsed_s` are blank when no activity recorded them,
+  and `moving_withdata` (S) and `elapsed_withdata` (T) count those that did,
+  out of B. Appended rather than placed beside D and E, because almanac reads
+  the tab by column. Additive for readers apart from D and E's `0` becoming
+  blank.
 - **§6 — Thrive gets an Apps Script API**, following Hive's pattern. Caps
   the mirror count at two permanently; does not reduce it to one, because
   the SPA keeps its direct Sheets path as Hive's does.

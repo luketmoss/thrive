@@ -1,6 +1,9 @@
 // #131 — the DailySummary rollup. One row per local calendar day, derived
 // from Workouts + DailyHealth, rebuildable over any range.
 
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import { loadApi, callDoGet, workoutRow, healthRow, type CellValue } from './apps-script-sandbox';
 
@@ -13,6 +16,7 @@ const COL = {
   cardio_activity_count: 7, distance_withdata: 8, ascent_withdata: 9,
   max_effort: 10, effort_counts: 11, steps: 12, resting_hr: 13, hrv: 14,
   sleep_total_s: 15, training_load: 16, computed_at: 17,
+  moving_withdata: 18, elapsed_withdata: 19,
 };
 
 function rebuild(
@@ -450,12 +454,148 @@ describe('the tab is readable, and history bounds are discoverable', () => {
     expect(res.data).toEqual({ from: '2026-03-04', to: '2026-09-15' });
   });
 
-  it('returns all 18 columns on a read', () => {
+  it('returns all 20 columns on a read', () => {
     const first = rebuild({
       workouts: [workoutRow({ id: 'w_1', date: '2026-09-15', type: 'weight' })],
     }, '2026-09-15', '2026-09-15');
     const res = callDoGet<any[]>(first.sandbox, { action: 'getDailySummary' });
-    expect(Object.keys(res.data[0])).toHaveLength(19); // 18 + sheetRow
-    expect(first.summaryRows[0]).toHaveLength(18);
+    expect(Object.keys(res.data[0])).toHaveLength(21); // 20 + sheetRow
+    expect(first.summaryRows[0]).toHaveLength(20);
+  });
+});
+
+describe('#181 AC1: a duration nobody recorded is blank, never 0', () => {
+  // A hand-logged weight session and a stretch: neither has moving time,
+  // neither has elapsed time. This is the day #158's QA saw as "moving 0 min".
+  const { summaryRows } = rebuild({
+    workouts: [
+      workoutRow({ id: 'w_1', date: '2026-09-15', type: 'weight' }),
+      workoutRow({ id: 'w_2', date: '2026-09-15', type: 'stretch' }),
+    ],
+  }, '2026-09-15', '2026-09-15');
+  const row = summaryRows[0];
+
+  it('leaves total_moving_s blank and reports 0 of B contributing', () => {
+    expect(row[COL.activity_count]).toBe('2');
+    expect(row[COL.total_moving_s]).toBe('');
+    expect(row[COL.moving_withdata]).toBe('0');
+  });
+
+  it('does the same for elapsed', () => {
+    expect(row[COL.total_elapsed_s]).toBe('');
+    expect(row[COL.elapsed_withdata]).toBe('0');
+  });
+
+  it('counts moving and elapsed independently', () => {
+    const { summaryRows: rows } = rebuild({
+      workouts: [workoutRow({ id: 'w_1', date: '2026-09-15', type: 'weight', elapsed_seconds: '3600' })],
+    }, '2026-09-15', '2026-09-15');
+    expect(rows[0][COL.total_elapsed_s]).toBe('3600');
+    expect(rows[0][COL.elapsed_withdata]).toBe('1');
+    expect(rows[0][COL.total_moving_s]).toBe('');
+    expect(rows[0][COL.moving_withdata]).toBe('0');
+  });
+
+  it('keeps a recorded 0 as data: it counts, and the total is 0', () => {
+    const { summaryRows: rows } = rebuild({
+      workouts: [
+        workoutRow({ id: 'w_1', date: '2026-09-15', type: 'bike', moving_seconds: '0' }),
+        workoutRow({ id: 'w_2', date: '2026-09-15', type: 'weight' }),
+      ],
+    }, '2026-09-15', '2026-09-15');
+    expect(rows[0][COL.total_moving_s]).toBe('0');
+    expect(rows[0][COL.moving_withdata]).toBe('1');
+  });
+});
+
+describe('#181 AC2: duration totals carry coverage against every activity', () => {
+  it('sums what was recorded and says how many of B contributed', () => {
+    const { summaryRows: rows } = rebuild({
+      workouts: [
+        workoutRow({ id: 'w_1', date: '2026-09-15', type: 'bike', moving_seconds: '2520', elapsed_seconds: '3000' }),
+        workoutRow({ id: 'w_2', date: '2026-09-15', type: 'weight' }),
+      ],
+    }, '2026-09-15', '2026-09-15');
+    expect(rows[0][COL.total_moving_s]).toBe('2520');
+    expect(rows[0][COL.moving_withdata]).toBe('1');
+    expect(rows[0][COL.total_elapsed_s]).toBe('3000');
+    expect(rows[0][COL.elapsed_withdata]).toBe('1');
+    expect(rows[0][COL.activity_count]).toBe('2');
+  });
+
+  // The `of` is B, not H: an indoor ride and a weight session are not
+  // outdoor cardio, but both have a duration.
+  it('counts indoor and non-cardio sessions, which H does not', () => {
+    const { summaryRows: rows } = rebuild({
+      workouts: [
+        workoutRow({ id: 'w_1', date: '2026-09-15', type: 'bike', sub_type: 'indoor', moving_seconds: '1800' }),
+        workoutRow({ id: 'w_2', date: '2026-09-15', type: 'weight', moving_seconds: '2400' }),
+      ],
+    }, '2026-09-15', '2026-09-15');
+    expect(rows[0][COL.cardio_activity_count]).toBe('');
+    expect(rows[0][COL.total_moving_s]).toBe('4200');
+    expect(rows[0][COL.moving_withdata]).toBe('2');
+  });
+
+  it('leaves D, E, S and T blank on a health-only day', () => {
+    const { summaryRows: rows } = rebuild({
+      workouts: [],
+      dailyHealth: [healthRow({ date: '2026-09-15', steps: '8400' })],
+    }, '2026-09-15', '2026-09-15');
+    expect(rows).toHaveLength(1);
+    for (const col of ['total_moving_s', 'total_elapsed_s', 'moving_withdata', 'elapsed_withdata'] as const) {
+      expect(rows[0][COL[col]], col).toBe('');
+    }
+  });
+
+  it('stays idempotent with the new columns', () => {
+    const workouts = () => [
+      workoutRow({ id: 'w_1', date: '2026-09-15', type: 'bike', moving_seconds: '2520' }),
+      workoutRow({ id: 'w_2', date: '2026-09-15', type: 'weight' }),
+    ];
+    const first = rebuild({ workouts: workouts() }, '2026-09-15', '2026-09-15');
+    const after = JSON.parse(JSON.stringify(first.summaryRows));
+    const second = rebuild({ workouts: workouts(), dailySummary: after }, '2026-09-15', '2026-09-15');
+    expect(second.summaryRows).toEqual(after);
+  });
+
+  // Rows written before #181 carry 0 in D and E and nothing in S or T. A
+  // rebuild corrects them in place rather than appending a second row.
+  it('heals a pre-#181 row in place', () => {
+    const old = ['2026-09-15', '2', 'bike,weight', '0', '0', '', '', '', '', '', '', '', '', '', '', '', '', '2026-09-20T00:00:00.000Z'];
+    const { summaryRows: rows, res } = rebuild({
+      workouts: [
+        workoutRow({ id: 'w_1', date: '2026-09-15', type: 'bike' }),
+        workoutRow({ id: 'w_2', date: '2026-09-15', type: 'weight' }),
+      ],
+      dailySummary: [old],
+    }, '2026-09-15', '2026-09-15');
+    expect(res.data.updated).toBe(1);
+    expect(rows).toHaveLength(1);
+    expect(rows[0][COL.total_moving_s]).toBe('');
+    expect(rows[0][COL.moving_withdata]).toBe('0');
+  });
+});
+
+describe('#181 AC3: S and T are appended, and the migration matches', () => {
+  const headersIn = (name: string) => {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const script = readFileSync(path.resolve(here, '..', '..', 'scripts', name), 'utf8');
+    const list = script.match(/const HEADERS = \[([\s\S]*?)\];/);
+    expect(list, `HEADERS array in ${name}`).not.toBeNull();
+    return [...list![1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  };
+
+  it('keeps A:R exactly as #131 created them, so no column almanac reads moves', () => {
+    const { sandbox } = loadApi();
+    expect([...sandbox.DAILY_SUMMARY_FIELDS].slice(0, 18)).toEqual(headersIn('migrate-131-daily-summary-tab.mjs'));
+    expect(sandbox.DAILY_SUMMARY_FIELDS[18]).toBe('moving_withdata');
+    expect(sandbox.DAILY_SUMMARY_FIELDS[19]).toBe('elapsed_withdata');
+    expect(sandbox.DAILY_SUMMARY_COLUMN_COUNT).toBe(20);
+  });
+
+  it('matches the headers the #181 migration writes', () => {
+    const { sandbox } = loadApi();
+    expect(headersIn('migrate-181-daily-summary-coverage.mjs')).toEqual([...sandbox.DAILY_SUMMARY_FIELDS]);
   });
 });
