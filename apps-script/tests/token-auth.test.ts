@@ -339,6 +339,8 @@ const KEY_ONLY_ACTIONS = [
   'appendSets', 'previewSetUpdates', 'updateSets',
   'rebuildDailySummary', 'upsertDailyHealth', 'upsertSyncedWorkout', 'enrichWorkout',
   'appendSyncLog',
+  // A read, but key-only (#179): no token caller needs raw vendor text.
+  'getWorkoutPayload',
 ];
 
 const READ_PARAMS: Record<string, Record<string, string>> = {
@@ -382,6 +384,7 @@ describe('AC4: token callers run only the named reads', () => {
     upsertSyncedWorkout: { incoming: { date: '2026-09-15', type: 'bike', name: 'Ride' }, last_written: null },
     enrichWorkout: { activity: { date: '2026-09-15' }, last_written: null },
     appendSyncLog: { row: { run_id: 'r1', status: 'ok' } },
+    getWorkoutPayload: {},
   };
 
   for (const action of KEY_ONLY_ACTIONS) {
@@ -404,6 +407,7 @@ describe('AC4: token callers run only the named reads', () => {
         api.summaryRows, api.healthRows, api.syncLogRows])).toBe(before);
       expect(api.lock.acquired).toBe(0);
       expect(ran).toBe(false);
+      expect(api.driveCalls).toEqual([]);
     });
   }
 

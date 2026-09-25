@@ -240,7 +240,7 @@ test('a synced workout reports moving time, calories, start, provenance and arch
     '- Calories: 640 kcal',
     '- Started at: 2026-09-24T07:30:00-06:00',
     '- Provenance: synced from COROS (activity 471166302945817201, last synced 2026-09-24T17:41:10.000Z)',
-    '- Raw vendor payload: archived in Drive (raw-1); its contents are not readable through this server',
+    '- Raw vendor payload: archived in Drive (raw-1); read it with thrive_get_workout_payload',
     '- FIT file: archived in Drive (fit-1), fetched 2026-09-24T17:41:10.000Z',
   ]);
 });
@@ -256,7 +256,7 @@ test('an enriched workout names its link and makes no FIT claim', () => {
   assert.deepEqual(describeSyncedFields(enriched), [
     '- Calories: 310 kcal',
     '- Provenance: hand-logged, enriched from COROS (activity 471093115402967310, last synced 2026-09-23T13:00:00.000Z)',
-    '- Raw vendor payload: archived in Drive (raw-2); its contents are not readable through this server',
+    '- Raw vendor payload: archived in Drive (raw-2); read it with thrive_get_workout_payload',
   ]);
 });
 

@@ -11,6 +11,7 @@ import {
   formatWeight, describeLoad, isSetLogged, buildSchedulePlan,
   describeSetState,
   prepareSchedule, startedAtUtc, denverOffset,
+  describeWorkoutPayload,
 } from './domain.js';
 
 test('normalizeDate passes ISO dates through', () => {
@@ -391,4 +392,43 @@ test('startedAtUtc returns empty rather than guessing at junk', () => {
 test('startedAtUtc keeps the local wall clock the user logged', () => {
   // The point of Y is the instant; B and C stay local and must not move.
   assert.ok(startedAtUtc('2026-07-15', '21:00').startsWith('2026-07-15T21:00'));
+});
+
+// --- #179: the archived payload -------------------------------------------
+
+const page = (o = {}) => ({
+  workout_id: 'w_ride', source_activity_id: '4711', raw_ref: 'raw-1', tool: 'getActivityDetail',
+  fetched_at: '2026-09-24T17:41:08.114Z', text: 'Max Speed: 8.1 km/h', offset: 0, total_chars: 19,
+  next_offset: null, ...o,
+});
+
+test('a complete payload says so, and has no truncation line', () => {
+  const out = describeWorkoutPayload(page());
+  assert.match(out, /^Archived COROS payload for workout w_ride \(activity 4711, getActivityDetail\), fetched 2026-09-24T17:41:08.114Z\.\nComplete: 19 characters\./);
+  assert.match(out, /the fields are what Thrive uses/);
+  assert.ok(out.endsWith('\n\nMax Speed: 8.1 km/h'));
+  assert.doesNotMatch(out, /Truncated|End of payload/);
+});
+
+test('a first page of several names the range and the exact offset to continue from', () => {
+  const out = describeWorkoutPayload(page({ text: 'x'.repeat(20000), total_chars: 45000, next_offset: 20000 }));
+  assert.match(out, /Characters 0–20,000 of 45,000\./);
+  assert.ok(out.endsWith('[Truncated: 25,000 more characters. Call thrive_get_workout_payload again with offset 20000 for the next page.]'));
+});
+
+test('a last page says it completes the payload', () => {
+  const out = describeWorkoutPayload(page({ text: 'y'.repeat(5000), offset: 40000, total_chars: 45000, next_offset: null }));
+  assert.match(out, /Characters 40,000–45,000 of 45,000\./);
+  assert.ok(out.endsWith('[End of payload: this page completes it.]'));
+});
+
+test('a page shorter than 20,000 that is not the last still shows the next offset (surrogate-safe cut)', () => {
+  const out = describeWorkoutPayload(page({ text: 'z'.repeat(19999), total_chars: 30000, next_offset: 19999 }));
+  assert.match(out, /Characters 0–19,999 of 30,000\./);
+  assert.match(out, /with offset 19999 for the next page/);
+});
+
+test('a blank tool or fetch time is not invented', () => {
+  const out = describeWorkoutPayload(page({ tool: '', fetched_at: '' }));
+  assert.match(out, /\(activity 4711\), fetched at an unknown time\./);
 });

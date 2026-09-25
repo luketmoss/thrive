@@ -23,6 +23,7 @@
 //   ?action=getWorkouts&key=...&from=2026-09-01&to=2026-09-30&type=bike
 //   ?action=getWorkout&key=...&id=w_1a2b3c4d
 //   ?action=getPlannedWorkouts&key=...&date=2026-09-21
+//   ?action=getWorkoutPayload&key=...&id=w_1a2b3c4d&offset=0   — key only (#179)
 //
 // Write examples:
 //   ?action=createWorkout&key=...&payload={"data":{"type":"bike","name":"Evening Ride"}}
@@ -173,6 +174,17 @@ function dispatch(action, params) {
       result = found
         ? { success: true, data: found }
         : fail('Workout "' + params.id + '" not found');
+      break;
+
+    // A synced activity's archived COROS payload, one page at a time (#179).
+    // Addressed by workout id, never by Drive ID. A read, but key-only: no
+    // token caller needs raw vendor text, so it is not on TOKEN_READ_ACTIONS.
+    case 'getWorkoutPayload':
+      if (!params.id) {
+        result = fail('id parameter required');
+        break;
+      }
+      result = { success: true, data: getWorkoutPayload(params.id, params.offset) };
       break;
 
     // A date with nothing planned returns [], not an error.

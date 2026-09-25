@@ -97,6 +97,7 @@ The server exits at startup with a message naming whichever is missing.
 |------|-------------|
 | `thrive_list_workouts` | Workouts newest first; filter by date range, type, planned/completed, name, and source (`synced` / `enriched` / `manual`). Shows the venue (`[bike:gravel]`) and marks COROS-synced and COROS-enriched rows |
 | `thrive_get_workout` | One workout in full — every exercise, every set, its activity measurements, and its provenance: synced, enriched or hand-logged, with the COROS activity id, last sync, and whether the raw payload and FIT file are archived |
+| `thrive_get_workout_payload` | A synced or enriched workout's archived COROS detail payload: COROS's own text, with what the sheet does not carry (max speed, training effect, and max HR or laps where COROS includes them). 20,000 characters per call; a longer one ends with the `offset` for the next page. Hand-logged workouts have none |
 | `thrive_daily_health` | `DailyHealth` for a date range (default: the 7 days ending today): resting HR, HRV, steps, calories, sleep and its stages, sleep score, bed and wake time, VO2max, recovery, training load |
 | `thrive_daily_summary` | `DailySummary` for a date range: the per-day rollup of activities and health. Derived, and its distance and ascent are **outdoor only** |
 | `thrive_list_exercises` | The exercise library, filterable by search text or tag |
@@ -190,8 +191,9 @@ because they are easy to get wrong in analysis:
   never an addend to activity distance or calories (`docs/data-architecture.md` §5).
 
 The raw COROS payload (`raw_ref`) and FIT file (`fit_ref`) live in the sync bot's Drive.
-This server has no Drive credential, so it reports that they exist, not what is in them
-(#179).
+This server has no Drive credential. `thrive_get_workout_payload` reads the payload through
+the API's `getWorkoutPayload`, which runs as the bot and finds the file from the workout row
+(#179). The FIT file's contents are not readable: it is binary and holds the GPS track.
 
 ## Dates
 

@@ -55,6 +55,24 @@ before(async () => {
           vo2max: '', recovery: '', training_load: '', bed_time: '', wake_time: '', raw_ref: '', synced_at: '' }];
         break;
       case 'getDailySummary': data = []; break;
+      // #179: the fake API pages a 25,000-character payload for w_sync only.
+      case 'getWorkoutPayload': {
+        if (p.id === 'w_man') {
+          res.end(JSON.stringify({ success: false, error: 'Workout "w_man" has no archived COROS payload (raw_ref is blank): it was logged by hand, or synced before the archive existed.' }));
+          return;
+        }
+        if (p.id !== 'w_sync') {
+          res.end(JSON.stringify({ success: false, error: `Workout "${p.id}" not found` }));
+          return;
+        }
+        const full = 'A'.repeat(20000) + 'B'.repeat(5000);
+        const offset = Number(p.offset ?? 0);
+        const end = Math.min(offset + 20000, full.length);
+        data = { workout_id: 'w_sync', source_activity_id: '4711', raw_ref: 'raw-1', tool: 'getActivityDetail',
+          fetched_at: '2026-09-24T17:41:08.114Z', text: full.slice(offset, end), offset,
+          total_chars: full.length, next_offset: end < full.length ? end : null };
+        break;
+      }
       default:
         res.end(JSON.stringify({ success: false, error: `unstubbed ${p.action}` }));
         return;
@@ -151,4 +169,56 @@ test('thrive_get_workout adds the synced fields and omits blanks', async () => {
   const manual = (await call('thrive_get_workout', { workout_id: 'w_man' })).text;
   assert.match(manual, /- Provenance: hand-logged/);
   assert.doesNotMatch(manual, /Calories|Moving time|Distance|FIT/);
+});
+
+// --- #179 ----------------------------------------------------------------
+
+test('thrive_get_workout_payload is registered with workout_id and offset only', async () => {
+  const { tools } = await client.listTools();
+  const t = tools.find((x) => x.name === 'thrive_get_workout_payload');
+  assert.ok(t);
+  assert.deepEqual(Object.keys(t.inputSchema.properties).sort(), ['offset', 'workout_id']);
+  assert.match(t.description, /20,000 characters per call/);
+  assert.match(t.description, /\[Truncated: \.\.\.\]/);
+  assert.match(t.description, /FIT file contents .* are not readable/);
+  const get = tools.find((x) => x.name === 'thrive_get_workout');
+  assert.match(get.description, /readable with thrive_get_workout_payload/);
+});
+
+test('thrive_get_workout_payload pages a long payload and says where to continue', async () => {
+  const first = await call('thrive_get_workout_payload', { workout_id: 'w_sync' });
+  assert.equal(first.isError, false);
+  assert.match(first.text, /Characters 0–20,000 of 25,000\./);
+  assert.match(first.text, /\[Truncated: 5,000 more characters\. Call thrive_get_workout_payload again with offset 20000 for the next page\.\]$/);
+  const sent = calls.findLast((c) => c.action === 'getWorkoutPayload');
+  assert.equal(sent.id, 'w_sync');
+  assert.equal(sent.offset, undefined);
+
+  const next = await call('thrive_get_workout_payload', { workout_id: 'w_sync', offset: 20000 });
+  assert.equal(calls.findLast((c) => c.action === 'getWorkoutPayload').offset, '20000');
+  assert.match(next.text, /Characters 20,000–25,000 of 25,000\./);
+  assert.match(next.text, /B{5000}\n\n\[End of payload: this page completes it\.\]$/);
+});
+
+test('thrive_get_workout_payload passes the API refusal through, and names an unknown id', async () => {
+  const manual = await call('thrive_get_workout_payload', { workout_id: 'w_man' });
+  assert.equal(manual.isError, true);
+  assert.match(manual.text, /has no archived COROS payload \(raw_ref is blank\)/);
+
+  const unknown = await call('thrive_get_workout_payload', { workout_id: 'w_nope' });
+  assert.equal(unknown.isError, true);
+  assert.match(unknown.text, /No workout with id "w_nope"\./);
+});
+
+test('thrive_get_workout_payload refuses a Drive id field by name, before any request', async () => {
+  const before = calls.length;
+  const res = await call('thrive_get_workout_payload', { workout_id: 'w_sync', raw_ref: 'tokenFile' });
+  assert.equal(res.isError, true);
+  assert.match(res.text, /Unknown field "raw_ref"/);
+  assert.equal(calls.length, before);
+});
+
+test('thrive_get_workout points at the payload tool', async () => {
+  const synced = (await call('thrive_get_workout', { workout_id: 'w_sync' })).text;
+  assert.match(synced, /- Raw vendor payload: archived in Drive \(raw-1\); read it with thrive_get_workout_payload/);
 });

@@ -82,9 +82,12 @@ days. Read these before you trust a number from them:
 - **Summary totals say what they cover.** "moving 42 min (recorded on 1 of 2 sessions)"
   totals one session; the other's moving time is unknown, not zero. Duration counts every
   session that day; distance and ascent count outdoor cardio only.
-- **You cannot read the raw watch data.** The full COROS payload and FIT file (max HR,
-  cadence, laps, GPS) are archived, and `thrive_get_workout` says so, but this server
-  cannot open them. Work from what the tools return.
+- **The raw COROS payload is readable; the FIT file is not.** `thrive_get_workout_payload`
+  returns a synced or enriched workout's archived detail text: max speed, training effect,
+  and max HR or laps where COROS includes them. Reach for it only when a question needs
+  one of those. Where it disagrees with the workout's fields, the fields win: the user may
+  have corrected them. It pages at 20,000 characters, and a `[Truncated: ...]` line gives
+  the next `offset`. The FIT file (per-second data, GPS) is archived but not readable.
 
 **Schedule and author** — `thrive_schedule_workout` (creates a `planned` workout from a
 template or an explicit exercise list), `thrive_create_exercise`,
