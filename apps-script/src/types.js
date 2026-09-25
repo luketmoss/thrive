@@ -251,6 +251,8 @@ var DAILY_HEALTH_COLUMN_COUNT = 18;
 // One row per sync run, appended by the COROS sync through appendSyncLog, read
 // newest first by getSyncLog. Layout is sync plan §5. It is also the dead-man's
 // switch: sync/deadman.mjs fails when the newest row is too old (sync plan §10).
+// Mirrored, read-only, by frontend/src/api/sync-log-api.ts for the Settings
+// "Last synced" line (#157); change both together. Its test fails if they drift.
 var SYNC_LOG_FIELDS = [
   'run_id',        // A  <event>-<GITHUB_RUN_ID>-<attempt> in Actions, local-<started_at> otherwise
   'started_at',    // B  ISO instant, the run's single synced_at

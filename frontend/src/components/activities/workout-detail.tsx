@@ -7,6 +7,8 @@ import { ExerciseDetail, groupSetsIntoExercises } from './exercise-detail';
 import { ExerciseCompactCard } from '../shared/exercise-compact-card';
 import { formatDuration } from '../../api/duration';
 import { formatDistance, formatElevation, formatHeartRate } from '../../api/units';
+import { provenanceDetail } from '../../api/provenance';
+import { WatchGlyph } from '../shared/provenance-mark';
 
 interface Props {
   workoutId: string;
@@ -121,6 +123,7 @@ export function WorkoutDetail({ workoutId }: Props) {
   };
 
   const isPlanned = workout.status === 'planned';
+  const provenance = provenanceDetail(workout);
 
   return (
     <div class="screen workout-detail-screen">
@@ -185,6 +188,14 @@ export function WorkoutDetail({ workoutId }: Props) {
             <span class="detail-hr">{formatHeartRate(workout.avg_hr)}</span>
           )}
         </div>
+        {/* #157: where this row came from (sync plan §8, §13). Manual rows,
+            most of them, show nothing. */}
+        {provenance && (
+          <p class="detail-provenance">
+            <WatchGlyph />
+            <span>{provenance}</span>
+          </p>
+        )}
         {workout.notes && (
           <p class="detail-notes">{workout.notes}</p>
         )}

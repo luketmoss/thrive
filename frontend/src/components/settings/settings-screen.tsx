@@ -2,9 +2,10 @@ import { useAuth } from '../../auth/auth-context';
 import { ThemeToggle } from '../shared/theme-toggle';
 import { workouts, exercises, templates, labels } from '../../state/store';
 import { navigate } from '../../router/router';
+import { SyncStatusRow } from './sync-status-row';
 
 export function SettingsScreen() {
-  const { user, logout } = useAuth();
+  const { user, token, logout } = useAuth();
 
   return (
     <div class="screen settings-screen">
@@ -44,6 +45,11 @@ export function SettingsScreen() {
             <span>Labels</span>
             <span class="settings-detail">{labels.value.length} defined &rsaquo;</span>
           </div>
+        </div>
+
+        <div class="settings-section">
+          <h2>COROS sync</h2>
+          <SyncStatusRow token={token} />
         </div>
 
         <div class="settings-section">
