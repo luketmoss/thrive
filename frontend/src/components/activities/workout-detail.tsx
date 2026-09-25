@@ -124,6 +124,7 @@ export function WorkoutDetail({ workoutId }: Props) {
 
   const isPlanned = workout.status === 'planned';
   const provenance = provenanceDetail(workout);
+  const estimate = formatEstimate(workout.estimated_seconds);
 
   return (
     <div class="screen workout-detail-screen">
@@ -164,8 +165,8 @@ export function WorkoutDetail({ workoutId }: Props) {
           }
           {/* #145: the plan's estimate, only while it is a plan. Once started,
               elapsed time is the only duration shown. */}
-          {isPlanned && formatEstimate(workout.estimated_seconds) && (
-            <span class="detail-duration detail-estimate">{formatEstimate(workout.estimated_seconds)}</span>
+          {isPlanned && estimate && (
+            <span class="detail-duration detail-estimate">{estimate}</span>
           )}
           {!isPlanned && <span class="detail-date">{workout.date}</span>}
           {!isPlanned && workout.time && <span class="detail-time">{workout.time}</span>}
