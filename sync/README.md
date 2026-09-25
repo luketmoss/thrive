@@ -170,7 +170,7 @@ idempotent, and a parser fix then re-applies without a replay.
 | 203 gravel bike | `bike` | `gravel` |
 | 204 mountain bike, 205 mountain e-bike | `bike` | `mountain` |
 | 900 walk | `walk` | `outdoor` if the list entry has `Start Coordinates`, else `indoor` |
-| 402 strength | archived, no row: #155's | |
+| 402 strength | no row of its own: enriches the hand-logged `weight` row (below) | |
 | anything else | archived, no row, logged with its ID and code; not a failure | |
 
 **Numbers from the detail prose** (`src/normalize-activity.mjs`), strictly, as
@@ -206,6 +206,42 @@ the name was edited in Thrive).
 
 A missing `THRIVE_API_URL`/`THRIVE_API_KEY` costs the sheet write, never the
 archive: the run archives first, then fails naming both.
+
+## Strength sessions (#155)
+
+A COROS strength session (402) never gets a `Workouts` row. Hand logging is
+the record: COROS has set counts but no reps or weight (#133). Instead, the
+session fills blanks on the matching hand-logged `weight` row through the
+API's `enrichWorkout` action (see `apps-script/README.md`). The match and the
+write happen in one execution. Sync plan §7 is the design.
+
+- **Parsed like any activity** (`normalizeActivity`): `Workout Time` gives
+  `moving_seconds`, `Total Time` gives `elapsed_seconds`, and `Average Heart
+  Rate` and `Calories` fill their fields. `Sets:` is not used. A line it does
+  use but cannot read fails the activity, as for any sport.
+- **The match:** `type = 'weight'`, the same local date, hand-logged, not yet
+  linked, finished (not `planned` or `active`), with `Time` within **30
+  minutes** of the session's local start. A blank `Time` counts as within.
+  Exactly one such row matches. None, or several, is `unmatched`: a line in
+  the run's `SyncLog.notes`, never a failure, and nothing is written. Every
+  run while the session is in the window tries again, so a workout logged late
+  still matches.
+- **What it writes:** `avg_hr`, `calories`, `moving_seconds` and
+  `elapsed_seconds`, each **only where the row holds a blank**, plus
+  `source_activity_id`, `raw_ref` and `synced_at`. `source` stays `''`.
+- **Once filled, a field is the user's.** The archive's `normalized` is
+  `{ enrichment: { workout_id, filled } }`, and a field named there is never
+  written again, even after an edit or a clearing in Thrive. A re-run with
+  nothing new writes nothing. A row that loses its link (a stale SPA save) is
+  matched afresh.
+- **No FIT** is requested for strength.
+- `SYNC_LOG=summary` prints only `Strength: N enriched, M unmatched`. The IDs
+  are in `SyncLog.notes`.
+
+The tolerance is one constant, `STRENGTH_MATCH_TOLERANCE_MINUTES` in
+`apps-script/src/types.js`. It was set from one real session, whose watch start
+was about 9 minutes before the row's `Time` (the SPA stamps `Time` when Start
+is tapped).
 
 ## FIT files (#154)
 
@@ -277,9 +313,10 @@ window covers it.
 | `window_start`, `window_end` | D − 10 and D + 1 |
 | `n_seen` | activities the COROS list named |
 | `n_new`, `n_updated` | `Workouts` rows created; rows whose merged fields actually changed |
-| `n_enriched` | `0` until #155 |
+| `n_enriched` | hand-logged strength rows the run wrote to (#155) |
 | `n_fit_fetched` | FIT requests made, failed ones included (#154). The next run's FIT budget is summed from it |
 | `n_errors`, `status`, `error_detail` | `ok` (exit 0), `partial` (completed with failures, exit 1), `failed` (aborted, exit 1, detail led by the error class, e.g. `CorosGrantDeadError: …`) |
+| `notes` | what the run noted that is not a failure: a strength session left unmatched, with its ID, local start, reason and any candidate workout IDs (#155). Blank when none |
 
 A row that cannot be written fails the run too.
 
@@ -320,6 +357,8 @@ the auto-disable after 60 days with no activity on a public repo. That layer is
 | `DailyHealth: …` / `DailySummary rebuild: …` | The Thrive API refused the write or was unreachable | Read the quoted error. The next run re-sends the whole window |
 | `activity <id>: not written, unrecognized format in getActivityDetail: …` | COROS changed how it words a value the activity parser reads | Fix `src/normalize-activity.mjs` for the quoted line, then re-run. The archive still holds the text |
 | `activity <id>: upsertSyncedWorkout: N Workouts rows are coros activity …` | Two rows claim one COROS activity | Delete all but one in Thrive, then re-run |
+| `activity <id>: enrichWorkout: N Workouts rows are enriched from activity …` | Two hand-logged rows carry one strength session's ID | Clear `source_activity_id` on all but one, then re-run |
+| `SyncLog row … was not written` naming `notes` | The API is newer than the tab | Run `scripts/migrate-155-sync-log-notes.mjs` |
 | `activity <id>: FIT request n of 3 failed` | COROS errored, or sent something that is not one whole FIT file for that activity | Nothing. The next run tries again, up to 3 requests in all |
 | `activity <id>: FIT request failed 3 times, so the sync has stopped asking for it` | It gave up. The row gets `fit_fetched_at` with `fit_ref` blank | Read `fit.last_error` in the activity's archive file. To retry, delete its `fit` record there |
 | `FIT budget unknown, so no FIT was requested this run` | `getSyncLog` failed, or 100 rows of the last 24 h leave older ones unread | Read the quoted reason. The next run tries again |

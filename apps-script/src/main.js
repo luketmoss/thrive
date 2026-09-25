@@ -30,6 +30,11 @@
 //     "type":"bike","sub_type":"gravel","name":"Gravel Bike",...},
 //     "last_written":null,"raw_ref":"<drive id>","synced_at":"2026-09-24T17:41:10.000Z"}
 //
+// A strength session enriches its hand-logged weight row (#155):
+//   ?action=enrichWorkout&key=...&payload={"source_activity_id":"471093115402967310",
+//     "activity":{"date":"2026-09-23","time":"07:30","avg_hr":"88",...},
+//     "last_written":null,"raw_ref":"<drive id>","synced_at":"..."}
+//
 // One row per sync run (#156):
 //   ?action=appendSyncLog&key=...&payload={"row":{"run_id":"schedule-123-1",
 //     "started_at":"...","finished_at":"...","status":"ok",...}}
@@ -357,6 +362,24 @@ function doGet(e) {
         result = {
           success: true,
           data: withScriptLock(function () { return upsertSyncedWorkout(payload); }),
+        };
+        break;
+
+      // --- Strength enrichment (#155) ---
+      // A COROS strength session fills blanks on its hand-logged weight row.
+      // A write, so key-only, like the sync's others.
+      case 'enrichWorkout':
+        if (!payload.activity) {
+          result = fail('payload.activity field required');
+          break;
+        }
+        if (!Object.prototype.hasOwnProperty.call(payload, 'last_written')) {
+          result = fail('payload.last_written field required (null when nothing was written before)');
+          break;
+        }
+        result = {
+          success: true,
+          data: withScriptLock(function () { return enrichWorkout(payload); }),
         };
         break;
 

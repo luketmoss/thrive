@@ -102,7 +102,29 @@ test('AC2: a clean run writes one ok row with the window and counts, and exits 0
     n_seen: 3, n_new: 1, n_updated: 1, n_enriched: 0, n_fit_fetched: 0, n_errors: 0,
     status: 'ok',
     error_detail: '',
+    notes: '',
   });
+});
+
+test('#155: strength enrichment counts as n_enriched, an unmatched session is a note, and the run is still ok', async () => {
+  const note = 'strength 480544748954747182 on 2026-09-23 at 07:30: no match; no workout enriched';
+  const env = { ...ACTIONS_ENV, SYNC_LOG: 'summary' };
+  const { exitCode, rows, text } = await run({
+    env,
+    sheetResult: {
+      activities: { created: 0, updated: 0, unchanged: 1, enriched: 1, unmatched: 1, notes: [note] },
+      failures: [],
+    },
+  });
+  assert.equal(exitCode, 0);
+  assert.equal(rows[0].status, 'ok');
+  assert.equal(rows[0].n_errors, 0);
+  assert.equal(rows[0].n_enriched, 1);
+  assert.equal(rows[0].notes, note, 'the detail is in the private row');
+  assert.match(text, /Strength: 1 enriched, 1 unmatched \(noted in SyncLog row schedule-36024934026-1\)\./);
+  assert.match(text, /1 enriched from strength/);
+  for (const canary of CANARIES) assert.ok(!text.includes(canary), `summary log leaked "${canary}":
+${text}`);
 });
 
 test('AC2: a run that completes with failures writes a partial row and exits 1', async () => {
@@ -213,7 +235,7 @@ test('AC5: summary mode prints counts and the run_id, and no COROS-derived text'
   for (const r of [clean, partial, failed]) {
     for (const canary of CANARIES) assert.ok(!r.text.includes(canary), `summary log leaked "${canary}":\n${r.text}`);
   }
-  assert.match(clean.text, /Run schedule-36024934026-1: ok\. Window 2026-09-14 to 2026-09-25\. 3 activities listed; Workouts 1 created, 1 updated; 0 FIT requested; 0 failure\(s\)\./);
+  assert.match(clean.text, /Run schedule-36024934026-1: ok\. Window 2026-09-14 to 2026-09-25\. 3 activities listed; Workouts 1 created, 1 updated, 0 enriched from strength; 0 FIT requested; 0 failure\(s\)\./);
   assert.match(partial.text, /1 failure\(s\)\. They are in SyncLog row schedule-36024934026-1, not in this public log\./);
   assert.match(failed.text, /Aborted by Error\. See "When a run fails" in sync\/README\.md; the message is in SyncLog row schedule-36024934026-1\./);
   // The detail still reaches the private row.

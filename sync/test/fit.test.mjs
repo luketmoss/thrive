@@ -160,6 +160,11 @@ function fakeApi({ syncLog = [], syncLogError = null } = {}) {
       rows.set(payload.source_activity_id, { id, fit_ref: payload.fit_ref, fit_fetched_at: payload.fit_fetched_at });
       return { status: row ? 'updated' : 'created', id, written: { ...payload.incoming, edited: [] }, kept: [] };
     },
+    // Strength (#155) goes here, never through the FIT step.
+    async enrichWorkout(payload) {
+      calls.push({ action: 'enrichWorkout', ...payload });
+      return { status: 'unmatched', reason: 'no match', candidates: [] };
+    },
   };
 }
 

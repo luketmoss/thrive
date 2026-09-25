@@ -360,6 +360,198 @@ function upsertSyncedWorkout(payload) {
 }
 
 /**
+ * Enrich the hand-logged `weight` row that matches a COROS strength session
+ * (#155, sync plan §7). Never creates a row.
+ *
+ * Finding the row, choosing it, filling it and writing it happen in one
+ * execution, under the script lock, like upsertSyncedWorkout.
+ *
+ * 1. **Linked already.** The row with `source` blank and this
+ *    `source_activity_id` is the activity's row. Each ENRICH_FIELDS field is
+ *    filled if it is blank, COROS has a value, and this activity has not
+ *    filled it before (`last_written.filled`, for the same `workout_id`). A
+ *    field enrichment filled is never written again, so an edit or a
+ *    clearing in Thrive sticks. With nothing to fill, nothing is written,
+ *    `synced_at` included: `unchanged`.
+ * 2. **Not linked.** A candidate is `type = 'weight'` on the activity's local
+ *    date, hand-logged (`source` blank), unlinked (`source_activity_id`
+ *    blank) and finished (`status` neither `planned` nor `active`). One is
+ *    within the tolerance when its `Time` is within
+ *    STRENGTH_MATCH_TOLERANCE_MINUTES of the activity's. A blank or
+ *    unreadable `Time` has no start to measure, so it always counts as
+ *    within. Exactly one within: it is linked and its blanks are filled.
+ *    None: `unmatched`, reason `no match`. Several, even if one is nearer:
+ *    `unmatched`, reason `ambiguous`. Neither writes anything.
+ *
+ * A row that lost its link (deleted, or overwritten by a stale SPA save) is
+ * simply not linked any more, so step 2 runs afresh, with no `filled` carried
+ * over: the fields are blank again because the link went with them.
+ *
+ * Only ENRICH_FIELDS and ENRICH_LINK_FIELDS are ever written; `source` stays
+ * ''. Two rows carrying the activity ID are refused, naming them.
+ *
+ * @returns {{ status: 'enriched' | 'unchanged' | 'unmatched', id?: string,
+ *   sheetRow?: number, linked?: boolean, filled?: string[], reason?: string,
+ *   candidates?: { id: string, time: string }[],
+ *   written?: { workout_id: string, filled: string[] } }}
+ *   `filled` is what this call filled; `written.filled` every field this
+ *   activity has filled on the row, for the sync to store as the next
+ *   `last_written`. `linked` is true when this call made the link.
+ */
+function enrichWorkout(payload) {
+  payload = payload || {};
+  var activityId = cell(payload.source_activity_id);
+  var rawRef = cell(payload.raw_ref);
+  var syncedAt = cell(payload.synced_at);
+  if (!activityId) throw new Error('source_activity_id is required');
+  if (!syncedAt) throw new Error('synced_at is required');
+  if (!rawRef) throw new Error('raw_ref is required');
+
+  var activity = normalizeEnrichActivity(payload.activity);
+  var previous = normalizeEnrichLastWritten(payload.last_written);
+
+  var sheet = getSheet(WORKOUTS_SHEET);
+  var rows = getAllRows(sheet);
+
+  var links = [];
+  for (var i = 0; i < rows.length; i++) {
+    if (cell(rows[i][COL.SOURCE]) === '' && cell(rows[i][COL.SOURCE_ACTIVITY_ID]) === activityId) {
+      links.push({ rowNum: i + 2, id: cell(rows[i][COL.ID]) });
+    }
+  }
+  if (links.length > 1) {
+    throw new Error(
+      links.length + ' Workouts rows are enriched from activity ' + activityId + ' (' +
+      links.map(function (m) { return m.id + ' at row ' + m.rowNum; }).join(', ') +
+      '). Clear source_activity_id on all but one; nothing was written.'
+    );
+  }
+
+  var target;
+  var linked = false;
+  var alreadyFilled = [];
+  if (links.length === 1) {
+    target = links[0];
+    if (previous && previous.workout_id === target.id) alreadyFilled = previous.filled;
+  } else {
+    var activityMinutes = clockMinutes(activity.time);
+    var within = [];
+    for (var r = 0; r < rows.length; r++) {
+      var row = rows[r];
+      var status = cell(row[COL.STATUS]);
+      if (cell(row[COL.TYPE]) !== 'weight') continue;
+      if (cell(row[COL.DATE]) !== activity.date) continue;
+      if (cell(row[COL.SOURCE]) !== '' || cell(row[COL.SOURCE_ACTIVITY_ID]) !== '') continue;
+      if (status === 'planned' || status === 'active') continue;
+      var rowMinutes = clockMinutes(cell(row[COL.TIME]));
+      if (rowMinutes === null || Math.abs(rowMinutes - activityMinutes) <= STRENGTH_MATCH_TOLERANCE_MINUTES) {
+        within.push({ rowNum: r + 2, id: cell(row[COL.ID]), time: cell(row[COL.TIME]) });
+      }
+    }
+    if (within.length !== 1) {
+      return {
+        status: 'unmatched',
+        reason: within.length ? 'ambiguous' : 'no match',
+        candidates: within.map(function (c) { return { id: c.id, time: c.time }; }),
+      };
+    }
+    target = within[0];
+    linked = true;
+  }
+
+  // Row-index drift (sync plan §10): confirm the row is still the one chosen.
+  var current = rowToWorkout(
+    sheet.getRange(target.rowNum, 1, 1, WORKOUT_COLUMN_COUNT).getDisplayValues()[0],
+    target.rowNum
+  );
+  var expectedLink = linked ? '' : activityId;
+  if (current.id !== target.id || current.source !== '' || current.source_activity_id !== expectedLink) {
+    throw new Error(
+      'Workouts row ' + target.rowNum + ' was expected to be ' + target.id + ' but changed during ' +
+      'the write; nothing was written. Re-run the sync.'
+    );
+  }
+
+  var filledNow = [];
+  for (var f = 0; f < ENRICH_FIELDS.length; f++) {
+    var field = ENRICH_FIELDS[f];
+    if (alreadyFilled.indexOf(field) !== -1) continue;
+    if (current[field] !== '' || activity[field] === '') continue;
+    current[field] = activity[field];
+    filledNow.push(field);
+  }
+  var allFilled = ENRICH_FIELDS.filter(function (x) {
+    return alreadyFilled.indexOf(x) !== -1 || filledNow.indexOf(x) !== -1;
+  });
+  var written = { workout_id: current.id, filled: allFilled };
+
+  if (!linked && filledNow.length === 0) {
+    return { status: 'unchanged', id: current.id, sheetRow: target.rowNum, linked: false, filled: [], written: written };
+  }
+
+  current.source_activity_id = activityId;
+  current.raw_ref = rawRef;
+  current.synced_at = syncedAt;
+  sheet.getRange(target.rowNum, 1, 1, WORKOUT_COLUMN_COUNT).setValues([asText(workoutToRow(current))]);
+  return {
+    status: 'enriched', id: current.id, sheetRow: target.rowNum,
+    linked: linked, filled: filledNow, written: written,
+  };
+}
+
+/** The strength session as the sync sends it: its local start and ENRICH_FIELDS. */
+function normalizeEnrichActivity(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error('activity must be an object keyed by field name');
+  }
+  var allowed = ['date', 'time'].concat(ENRICH_FIELDS);
+  for (var key in data) {
+    if (!Object.prototype.hasOwnProperty.call(data, key)) continue;
+    if (allowed.indexOf(key) === -1) {
+      throw new Error('activity: "' + key + '" is not an enrichable field. Valid fields: ' + allowed.join(', '));
+    }
+  }
+  var out = {};
+  for (var i = 0; i < allowed.length; i++) out[allowed[i]] = cell(data[allowed[i]]);
+  if (!out.date) throw new Error('activity.date is required');
+  validateDate('activity.date', out.date);
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(out.time)) {
+    throw new Error('activity.time must be local HH:MM, got "' + out.time + '"');
+  }
+  for (var j = 0; j < ENRICH_FIELDS.length; j++) {
+    var n = ENRICH_FIELDS[j];
+    if (out[n] && !/^\d+$/.test(out[n])) {
+      throw new Error('activity.' + n + ' must be a whole number or blank, got "' + out[n] + '"');
+    }
+  }
+  return out;
+}
+
+/** `last_written`: null, or `{ workout_id, filled }` as a previous call returned it. */
+function normalizeEnrichLastWritten(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('last_written must be null or { workout_id, filled }');
+  }
+  var filled = value.filled === undefined || value.filled === null ? [] : value.filled;
+  if (!Array.isArray(filled)) throw new Error('last_written.filled must be an array of field names');
+  var out = [];
+  for (var i = 0; i < filled.length; i++) {
+    var f = cell(filled[i]);
+    if (ENRICH_FIELDS.indexOf(f) === -1) throw new Error('last_written.filled: "' + f + '" is not an enrichable field');
+    if (out.indexOf(f) === -1) out.push(f);
+  }
+  return { workout_id: cell(value.workout_id), filled: out };
+}
+
+/** `HH:MM` (or `H:MM`) -> minutes past midnight, or null when there is no readable time. */
+function clockMinutes(value) {
+  var m = /^(\d{1,2}):([0-5]\d)(:[0-5]\d)?$/.exec(cell(value));
+  if (!m || Number(m[1]) > 23) return null;
+  return Number(m[1]) * 60 + Number(m[2]);
+}
+
+/**
  * The FIT step's two sync-owned fields (#154), or null when the payload sends
  * neither, so a caller that predates them leaves V and W alone. When sent they
  * are always overwritten, never merged, and they travel together.

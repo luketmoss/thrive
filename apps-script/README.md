@@ -204,6 +204,39 @@ SPA between a read and a write cannot be lost. Key only, like every write.
   for the sync to store as the next `last_written`; and `kept`, the fields
   this call declined to overwrite.
 
+### Strength enrichment (#155)
+
+| Action | Payload |
+|---|---|
+| `enrichWorkout` | `{"source_activity_id":"...","activity":{"date":"2026-09-23","time":"07:30","elapsed_seconds":"...","moving_seconds":"...","avg_hr":"...","calories":"..."},"last_written":null,"raw_ref":"<drive id>","synced_at":"..."}` |
+
+A COROS strength session fills blanks on its hand-logged `weight` row (sync
+plan §7). It never creates a row, and never overwrites a typed value. The
+match, the fill and the write happen inside the action. Key only.
+
+- **Already linked:** the row with `source` blank and this `source_activity_id`.
+  Each of `ENRICH_FIELDS` (`elapsed_seconds`, `moving_seconds`, `avg_hr`,
+  `calories`) is filled when the row holds a blank, COROS has a value, and
+  `last_written.filled` (for the same `workout_id`) does not name it. A filled
+  field is never written again, so an edit or a clearing in Thrive sticks.
+  Nothing to fill means nothing is written, `synced_at` included:
+  `{"status":"unchanged"}`.
+- **Not linked:** a candidate is `type = 'weight'` on `activity.date`, `source`
+  and `source_activity_id` blank, and `status` neither `planned` nor `active`.
+  It is within the tolerance when its `Time` is within
+  `STRENGTH_MATCH_TOLERANCE_MINUTES` (30, inclusive) of `activity.time`. A
+  blank `Time` always counts as within. Exactly one within: linked, and its
+  blanks filled. None, or several (even if one is nearer):
+  `{"status":"unmatched","reason":"no match"|"ambiguous","candidates":[...]}`,
+  and nothing is written.
+- A linked row gains `source_activity_id`, `raw_ref` and `synced_at`, and
+  keeps `source = ''`. That is what the UI reads as "enriched". No other
+  column is written.
+- **Two rows carrying the activity ID:** refused, naming both.
+- Returns `filled` (this call's fields), `linked` (whether this call made the
+  link) and `written`, which is `{ workout_id, filled }` for the sync to store
+  as the next `last_written`.
+
 ### SyncLog (#156)
 
 | Action | Parameters / payload |
@@ -215,12 +248,16 @@ SPA between a read and a write cannot be lost. Key only, like every write.
   `YYYY-MM-DD` window, non-negative integer counts, `status` one of `ok`,
   `partial`, `failed`, no unknown fields. A `run_id` already present answers
   `{"status":"exists"}` and writes nothing. Key only, like every write.
+- `notes` (column N, #155) holds what a run noted that is not a failure, such as
+  a strength session with no workout to enrich. It does not affect `status`.
+  `scripts/migrate-155-sync-log-notes.mjs` adds the column. A tab without it
+  still reads, with `notes` blank.
 - `getSyncLog` returns rows **newest first by `started_at`**, never by position.
   The dead-man's switch (`sync/deadman.mjs`) reads `limit=1`.
 
 ### The script lock
 
-`upsertSyncedWorkout`, `upsertDailyHealth` and `appendSyncLog` run under
+`upsertSyncedWorkout`, `enrichWorkout`, `upsertDailyHealth` and `appendSyncLog` run under
 `LockService`'s script lock (`withScriptLock` in `src/utils.js`), so a local
 sync overlapping a scheduled one cannot interleave a read-then-write. A caller
 that waits over 30 s gets `Lock timeout`, and nothing is written. The SPA

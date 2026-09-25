@@ -83,6 +83,7 @@ export async function syncRun({ env = process.env, force = false, now = () => ne
 
   const counts = {};
   const failures = [];
+  const notes = [];
   let fatal = null;
   let client = null;
   let fit = null;
@@ -126,6 +127,17 @@ export async function syncRun({ env = process.env, force = false, now = () => ne
       failures.push(...sheet.failures);
       counts.created = sheet.activities?.created ?? 0;
       counts.updated = sheet.activities?.updated ?? 0;
+      counts.enriched = sheet.activities?.enriched ?? 0;
+      notes.push(...(sheet.activities?.notes ?? []));
+      // Counts only: the notes name activities and workouts, so they go to
+      // SyncLog, never to a summary-mode log.
+      if (sheet.activities) {
+        const a = sheet.activities;
+        out.info(
+          `Strength: ${a.enriched ?? 0} enriched, ${a.unmatched ?? 0} unmatched` +
+          `${a.unmatched ? ` (noted in SyncLog row ${runId})` : ''}.`,
+        );
+      }
     } else {
       failures.push(redact(apiError.message || String(apiError)));
     }
@@ -146,7 +158,7 @@ export async function syncRun({ env = process.env, force = false, now = () => ne
   }
 
   const row = buildSyncLogRow({
-    runId, startedAt, finishedAt: now().toISOString(), window, counts, failures, fatal,
+    runId, startedAt, finishedAt: now().toISOString(), window, counts, failures, fatal, notes,
   });
 
   if (fatal) out.fatal(runId, fatal);

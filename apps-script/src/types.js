@@ -78,6 +78,31 @@ var SYNC_MERGED_FIELDS = [
 
 var SYNC_OWNED_FIELDS = ['source', 'source_activity_id', 'raw_ref', 'synced_at'];
 
+/**
+ * Strength enrichment (#155, sync plan §7): the fields a COROS strength
+ * session may fill on the matching hand-logged `weight` row, and only where
+ * the row holds a blank. A typed value is never overwritten.
+ *
+ * The row keeps `source = ''` and gains the link fields. The UI reads
+ * "enriched" as `source == '' && source_activity_id != ''`.
+ */
+var ENRICH_FIELDS = ['elapsed_seconds', 'moving_seconds', 'avg_hr', 'calories'];
+
+var ENRICH_LINK_FIELDS = ['source_activity_id', 'raw_ref', 'synced_at'];
+
+/**
+ * How far apart, in whole minutes of local wall clock, a COROS strength
+ * session's start and a hand-logged row's `Time` may be and still match.
+ * Inclusive.
+ *
+ * A judgment call on one data point (#155). The one real session, on 23 Sept
+ * 2026, started on the watch about 9 minutes before the row's `Time`, which
+ * the SPA stamps when Start is tapped. 30 minutes covers that with three
+ * times the margin and stays far below the gap between two sessions on one
+ * day. Revisit it when SyncLog.notes shows near misses.
+ */
+var STRENGTH_MATCH_TOLERANCE_MINUTES = 30;
+
 /** Merged fields that hold a whole number (seconds, meters, bpm, kcal) or ''. */
 var SYNC_INTEGER_FIELDS = [
   'elapsed_seconds', 'moving_seconds', 'distance_m', 'ascent_m', 'descent_m',
@@ -221,7 +246,7 @@ var DAILY_HEALTH_FIELDS = [
 var DAILY_HEALTH_COLUMN_COUNT = 18;
 
 
-// --- SyncLog (A:M) — #156 -------------------------------------------
+// --- SyncLog (A:N) — #156, #155 -------------------------------------
 //
 // One row per sync run, appended by the COROS sync through appendSyncLog, read
 // newest first by getSyncLog. Layout is sync plan §5. It is also the dead-man's
@@ -235,14 +260,15 @@ var SYNC_LOG_FIELDS = [
   'n_seen',        // F  activities the COROS list named
   'n_new',         // G  Workouts rows created
   'n_updated',     // H  Workouts rows whose merged fields changed
-  'n_enriched',    // I  hand-logged strength rows enriched (#155); 0 until then
-  'n_fit_fetched', // J  FIT files fetched (#154's rolling 24h budget sums this); 0 until then
+  'n_enriched',    // I  hand-logged strength rows the run wrote to (#155)
+  'n_fit_fetched', // J  FIT requests made (#154's rolling 24h budget sums this)
   'n_errors',      // K  failures in the run
   'status',        // L  ok | partial | failed
   'error_detail',  // M  redacted failures; blank when ok
+  'notes',         // N  not failures: strength sessions left unmatched (#155); blank when none
 ];
 
-var SYNC_LOG_COLUMN_COUNT = 13;
+var SYNC_LOG_COLUMN_COUNT = 14;
 
 var SYNC_LOG_STATUSES = ['ok', 'partial', 'failed'];
 

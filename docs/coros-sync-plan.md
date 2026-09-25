@@ -619,6 +619,7 @@ staleness surface for no gain.
 | K | `n_errors` |
 | L | `status` |
 | M | `error_detail` |
+| N | `notes` (#155): not failures, e.g. an unmatched strength session |
 
 This tab is also the dead-man's switch — §10.
 
@@ -754,10 +755,28 @@ and never creates one of its own.**
    Log it to `SyncLog` and move on. The raw payload is still written to
    Drive, so nothing is lost and the match can be made later by hand.
 
-**[DECIDE] Tolerance window.** ±30 minutes is a reasonable first guess but is
-genuinely a guess — it depends on how promptly the workout gets marked
-finished in Thrive relative to when the watch stops recording. Worth
-calibrating against a week of real data at Phase 3 rather than picking now.
+**Tolerance window — decided in #155: 30 minutes, inclusive**, between the
+COROS start and the row's `Time` (the SPA stamps `Time` when Start is tapped,
+not when the workout is finished). It was calibrated on the one real session,
+23 September 2026, whose watch start was about 9 minutes before its row's
+`Time`. That is one data point, so it is one constant
+(`STRENGTH_MATCH_TOLERANCE_MINUTES` in `apps-script/src/types.js`), to revisit
+when `SyncLog.notes` shows near misses.
+
+**As built (#155).** The match runs in the API's `enrichWorkout`, in one
+execution with the write, like §8's merge.
+- A candidate is also hand-logged (`source` blank) and finished (`status`
+  neither `planned` nor `active`).
+- A blank `Time` has no start to measure, so it always counts as within the
+  tolerance. It matches only as the day's sole candidate, and makes any other
+  candidate ambiguous.
+- **Ambiguous means more than one candidate within the tolerance**, even if one
+  is nearer. Picking the nearer one would be a guess.
+- One-to-one: sessions are matched oldest first.
+- "Log it to `SyncLog`" is `SyncLog.notes` (column N, added by #155), not
+  `error_detail`. It is not a failure, so `status` and `n_errors` are
+  unaffected. Every run while the session is in the window tries again, so a
+  workout logged late still matches.
 
 ### What gets written
 
@@ -780,6 +799,14 @@ manual and synced — see §8.
 
 No FIT file is fetched for a strength activity. There is no track, and the
 50/day budget is better spent elsewhere.
+
+**Re-runs — decided in #155.** Each field is filled at most once per
+activity. The archive's `normalized` for a strength session is
+`{ enrichment: { workout_id, filled } }`, and a field named in `filled` is never
+written again, even after the user edits or clears it. A re-run with nothing
+new writes nothing, `synced_at` included. A field COROS had no value for is
+filled on a later run if COROS then has one. A row that has lost its link is
+matched afresh.
 
 ---
 
@@ -1251,13 +1278,16 @@ already answered are not repeated.
    defer both?
 2. **[DECIDE §6]** Seven-day window or ten? Ten is recommended given
    multi-day trips.
-3. **[DECIDE §7]** Strength match tolerance — calibrate at Phase 3 rather
-   than guessing ±30 minutes now?
+3. ~~Strength match tolerance~~ — settled below (#155).
 4. Should a mis-detected sport type be correctable in Thrive's UI, given §8
    makes the row editable but `type` and `sub_type` drive which cardio
    fields render?
 
 ### Settled
+
+- **§7 — Strength match tolerance: 30 minutes** (#155, formerly item 3),
+  calibrated on one real session about 9 minutes off. Unmatched sessions are
+  noted in `SyncLog.notes`.
 
 - **§2 — COROS API behaviour, verified in #133.** Refresh tokens rotate; the
   API exposes history from before authorization; no read limit is published

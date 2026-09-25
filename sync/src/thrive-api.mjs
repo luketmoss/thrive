@@ -201,6 +201,23 @@ export function createThriveApi({
       return write('upsertSyncedWorkout', payload);
     },
 
+    /**
+     * One COROS strength session, offered to its hand-logged weight row
+     * (#155). The match, the fill and the write run in the API, in one
+     * execution. Sent once, like every write.
+     *
+     * @param {{ source_activity_id: string, activity: object,
+     *   last_written: { workout_id: string, filled: string[] } | null,
+     *   raw_ref: string, synced_at: string }} payload
+     * @returns {Promise<{ status: 'enriched' | 'unchanged' | 'unmatched', id?: string,
+     *   linked?: boolean, filled?: string[], reason?: string,
+     *   candidates?: { id: string, time: string }[],
+     *   written?: { workout_id: string, filled: string[] } }>}
+     */
+    enrichWorkout(payload) {
+      return write('enrichWorkout', payload);
+    },
+
     /** Recompute DailySummary for `from`..`to`, inclusive, stamped `computedAt`. */
     rebuildDailySummary(from, to, computedAt) {
       return write('rebuildDailySummary', { from, to, computed_at: computedAt });

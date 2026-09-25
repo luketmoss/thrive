@@ -10,7 +10,7 @@ import { loadApi, callDoGet, type CellValue } from './apps-script-sandbox';
 const FIELDS = [
   'run_id', 'started_at', 'finished_at', 'window_start', 'window_end',
   'n_seen', 'n_new', 'n_updated', 'n_enriched', 'n_fit_fetched', 'n_errors',
-  'status', 'error_detail',
+  'status', 'error_detail', 'notes',
 ];
 
 /** A run as the sync sends it. */
@@ -43,21 +43,24 @@ function append(existing: CellValue[][], row: unknown, key?: string) {
 }
 
 describe('AC1: SYNC_LOG_FIELDS is the one layout', () => {
-  it('lists sync plan §5’s 13 fields in order', () => {
+  it('lists sync plan §5’s 13 fields in order, then #155’s notes', () => {
     const { sandbox } = loadApi();
     expect([...sandbox.SYNC_LOG_FIELDS]).toEqual(FIELDS);
-    expect(sandbox.SYNC_LOG_COLUMN_COUNT).toBe(13);
+    expect(sandbox.SYNC_LOG_COLUMN_COUNT).toBe(14);
   });
 
-  it('matches the headers the migration script creates', () => {
+  const headersIn = (name: string) => {
     const here = path.dirname(fileURLToPath(import.meta.url));
-    const script = readFileSync(
-      path.resolve(here, '..', '..', 'scripts', 'migrate-156-sync-log-tab.mjs'), 'utf8');
+    const script = readFileSync(path.resolve(here, '..', '..', 'scripts', name), 'utf8');
     const list = script.match(/const HEADERS = \[([\s\S]*?)\];/);
-    expect(list, 'HEADERS array in the migration').not.toBeNull();
-    const headers = [...list![1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+    expect(list, `HEADERS array in ${name}`).not.toBeNull();
+    return [...list![1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  };
+
+  it('matches the headers the migrations create: #156’s A:M, then #155’s N', () => {
     const { sandbox } = loadApi();
-    expect(headers).toEqual([...sandbox.SYNC_LOG_FIELDS]);
+    expect(headersIn('migrate-156-sync-log-tab.mjs')).toEqual([...sandbox.SYNC_LOG_FIELDS].slice(0, 13));
+    expect(headersIn('migrate-155-sync-log-notes.mjs')).toEqual([...sandbox.SYNC_LOG_FIELDS]);
   });
 });
 
@@ -69,7 +72,7 @@ describe('AC1: appendSyncLog', () => {
     expect(log).toHaveLength(1);
     expect(log[0]).toEqual([
       'schedule-36024934026-1', '2026-09-24T09:17:04.512Z', '2026-09-24T09:17:41.020Z',
-      '2026-09-14', '2026-09-25', '2', '1', '0', '0', '0', '0', 'ok', '',
+      '2026-09-14', '2026-09-25', '2', '1', '0', '0', '0', '0', 'ok', '', '',
     ]);
     // Strings, not a parsed date or number: asText() escaped every one.
     for (const v of log[0]) expect(typeof v).toBe('string');
@@ -78,6 +81,13 @@ describe('AC1: appendSyncLog', () => {
   it('stores an error_detail beginning with "=" as text, never a formula', () => {
     const { log } = append([], run({ status: 'failed', n_errors: 1, error_detail: '=HYPERLINK("x")' }));
     expect(log[0][12]).toBe('=HYPERLINK("x")');
+  });
+
+  it('#155: stores notes in column N, as text, without making the run a failure', () => {
+    const { res, log } = append([], run({ notes: '=strength 1: no match' }));
+    expect(res.success).toBe(true);
+    expect(log[0][13]).toBe('=strength 1: no match');
+    expect(log[0][11]).toBe('ok');
   });
 
   it('does not append a run_id that is already there', () => {
@@ -147,6 +157,33 @@ describe('AC1: getSyncLog', () => {
     const { sandbox } = loadApi({ syncLog: rows() });
     const res = callDoGet<any[]>(sandbox, { action: 'getSyncLog', limit: '1' });
     expect(res.data.map((r) => r.run_id)).toEqual(['schedule-3-1']);
+  });
+
+  it('#155: reads a tab that has no column N yet, with notes blank', () => {
+    const old = rows().map((r) => r.slice(0, 13));
+    const { sandbox } = loadApi({ syncLog: old });
+    const real = sandbox.getSheet;
+    sandbox.getSheet = (name: string) => {
+      const sheet = real(name);
+      if (name !== 'SyncLog') return sheet;
+      // A 13-column grid: a wider range is outside the sheet, as in Sheets.
+      return {
+        ...sheet,
+        getLastColumn: () => 13,
+        getRange: (r: number, c: number, n: number, w: number) => {
+          if (c + w - 1 > 13) throw new Error('The coordinates of the range are outside the dimensions of the sheet.');
+          return sheet.getRange(r, c, n, w);
+        },
+      };
+    };
+    const res = callDoGet<any[]>(sandbox, { action: 'getSyncLog', limit: '1' });
+    expect(res.success, res.error).toBe(true);
+    expect(res.data[0]).toMatchObject({ run_id: 'schedule-3-1', notes: '' });
+  });
+
+  it('#155: returns notes', () => {
+    const { sandbox } = loadApi({ syncLog: [stored({ run_id: 'local-1', notes: 'strength 1: no match' })] });
+    expect(callDoGet<any[]>(sandbox, { action: 'getSyncLog' }).data[0].notes).toBe('strength 1: no match');
   });
 
   it('answers [] for an empty tab', () => {

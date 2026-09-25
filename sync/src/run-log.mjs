@@ -36,9 +36,13 @@ export const logModeFor = (env) => (env.SYNC_LOG === 'summary' ? 'summary' : 'fu
  * @param {{ runId: string, startedAt: string, finishedAt: string,
  *   window: { start: string, end: string },
  *   counts?: { seen?: number, created?: number, updated?: number, enriched?: number, fitFetched?: number },
- *   failures?: string[], fatal?: Error | null }} run
+ *   failures?: string[], fatal?: Error | null, notes?: string[] }} run
+ *   `notes` are what the run noted that are not failures, such as a strength
+ *   session with no workout to enrich (#155). They do not touch `status`.
  */
-export function buildSyncLogRow({ runId, startedAt, finishedAt, window, counts = {}, failures = [], fatal = null }) {
+export function buildSyncLogRow({
+  runId, startedAt, finishedAt, window, counts = {}, failures = [], fatal = null, notes = [],
+}) {
   const lines = [];
   if (fatal) lines.push(`${fatal.name || 'Error'}: ${redact(fatal.message || String(fatal))}`);
   for (const f of failures) lines.push(redact(f));
@@ -52,14 +56,15 @@ export function buildSyncLogRow({ runId, startedAt, finishedAt, window, counts =
     n_seen: counts.seen ?? 0,
     n_new: counts.created ?? 0,
     n_updated: counts.updated ?? 0,
-    // #155 fills n_enriched. n_fit_fetched is FIT requests made (#154), failed
-    // ones included, because each may have spent COROS's allowance; the next
-    // run's budget is summed from it.
+    // n_enriched is hand-logged strength rows written to (#155). n_fit_fetched
+    // is FIT requests made (#154), failed ones included, because each may have
+    // spent COROS's allowance; the next run's budget is summed from it.
     n_enriched: counts.enriched ?? 0,
     n_fit_fetched: counts.fitFetched ?? 0,
     n_errors: failures.length + (fatal ? 1 : 0),
     status,
     error_detail: lines.join('\n'),
+    notes: notes.map((n) => redact(n)).join('\n'),
   };
 }
 
@@ -106,7 +111,8 @@ export function createRunOutput(mode, { out = console.log, err = console.error }
 export function summaryLine(row) {
   return (
     `Run ${row.run_id}: ${row.status}. Window ${row.window_start} to ${row.window_end}. ` +
-    `${row.n_seen} activities listed; Workouts ${row.n_new} created, ${row.n_updated} updated; ` +
+    `${row.n_seen} activities listed; Workouts ${row.n_new} created, ${row.n_updated} updated, ` +
+    `${row.n_enriched} enriched from strength; ` +
     `${row.n_fit_fetched} FIT requested; ` +
     `${row.n_errors} failure(s).`
   );

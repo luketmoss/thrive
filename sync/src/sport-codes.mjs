@@ -30,7 +30,7 @@ export const SPORT_CODES = {
   900: { type: 'walk', sub_type: 'from-track' },
 };
 
-/** Strength is archived, and left to #155's reconciliation. */
+/** Strength never gets a row: it enriches the hand-logged one (#155, sync plan §7). */
 export const STRENGTH_CODE = 402;
 
 /**
