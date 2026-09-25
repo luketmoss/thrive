@@ -20,7 +20,8 @@
 //     {"exercise":"Bench Press","set_number":1,"weight":"185","reps":"6"}]}
 //   ?action=previewSetUpdates&key=...&payload={...}   — resolves, writes nothing
 //
-// DailyHealth rows are addressed by date (#165):
+// DailyHealth rows are read and addressed by date (#165, #158):
+//   ?action=getDailyHealth&key=...&from=2026-09-01&to=2026-09-30   — oldest first
 //   ?action=upsertDailyHealth&key=...&payload={"rows":[{"date":"2026-09-23",
 //     "steps":"2617","raw_ref":"<drive id>"}],"synced_at":"2026-09-24T13:25:32.000Z"}
 //
@@ -330,6 +331,15 @@ function doGet(e) {
         break;
 
       // --- DailyHealth (#165) ---
+      // A read: from/to exactly as getDailySummary. A missing tab is [], not an
+      // error. It belongs on #144's token read allow-list when that lands.
+      case 'getDailyHealth':
+        result = {
+          success: true,
+          data: getDailyHealthRows({ from: params.from, to: params.to }),
+        };
+        break;
+
       // Written by the COROS sync alone. A write, so key-only: it must never be
       // added to #144's token read allow-list when that lands.
       case 'upsertDailyHealth':

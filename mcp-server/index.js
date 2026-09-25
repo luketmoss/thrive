@@ -19,6 +19,7 @@ import { z } from 'zod';
 import {
   API_URL, API_KEY, ApiError,
   fetchWorkouts, fetchWorkout, fetchSets, fetchExercises, fetchTemplates,
+  fetchDailyHealth, fetchDailySummary,
   createWorkout, updateWorkout, deleteWorkout,
   createExercise, updateExercise, deleteExercise,
   createTemplate, replaceTemplate,
@@ -33,7 +34,9 @@ import {
   parseDurationMinutes, findUnknownFields,
   formatWeight, describeLoad, isSetLogged, prepareSchedule,
   slotKey, groupSetsByExercise, describeSetState,
+  provenanceOf, PROVENANCES, typeLabel, provenanceTag, describeSyncedFields,
 } from './domain.js';
+import { resolveRange, describeHealthRange, describeSummaryRange } from './daily.js';
 
 // #132 AC4: the API URL and key replace the service account entirely. The old
 // THRIVE_SPREADSHEET_ID / THRIVE_SERVICE_ACCOUNT_KEY* variables are not read.
@@ -156,7 +159,10 @@ const toTemplateExercises = (rows) =>
 tool(
   'thrive_list_workouts',
   'List workouts, newest first. Use this to review training history or see what is already scheduled. ' +
-    'Returns a compact summary per workout; use thrive_get_workout for set-by-set detail.',
+    'Returns a compact summary per workout; use thrive_get_workout for set-by-set detail. ' +
+    'The type shows its venue when one is set ([bike:gravel]); rows marked (COROS) were created by the watch ' +
+    'sync, and (enriched from COROS) are hand-logged sessions the sync filled in. A field not shown is ' +
+    'unknown, never zero.',
   {
     date_from: z.string().optional().describe("Only workouts on or after this date (YYYY-MM-DD, 'today', '+7d')"),
     date_to: z.string().optional().describe('Only workouts on or before this date'),
@@ -166,9 +172,14 @@ tool(
       .optional()
       .describe("'completed' (logged), 'planned' (scheduled for later), or 'any'. Default: any"),
     name_contains: z.string().optional().describe('Case-insensitive substring match on workout name'),
+    source: z
+      .enum([...PROVENANCES, 'any'])
+      .optional()
+      .describe("'synced' (created by the COROS sync), 'enriched' (hand-logged, filled in from COROS), " +
+        "'manual' (hand-logged only), or 'any'. Default: any"),
     limit: z.coerce.number().optional().describe('Max workouts to return (default 25)'),
   },
-  async ({ date_from, date_to, type, status = 'any', name_contains, limit = 25 }) => {
+  async ({ date_from, date_to, type, status = 'any', name_contains, source = 'any', limit = 25 }) => {
     const [workouts, sets] = await Promise.all([fetchWorkouts(), fetchSets()]);
     const from = normalizeDate(date_from);
     const to = normalizeDate(date_to);
@@ -180,6 +191,7 @@ tool(
       if (status === 'planned' && !isPlanned(w)) return false;
       if (status === 'completed' && isPlanned(w)) return false;
       if (name_contains && !w.name.toLowerCase().includes(name_contains.toLowerCase())) return false;
+      if (source !== 'any' && provenanceOf(w) !== source) return false;
       return true;
     });
 
@@ -193,7 +205,7 @@ tool(
       const mine = sets.filter((s) => s.workout_id === w.id);
       const exercises = new Set(mine.map(slotKey)).size;
       const logged = mine.filter((s) => isSetLogged(s, isPlanned(w))).length;
-      const parts = [`- ${w.date} **${w.name || '(unnamed)'}** [${w.type}]`];
+      const parts = [`- ${w.date} **${w.name || '(unnamed)'}** [${typeLabel(w)}]${provenanceTag(w)}`];
       if (isPlanned(w)) parts.push('(planned)');
       if (w.type === 'weight') parts.push(`— ${exercises} exercises, ${logged}/${mine.length} sets logged`);
       const mins = secondsToMinutes(w.elapsed_seconds);
@@ -212,14 +224,17 @@ tool(
 
 tool(
   'thrive_get_workout',
-  'Get one workout in full: every exercise, every set, with weight, reps and effort.',
+  'Get one workout in full: every exercise, every set, with weight, reps and effort, plus its activity ' +
+    'measurements (distance, ascent, heart rate, moving time, calories) and provenance: synced from COROS, ' +
+    'hand-logged and enriched from COROS, or hand-logged. A measurement not shown is unknown, never zero. ' +
+    'The raw COROS payload and FIT file are archived in Drive but not readable through this server.',
   { workout_id: z.string().describe('Workout id (from thrive_list_workouts)') },
   async ({ workout_id }) => {
     const w = await resolveWorkout(workout_id);
     const mine = await fetchSets(w.id);
 
     const out = [
-      `**${w.name || '(unnamed)'}** — ${w.date}${w.time ? ` ${w.time}` : ''} [${w.type}]${isPlanned(w) ? ' (planned)' : ''}`,
+      `**${w.name || '(unnamed)'}** — ${w.date}${w.time ? ` ${w.time}` : ''} [${typeLabel(w)}]${isPlanned(w) ? ' (planned)' : ''}`,
       `- id: ${w.id}`,
     ];
     const mins = secondsToMinutes(w.elapsed_seconds);
@@ -229,6 +244,7 @@ tool(
     if (w.ascent_m) out.push(`- Ascent: ${metersToFeet(w.ascent_m)} ft`);
     if (w.descent_m) out.push(`- Descent: ${metersToFeet(w.descent_m)} ft`);
     if (w.avg_hr) out.push(`- Avg HR: ${w.avg_hr} bpm`);
+    out.push(...describeSyncedFields(w));
     if (w.template_id) out.push(`- From template: ${w.template_id}`);
     if (w.copied_from) out.push(`- Copied from: ${w.copied_from}`);
     if (w.notes) out.push(`- Notes: ${w.notes}`);
@@ -247,6 +263,48 @@ tool(
       for (const s of g.sets) out.push(`  - ${setLine(s)}`);
     }
     return text(out.join('\n'));
+  },
+);
+
+const RANGE_SHAPE = {
+  date_from: z.string().optional().describe("First day, inclusive (YYYY-MM-DD, 'today', '+7d'). Default: 6 days before date_to"),
+  date_to: z.string().optional().describe('Last day, inclusive. Default: today'),
+};
+
+tool(
+  'thrive_daily_health',
+  'Daily health from the watch, one line per day: resting HR, HRV, steps, calories, sleep (total and ' +
+    'stages), sleep score, bed and wake time, VO2max, recovery and training load. Use it for recovery, ' +
+    'sleep and readiness questions. Default range: the 7 days ending today. ' +
+    'Every field is nullable: "—" means COROS did not report it and is unknown, never zero, and a day ' +
+    'with no row is listed as having none. Sleep is filed under the day you woke up, and sleep total ' +
+    'INCLUDES awake time. VO2max and recovery are current-state snapshots written only on the day each ' +
+    'sync ran, so they are blank on most days by design. Steps include steps taken during indoor walks ' +
+    'and runs: treat them as context and never add them to activity distance or calorie totals.',
+  RANGE_SHAPE,
+  async (args) => {
+    const range = resolveRange(args, normalizeDate);
+    const rows = await fetchDailyHealth(range.from, range.to);
+    return text(describeHealthRange(rows, range));
+  },
+);
+
+tool(
+  'thrive_daily_summary',
+  'One line per day rolled up across workouts and health: activity count and types, moving and elapsed ' +
+    'time, outdoor distance and ascent with how many sessions were measured, session effort, and the ' +
+    "day's steps, resting HR, HRV, sleep and training load. Use it for volume and load across days. " +
+    'Default range: the 7 days ending today. Distance and ascent are OUTDOOR ONLY, so on a day with an ' +
+    "indoor session they will not equal the sum of that day's activity distances. The rollup is derived " +
+    'from the workouts and daily health, rebuilt on every COROS sync run: if it disagrees with ' +
+    'thrive_list_workouts, the workouts are right. "—" means unknown, never zero. Moving and elapsed ' +
+    'time are plain sums: a session that recorded no moving time adds nothing, so "moving 0 min" on a ' +
+    'day with activities means unrecorded, not stationary.',
+  RANGE_SHAPE,
+  async (args) => {
+    const range = resolveRange(args, normalizeDate);
+    const rows = await fetchDailySummary(range.from, range.to);
+    return text(describeSummaryRange(rows, range));
   },
 );
 

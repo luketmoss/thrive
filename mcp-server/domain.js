@@ -416,3 +416,73 @@ export function describeSetState(s) {
     `effort ${s.effort || '—'}`,
   ].join(' · ');
 }
+
+// --- Synced workouts: provenance narration (#158) -------------------
+
+/**
+ * Where a workout came from, as the SPA's badge reads it (#157):
+ * - `synced`   — `source` set: the row was created by a vendor sync
+ * - `enriched` — `source` blank, `source_activity_id` set: logged by hand and
+ *                filled in from a matching COROS session (#155)
+ * - `manual`   — both blank: logged by hand
+ *
+ * A blank `source` positively means "logged by hand"; nothing here defaults it.
+ */
+export function provenanceOf(w) {
+  if (w.source) return 'synced';
+  if (w.source_activity_id) return 'enriched';
+  return 'manual';
+}
+
+export const PROVENANCES = ['synced', 'enriched', 'manual'];
+
+const SOURCE_NAMES = { coros: 'COROS', garmin_import: 'a Garmin import' };
+const sourceName = (source) => SOURCE_NAMES[source] || source || 'COROS';
+
+/** "bike:gravel" when a venue is set, "bike" otherwise. The DailySummary form. */
+export const typeLabel = (w) => (w.sub_type ? `${w.type}:${w.sub_type}` : w.type);
+
+/** " (COROS)", " (enriched from COROS)", or "" — for a list line. */
+export function provenanceTag(w) {
+  const p = provenanceOf(w);
+  if (p === 'synced') return ` (${sourceName(w.source)})`;
+  if (p === 'enriched') return ' (enriched from COROS)';
+  return '';
+}
+
+/**
+ * thrive_get_workout's lines for the synced columns: moving time, calories,
+ * start instant, provenance, and what is archived. A blank field is omitted,
+ * never printed as 0 — the rule the existing distance and HR lines follow.
+ */
+export function describeSyncedFields(w) {
+  const out = [];
+  const moving = secondsToMinutes(w.moving_seconds);
+  if (moving !== null) out.push(`- Moving time: ${moving} min`);
+  if (w.calories) out.push(`- Calories: ${w.calories} kcal`);
+  if (w.started_at_utc) out.push(`- Started at: ${w.started_at_utc}`);
+
+  const p = provenanceOf(w);
+  const link = [
+    w.source_activity_id && `activity ${w.source_activity_id}`,
+    w.synced_at && `last synced ${w.synced_at}`,
+  ].filter(Boolean).join(', ');
+  const detail = link ? ` (${link})` : '';
+  if (p === 'synced') out.push(`- Provenance: synced from ${sourceName(w.source)}${detail}`);
+  else if (p === 'enriched') out.push(`- Provenance: hand-logged, enriched from COROS${detail}`);
+  else out.push('- Provenance: hand-logged');
+
+  if (p !== 'manual') {
+    if (w.raw_ref) {
+      out.push(`- Raw vendor payload: archived in Drive (${w.raw_ref}); its contents are not readable through this server`);
+    }
+  }
+  // Only synced activities get a FIT: the sync never fetches one for an
+  // enriched strength session (#154, #155), so there is nothing to report.
+  if (p === 'synced') {
+    if (w.fit_ref) out.push(`- FIT file: archived in Drive (${w.fit_ref}), fetched ${w.fit_fetched_at || 'at an unknown time'}`);
+    else if (w.fit_fetched_at) out.push(`- FIT file: none, and none will be fetched (settled ${w.fit_fetched_at})`);
+    else out.push('- FIT file: not fetched yet');
+  }
+  return out;
+}

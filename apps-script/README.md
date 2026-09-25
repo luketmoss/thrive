@@ -154,14 +154,20 @@ second implementation of "catch up" to drift out of step with the one for
 distance is a machine estimate of ground never covered. They will not equal
 the sum of a day's activity distances on any day with an indoor session.
 
-### DailyHealth (#165)
+### DailyHealth (#165, #158)
 
-| Action | Payload |
+| Action | Parameters / payload |
 |---|---|
+| `getDailyHealth` | `from`, `to` (optional, inclusive) — oldest first |
 | `upsertDailyHealth` | `{"rows":[{"date":"2026-09-23","steps":"2617",...}],"synced_at":"..."}` |
 
-Written by the COROS sync alone, **key only**: it is a write, so it never joins
-#144's token read allow-list. Rows are domain objects keyed by field name
+`getDailyHealth` returns every one of the 18 fields on every row, a blank cell as
+`''` and never `0`, and no `sheetRow`. It reads the tab once. With no `DailyHealth`
+tab it answers `[]`: no tab means no health data, not a tab of zeros. It is a read,
+so it joins #144's token allow-list when that lands.
+
+`upsertDailyHealth` is called by the COROS sync alone, **key only**: it is a write,
+so it never joins #144's token read allow-list. Rows are domain objects keyed by field name
 (`DAILY_HEALTH_FIELDS` in `src/types.js`), addressed by `date`:
 
 - A date with no row is appended; a date with a row is updated in place, after

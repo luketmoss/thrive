@@ -1,6 +1,7 @@
 // DailyHealth tab (A:R) — one row per local calendar day of COROS health
 // metrics (#165). Written only by the sync, through upsertDailyHealth; read by
-// the DailySummary rollup (getDailyHealth in daily-summary.js).
+// the DailySummary rollup (getDailyHealth in daily-summary.js) and by callers
+// through the getDailyHealth action (getDailyHealthRows, #158).
 //
 // The sync sends domain objects keyed by field name and holds no column
 // indices. DAILY_HEALTH_FIELDS in types.js is the only place the layout lives.
@@ -37,6 +38,48 @@ function dailyHealthToRow(health) {
     row.push(cell(health[DAILY_HEALTH_FIELDS[i]]));
   }
   return row;
+}
+
+/**
+ * Every DailyHealth row with a date, in sheet order, read in one call. The tab
+ * may not exist yet: the sync brings it, and until then every day is
+ * legitimately health-less, which is not the same as a day of zeros (#131 AC2).
+ */
+function readDailyHealthRows() {
+  var sheet = getSpreadsheet().getSheetByName(DAILY_HEALTH_SHEET);
+  if (!sheet) return [];
+
+  var rows = getAllRows(sheet);
+  var out = [];
+  for (var i = 0; i < rows.length; i++) {
+    var health = rowToDailyHealth(rows[i]);
+    if (health.date) out.push(health);
+  }
+  return out;
+}
+
+/**
+ * DailyHealth rows for an inclusive date range, oldest first (#158, #147).
+ *
+ * The action behind `getDailyHealth`. `from` and `to` are optional and
+ * validated exactly as getDailySummaries validates them. Every one of the 18
+ * fields is present on every object, a blank cell as '' and never 0, and no
+ * `sheetRow`: callers address a day by its date.
+ *
+ * A read, so it belongs on #144's token allow-list when that lands.
+ */
+function getDailyHealthRows(filters) {
+  var from = validateDate('from', filters && filters.from);
+  var to = validateDate('to', filters && filters.to);
+
+  var rows = readDailyHealthRows().filter(function (h) {
+    if (from && h.date < from) return false;
+    if (to && h.date > to) return false;
+    return true;
+  });
+  // Appended in sync order, which is not date order after a backfill.
+  rows.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+  return rows;
 }
 
 /**
