@@ -153,6 +153,11 @@ export const fetchTemplates = () => apiGet('getTemplates');
 export const fetchDailyHealth = (from, to) => apiGet('getDailyHealth', { from, to });
 /** DailySummary rows in an inclusive date range. Derived, never authoritative. */
 export const fetchDailySummary = (from, to) => apiGet('getDailySummary', { from, to });
+/**
+ * One page of a synced workout's archived COROS payload text (#179), by
+ * workout id: the API finds the file from the row, never from us.
+ */
+export const fetchWorkoutPayload = (id, offset) => apiGet('getWorkoutPayload', { id, offset });
 
 // --- writes ---------------------------------------------------------
 

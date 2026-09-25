@@ -324,6 +324,43 @@ match, the fill and the write happen inside the action. Key only.
 - `getSyncLog` returns rows **newest first by `started_at`**, never by position.
   The dead-man's switch (`sync/deadman.mjs`) reads `limit=1`.
 
+### Archived payloads (#179)
+
+| Action | Parameters |
+|---|---|
+| `getWorkoutPayload` | `id` (required, a workout id), `offset` (optional, default 0) |
+
+```
+?action=getWorkoutPayload&key=...&id=w_1325851e
+?action=getWorkoutPayload&key=...&id=w_1325851e&offset=20000
+```
+
+A synced or enriched workout's COROS detail payload, read from the sync's
+archive in the bot's Drive (`sync/README.md`, "The raw archive").
+
+- **Addressed by workout id, never by Drive ID.** The file is the one the row's
+  `raw_ref` names. Because `raw_ref` is an ordinary column (`updateWorkout` can
+  set it) and the same Drive holds `coros-token.json`, the file must also be
+  that activity's archive file before anything is read back: named
+  `<source_activity_id>.json`, the only file at
+  `Thrive COROS/activities/<YYYY>/<MM>/`, JSON, at most 5 MB, with
+  `source: "coros"`, the row's `activity_id` and a string `payload`. Anything
+  else is refused with one fixed message that quotes nothing from the file.
+- **Returns** `workout_id`, `source_activity_id`, `raw_ref`, `tool`,
+  `fetched_at` and `text`: the payload decoded from the JSON string literal the
+  archive stores it as. Nothing else in the file (`normalized`, `fit`, `args`,
+  `list_entry` with its start coordinates) is returned.
+- **Paged**, 20,000 characters at a time, with `offset`, `total_chars` and
+  `next_offset` (`null` when complete). A page never ends inside a surrogate
+  pair. An offset that is not a whole number, or is past the end, is refused.
+- **Key only.** A read, but not on `TOKEN_READ_ACTIONS`: no token caller needs
+  raw vendor text.
+- **FIT contents are not readable** here. The `.fit` files are binary and hold
+  the GPS track.
+- Needs the `drive.readonly` scope (see Setup). Until the owner grants it, the
+  action answers "The script is not yet allowed to read Drive…", and every
+  other action is unaffected.
+
 ### The script lock
 
 `upsertSyncedWorkout`, `enrichWorkout`, `upsertDailyHealth` and `appendSyncLog` run under
@@ -379,9 +416,20 @@ presentation concern, not a data one.
 3. Deploy as a web app: execute as **me**, access **anyone**. Anonymous access
    is what makes the API key and the token check load-bearing — "anyone with a
    Google account" would answer a browser `fetch` with a login page.
-   The token check's `UrlFetchApp` call needs the `script.external_request`
-   scope; `appsscript.json` pins no scopes, so they are inferred, and the owner
-   must re-authorize once whenever a new one appears.
+   `appsscript.json` **pins its scopes** (#179): `spreadsheets`,
+   `script.external_request` (the token check's `UrlFetchApp`) and
+   `drive.readonly` (`getWorkoutPayload`). Pinned, so `DriveApp` cannot widen
+   Drive access to full `drive` by inference. `drive.file` would not do: it
+   covers only files the script's own OAuth client created, and the archive
+   was created by the sync's client.
+
+   **Whenever a scope is added, the owner re-authorizes once.** Signed in as
+   luketmossbot, open the script (`clasp open-script`), pick `doGet` in the
+   function menu, **Run**, and allow the permissions dialog. `doGet` with no
+   parameters only answers "Invalid or missing API key", so running it
+   changes nothing. Until then, only calls that need the new scope fail, each
+   with a message saying so. #179 confirmed this on a temporary deployment
+   before updating `@2`.
 4. The deployment URL and key become `THRIVE_API_URL` / `THRIVE_API_KEY` for
    consumers, and GitHub Actions secrets for the sync.
 

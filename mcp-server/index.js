@@ -19,7 +19,7 @@ import { z } from 'zod';
 import {
   API_URL, API_KEY, ApiError,
   fetchWorkouts, fetchWorkout, fetchSets, fetchExercises, fetchTemplates,
-  fetchDailyHealth, fetchDailySummary,
+  fetchDailyHealth, fetchDailySummary, fetchWorkoutPayload,
   createWorkout, updateWorkout, deleteWorkout,
   createExercise, updateExercise, deleteExercise,
   createTemplate, replaceTemplate,
@@ -35,6 +35,7 @@ import {
   formatWeight, describeLoad, isSetLogged, prepareSchedule,
   slotKey, groupSetsByExercise, describeSetState,
   provenanceOf, PROVENANCES, typeLabel, provenanceTag, describeSyncedFields,
+  describeWorkoutPayload,
 } from './domain.js';
 import { resolveRange, describeHealthRange, describeSummaryRange } from './daily.js';
 
@@ -227,7 +228,8 @@ tool(
   'Get one workout in full: every exercise, every set, with weight, reps and effort, plus its activity ' +
     'measurements (distance, ascent, heart rate, moving time, calories) and provenance: synced from COROS, ' +
     'hand-logged and enriched from COROS, or hand-logged. A measurement not shown is unknown, never zero. ' +
-    'The raw COROS payload and FIT file are archived in Drive but not readable through this server.',
+    'The raw COROS payload is readable with thrive_get_workout_payload; the FIT file is archived but ' +
+    'its contents are not readable through this server.',
   { workout_id: z.string().describe('Workout id (from thrive_list_workouts)') },
   async ({ workout_id }) => {
     const w = await resolveWorkout(workout_id);
@@ -263,6 +265,32 @@ tool(
       for (const s of g.sets) out.push(`  - ${setLine(s)}`);
     }
     return text(out.join('\n'));
+  },
+);
+
+tool(
+  'thrive_get_workout_payload',
+  "Read a synced or enriched workout's archived COROS detail payload: COROS's own text for the activity, " +
+    'which carries what the workout fields do not, such as max and average speed, training effect and, ' +
+    'where COROS includes them, max heart rate and laps.Use it only when a question needs one of those; the ' +
+    'workout fields from thrive_get_workout are what Thrive uses, and win where the two disagree. ' +
+    'Returns up to 20,000 characters per call. A longer payload ends with a [Truncated: ...] line giving ' +
+    'the offset for the next page; nothing is ever cut off without that line. Hand-logged workouts have no ' +
+    'payload. FIT file contents (GPS track, per-second data) are not readable.',
+  {
+    workout_id: z.string().describe('Workout id (from thrive_list_workouts)'),
+    offset: z.number().int().min(0).optional()
+      .describe('Character offset to start from. Default 0; use the offset a [Truncated: ...] line gives'),
+  },
+  async ({ workout_id, offset }) => {
+    try {
+      return text(describeWorkoutPayload(await fetchWorkoutPayload(workout_id, offset)));
+    } catch (err) {
+      if (err instanceof ApiError && /^Workout ".*" not found$/.test(err.message)) {
+        throw new Error(`No workout with id "${workout_id}".`);
+      }
+      throw err;
+    }
   },
 );
 

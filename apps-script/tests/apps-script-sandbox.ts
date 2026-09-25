@@ -259,6 +259,54 @@ export function makeUrlFetchApp(calls: string[], reply: (url: string) => FetchRe
   };
 }
 
+/** A folder or file in the fake Drive (#179). `parents` are ids. */
+export interface DriveNode {
+  name: string;
+  parents: string[];
+  /** Files only: the content, and optionally its MIME type and trash state. */
+  content?: string;
+  trashed?: boolean;
+}
+
+/**
+ * DriveApp stub (#179) over `nodes`, keyed by id. Records every id asked for,
+ * so a test can assert that a refusal made no Drive call at all. `fail`, when
+ * given, is thrown from `getFileById` instead — Drive's real permission and
+ * not-found messages.
+ */
+export function makeDriveApp(nodes: Record<string, DriveNode>, calls: string[], fail?: string) {
+  const wrap = (id: string): any => {
+    const node = nodes[id];
+    return {
+      getName: () => node.name,
+      isTrashed: () => !!node.trashed,
+      getSize: () => Buffer.byteLength(node.content ?? '', 'utf8'),
+      getParents() {
+        const ids = [...node.parents];
+        return { hasNext: () => ids.length > 0, next: () => wrap(ids.shift()!) };
+      },
+      getBlob: () => ({
+        getDataAsString(charset: string) {
+          if (charset !== 'UTF-8') throw new Error('DriveApp stub reads UTF-8 only');
+          return node.content ?? '';
+        },
+      }),
+    };
+  };
+  return {
+    getFileById(id: string) {
+      calls.push(id);
+      if (fail) throw new Error(fail);
+      const node = nodes[id];
+      if (!node || node.content === undefined) {
+        throw new Error('No item with the given ID could be found. Possibly because you have not ' +
+          'edited this item or you do not have permission to access it.');
+      }
+      return wrap(id);
+    },
+  };
+}
+
 /** PropertiesService stub backed by a plain object of script properties. */
 export function makePropertiesService(properties: Record<string, string>) {
   return {
@@ -308,6 +356,8 @@ export interface LoadedApi {
   cache: Map<string, CacheEntry>;
   /** Every URL UrlFetchApp was asked for, in order (#144). */
   fetches: string[];
+  /** Every Drive file id DriveApp was asked for, in order (#179). */
+  driveCalls: string[];
 }
 
 /** Tab fixtures for `loadApi`. Each defaults to empty. */
@@ -340,6 +390,10 @@ export function loadApi(
     properties?: Record<string, string>;
     /** How the fake tokeninfo answers. Without it, any fetch fails the test. */
     tokeninfo?: (url: string) => FetchReply;
+    /** The fake Drive (#179). Without it, any Drive call finds nothing. */
+    drive?: Record<string, DriveNode>;
+    /** Thrown by DriveApp.getFileById instead of looking anything up. */
+    driveFails?: string;
   } = {},
 ): LoadedApi {
   const apiKey = options.apiKey ?? 'test-key';
@@ -356,6 +410,7 @@ export function loadApi(
   const lock = { acquired: 0, held: false };
   const cache = new Map<string, CacheEntry>();
   const fetches: string[] = [];
+  const driveCalls: string[] = [];
   const tokeninfo = options.tokeninfo ?? ((url: string): FetchReply => {
     throw new Error('Unexpected UrlFetchApp.fetch: ' + url);
   });
@@ -371,7 +426,7 @@ export function loadApi(
 
   const sandbox = loadSources(
     ['types.js', 'utils.js', 'workouts.js', 'exercises.js', 'templates.js', 'sets.js',
-      'daily-summary.js', 'daily-health.js', 'sync-log.js', 'auth.js', 'main.js'],
+      'daily-summary.js', 'daily-health.js', 'sync-log.js', 'payload.js', 'auth.js', 'main.js'],
     {
       LockService: makeLockService(lock),
       ContentService: makeContentService(),
@@ -380,6 +435,7 @@ export function loadApi(
       }),
       CacheService: makeCacheService(cache),
       UrlFetchApp: makeUrlFetchApp(fetches, tokeninfo),
+      DriveApp: makeDriveApp(options.drive ?? {}, driveCalls, options.driveFails),
       Utilities: makeUtilities(options.uuids),
       Date: FixedDate,
     }
@@ -415,6 +471,7 @@ export function loadApi(
   return {
     sandbox, rows: workoutRows, exerciseRows, templateRows, setRows, summaryRows,
     healthRows: fixtures.dailyHealth, syncLogRows: fixtures.syncLog, lock, cache, fetches,
+    driveCalls,
   };
 }
 

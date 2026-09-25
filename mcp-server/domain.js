@@ -474,7 +474,7 @@ export function describeSyncedFields(w) {
 
   if (p !== 'manual') {
     if (w.raw_ref) {
-      out.push(`- Raw vendor payload: archived in Drive (${w.raw_ref}); its contents are not readable through this server`);
+      out.push(`- Raw vendor payload: archived in Drive (${w.raw_ref}); read it with thrive_get_workout_payload`);
     }
   }
   // Only synced activities get a FIT: the sync never fetches one for an
@@ -485,4 +485,31 @@ export function describeSyncedFields(w) {
     else out.push('- FIT file: not fetched yet');
   }
   return out;
+}
+
+/**
+ * thrive_get_workout_payload's text (#179): a header, the page, and a closing
+ * line that says either that the payload is complete or exactly where to
+ * continue. A page is never cut off without saying so.
+ */
+export function describeWorkoutPayload(page) {
+  const start = page.offset;
+  const end = page.offset + page.text.length;
+  const fmt = (n) => n.toLocaleString('en-US');
+  const whole = start === 0 && page.next_offset === null;
+  const header = [
+    `Archived COROS payload for workout ${page.workout_id} (activity ${page.source_activity_id}` +
+      `${page.tool ? `, ${page.tool}` : ''}), fetched ${page.fetched_at || 'at an unknown time'}.`,
+    whole
+      ? `Complete: ${fmt(page.total_chars)} characters.`
+      : `Characters ${fmt(start)}–${fmt(end)} of ${fmt(page.total_chars)}.`,
+    "This is COROS's own text, as served. Where it disagrees with the workout's fields, the fields " +
+      'are what Thrive uses: the user may have corrected them.',
+    '',
+  ];
+  const footer = page.next_offset === null
+    ? (whole ? [] : ['', '[End of payload: this page completes it.]'])
+    : ['', `[Truncated: ${fmt(page.total_chars - end)} more characters. Call thrive_get_workout_payload ` +
+        `again with offset ${page.next_offset} for the next page.]`];
+  return [...header, page.text, ...footer].join('\n');
 }
