@@ -80,7 +80,7 @@ function cell(value) {
 }
 
 /**
- * A Workouts row -> the API's workout object, all 26 fields present.
+ * A Workouts row -> the API's workout object, all 27 fields present.
  *
  * Derived from WORKOUT_FIELDS rather than written out, so the read and write
  * mappers cannot disagree about which columns exist.
@@ -97,7 +97,7 @@ function rowToWorkout(row, sheetRow) {
 }
 
 /**
- * A workout object -> a 26-cell row.
+ * A workout object -> a 27-cell row.
  *
  * Always exactly WORKOUT_COLUMN_COUNT cells: Sheets writes every value it is
  * handed regardless of the range, so a short row leaves stale cells behind

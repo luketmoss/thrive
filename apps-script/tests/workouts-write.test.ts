@@ -29,9 +29,9 @@ describe('AC3: an omitted field is written empty, never defaulted', () => {
     expect(rows[0][12]).toBe('');  // M effort
   });
 
-  it('writes a full 26-cell row so no stale cell is left behind', () => {
+  it('writes a full 27-cell row so no stale cell is left behind', () => {
     const { rows } = create({ type: 'bike', name: 'Evening Ride' });
-    expect(rows[0]).toHaveLength(26);
+    expect(rows[0]).toHaveLength(27);
     for (const c of rows[0]) expect(c).not.toBeUndefined();
   });
 
@@ -107,7 +107,7 @@ describe('AC3: an update leaves unmentioned fields alone', () => {
 
   it('writes the whole row back at full width', () => {
     const { rows } = update({ effort: 'Hard' });
-    expect(rows[0]).toHaveLength(26);
+    expect(rows[0]).toHaveLength(27);
   });
 
   it('refuses an id that is not there', () => {

@@ -34,7 +34,7 @@ describe('AC4: only that date, and only planned', () => {
     expect(ids).not.toContain('w_active');
   });
 
-  it('returns the full A:Z shape, not a summary', () => {
+  it('returns the full A:AA shape, not a summary', () => {
     const { sandbox } = loadApi(ROWS());
     const [w] = callDoGet(sandbox, { action: 'getPlannedWorkouts', date: '2026-09-21' }).data;
     for (const f of sandbox.WORKOUT_FIELDS) expect(w, f).toHaveProperty(f);

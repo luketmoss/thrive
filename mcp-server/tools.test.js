@@ -17,7 +17,7 @@ const W_FIELDS = [
   'id', 'date', 'time', 'type', 'name', 'template_id', 'notes', 'elapsed_seconds', 'created',
   'copied_from', 'status', 'moving_seconds', 'effort', 'distance_m', 'ascent_m', 'descent_m',
   'avg_hr', 'sub_type', 'source', 'source_activity_id', 'raw_ref', 'fit_ref', 'fit_fetched_at',
-  'synced_at', 'started_at_utc', 'calories',
+  'synced_at', 'started_at_utc', 'calories', 'estimated_seconds',
 ];
 const workout = (o) => ({ ...Object.fromEntries(W_FIELDS.map((f) => [f, o[f] ?? ''])), sheetRow: 2 });
 
@@ -33,6 +33,8 @@ const WORKOUTS = [
     avg_hr: '88', source_activity_id: '4712', raw_ref: 'raw-2', synced_at: '2026-09-23T13:00:00.000Z',
   }),
   workout({ id: 'w_man', date: '2026-09-22', time: '08:00', type: 'hike', name: 'Morning Hike' }),
+  // #145: a hand-planned session with an estimate.
+  workout({ id: 'w_plan', date: '2026-09-21', type: 'weight', name: 'Upper Pull A', status: 'planned', estimated_seconds: '2820' }),
 ];
 
 const calls = [];
@@ -55,6 +57,15 @@ before(async () => {
           vo2max: '', recovery: '', training_load: '', bed_time: '', wake_time: '', raw_ref: '', synced_at: '' }];
         break;
       case 'getDailySummary': data = []; break;
+      case 'getExercises': data = []; break;
+      case 'getTemplates': data = []; break;
+      case 'appendSets': data = { appended: 0 }; break;
+      case 'createWorkout': data = JSON.parse(p.payload).data; break;
+      case 'updateWorkout': {
+        const { id, changes } = JSON.parse(p.payload);
+        data = { ...WORKOUTS.find((w) => w.id === id), ...changes };
+        break;
+      }
       // #179: the fake API pages a 25,000-character payload for w_sync only.
       case 'getWorkoutPayload': {
         if (p.id === 'w_man') {
@@ -154,7 +165,7 @@ test('thrive_list_workouts shows venue and provenance, and filters on source', a
   const only = async (source) => (await call('thrive_list_workouts', { source })).text;
   assert.match(await only('synced'), /^1 workouts:\n.*Gravel Bike/);
   assert.match(await only('enriched'), /^1 workouts:\n.*Upper Push/);
-  assert.match(await only('manual'), /^1 workouts:\n.*Morning Hike/);
+  assert.match(await only('manual'), /^2 workouts:\n.*Morning Hike.*\n.*Upper Pull A/);
 });
 
 test('thrive_get_workout adds the synced fields and omits blanks', async () => {
@@ -221,4 +232,63 @@ test('thrive_get_workout_payload refuses a Drive id field by name, before any re
 test('thrive_get_workout points at the payload tool', async () => {
   const synced = (await call('thrive_get_workout', { workout_id: 'w_sync' })).text;
   assert.match(synced, /- Raw vendor payload: archived in Drive \(raw-1\); read it with thrive_get_workout_payload/);
+});
+
+// --- #145 ----------------------------------------------------------------
+
+const payloadOf = (action) => JSON.parse(calls.filter((c) => c.action === action).at(-1).payload);
+
+test('thrive_get_workout and thrive_list_workouts show a planned estimate, and only when set', async () => {
+  const planned = (await call('thrive_get_workout', { workout_id: 'w_plan' })).text;
+  assert.match(planned, /\(planned\)/);
+  assert.match(planned, /- Estimated duration: 47 min\n/);
+  assert.doesNotMatch(planned, /- Duration:/);
+
+  const list = (await call('thrive_list_workouts')).text;
+  assert.match(list, /\*\*Upper Pull A\*\* \[weight\] \(planned\) .*— est\. 47 min/);
+  assert.equal((list.match(/est\./g) || []).length, 1);
+
+  const manual = (await call('thrive_get_workout', { workout_id: 'w_man' })).text;
+  assert.doesNotMatch(manual, /Estimated/);
+});
+
+test('thrive_schedule_workout takes estimated_min in minutes and stores seconds', async () => {
+  const res = await call('thrive_schedule_workout', { date: '2099-12-31', name: 'Long Ride', type: 'bike', estimated_min: 47 });
+  assert.equal(res.isError, false, res.text);
+  assert.equal(payloadOf('createWorkout').data.estimated_seconds, '2820');
+  assert.match(res.text, /- Estimated duration: 47 min/);
+
+  await call('thrive_schedule_workout', { date: '2099-12-31', name: 'Long Ride', type: 'bike' });
+  assert.equal(payloadOf('createWorkout').data.estimated_seconds, '');
+});
+
+test('thrive_schedule_week takes estimated_min per entry', async () => {
+  const res = await call('thrive_schedule_week', { workouts: [
+    { date: '2099-12-30', name: 'Ride A', type: 'bike', estimated_min: '45' },
+    { date: '2099-12-31', name: 'Ride B', type: 'bike' },
+  ] });
+  assert.equal(res.isError, false, res.text);
+  const created = calls.filter((c) => c.action === 'createWorkout').slice(-2).map((c) => JSON.parse(c.payload).data);
+  assert.deepEqual(created.map((w) => w.estimated_seconds), ['2700', '']);
+  assert.match(res.text, /Ride A\*\* \[bike\] \(planned\) — 0 planned sets, est\. 45 min/);
+});
+
+test('estimated_min refuses anything but whole minutes of at least 1, before any write', async () => {
+  for (const bad of ['45 min', '0', '47.5', -5]) {
+    const before = calls.filter((c) => c.action === 'createWorkout').length;
+    const res = await call('thrive_schedule_workout', { date: '2099-12-31', name: 'Ride', type: 'bike', estimated_min: bad });
+    assert.equal(res.isError, true, `${bad} should be refused`);
+    assert.match(res.text, /estimated_min must be whole minutes/);
+    assert.equal(calls.filter((c) => c.action === 'createWorkout').length, before);
+  }
+});
+
+test('thrive_update_workout changes and clears the estimate, never elapsed', async () => {
+  const res = await call('thrive_update_workout', { workout_id: 'w_plan', estimated_min: 50 });
+  assert.equal(res.isError, false, res.text);
+  assert.deepEqual(payloadOf('updateWorkout').changes, { estimated_seconds: '3000' });
+  assert.match(res.text, /estimate 47 min -> 50 min/);
+
+  await call('thrive_update_workout', { workout_id: 'w_plan', estimated_min: '' });
+  assert.deepEqual(payloadOf('updateWorkout').changes, { estimated_seconds: '' });
 });

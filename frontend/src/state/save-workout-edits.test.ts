@@ -19,6 +19,10 @@ interface FakeSheet {
 
 let sheet: FakeSheet;
 
+/** Column letters -> zero-based index: A = 0, Z = 25, AA = 26 (#145). */
+const colIndex = (letters: string) =>
+  [...letters].reduce((n, c) => n * 26 + (c.charCodeAt(0) - 64), 0) - 1;
+
 function parseRange(range: string) {
   const [tab, cells] = range.split('!');
   const m = cells.match(/^([A-Z]+)(\d*):([A-Z]+)(\d*)$/);
@@ -26,8 +30,8 @@ function parseRange(range: string) {
   const [, colStart, rowStartStr, colEnd, rowEndStr] = m;
   return {
     tab: tab as keyof FakeSheet,
-    colStart: colStart.charCodeAt(0) - 65,
-    colEnd: colEnd.charCodeAt(0) - 65,
+    colStart: colIndex(colStart),
+    colEnd: colIndex(colEnd),
     rowStart: rowStartStr ? Number(rowStartStr) : null,
     rowEnd: rowEndStr ? Number(rowEndStr) : null,
   };

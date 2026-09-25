@@ -178,7 +178,7 @@ export function WorkoutFlow({ workoutId, planDate }: Props) {
   };
 
   // Planner: "Save Workout" handler
-  const handlePlannerSave = async (name: string, exercises: PlannerExercise[], date: string) => {
+  const handlePlannerSave = async (name: string, exercises: PlannerExercise[], date: string, estimatedSeconds: string) => {
     if (!token) return;
     setSaving(true);
     try {
@@ -189,7 +189,7 @@ export function WorkoutFlow({ workoutId, planDate }: Props) {
         sets: Number(ex.sets) || 1,
         planned_reps: ex.reps,
       }));
-      await saveWorkoutForLater({ type: 'weight', name, exercises: builderExercises, date }, token);
+      await saveWorkoutForLater({ type: 'weight', name, exercises: builderExercises, date, estimated_seconds: estimatedSeconds }, token);
       navigate('/');
     } catch {
       // Error toast shown by action

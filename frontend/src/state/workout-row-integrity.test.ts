@@ -20,6 +20,10 @@ interface FakeSheet {
 
 let sheet: FakeSheet;
 
+/** Column letters -> zero-based index: A = 0, Z = 25, AA = 26 (#145). */
+const colIndex = (letters: string) =>
+  [...letters].reduce((n, c) => n * 26 + (c.charCodeAt(0) - 64), 0) - 1;
+
 function parseRange(range: string) {
   const [tab, cells] = range.split('!');
   const m = cells.match(/^([A-Z]+)(\d*):([A-Z]+)(\d*)$/);
@@ -27,8 +31,8 @@ function parseRange(range: string) {
   const [, colStart, rowStartStr, colEnd, rowEndStr] = m;
   return {
     tab: tab as keyof FakeSheet,
-    colStart: colStart.charCodeAt(0) - 65,
-    colEnd: colEnd.charCodeAt(0) - 65,
+    colStart: colIndex(colStart),
+    colEnd: colIndex(colEnd),
     rowStart: rowStartStr ? Number(rowStartStr) : null,
     rowEnd: rowEndStr ? Number(rowEndStr) : null,
   };
@@ -102,6 +106,7 @@ vi.mock('../auth/reauth', () => ({ attemptReauth: vi.fn(), ReauthFailedError: cl
 
 const {
   deleteWorkout,
+  saveWorkoutForLater,
   copyWorkout,
   finishWorkout,
   startPlannedWorkout,
@@ -109,13 +114,14 @@ const {
 
 const TOKEN = 'test-token';
 
-function workoutRow(w: { id: string; date: string; time: string; type: string; name: string; status?: string }): string[] {
-  // A:Z — eleven original columns, the six nullable attributes (#101) and
-  // the nine sync provenance columns (#128).
+function workoutRow(w: { id: string; date: string; time: string; type: string; name: string; status?: string; estimated_seconds?: string }): string[] {
+  // A:AA — eleven original columns, the six nullable attributes (#101),
+  // the nine sync provenance columns (#128) and the estimate (#145).
   return [
     w.id, w.date, w.time, w.type, w.name, '', '', '', '', '', w.status || '',
     '', '', '', '', '', '',
     '', '', '', '', '', '', '', '', '',
+    w.estimated_seconds || '',
   ];
 }
 
@@ -134,7 +140,7 @@ function workoutsFromSheet(): WorkoutWithRow[] {
     descent_m: row[15] || '', avg_hr: row[16] || '',
     sub_type: row[17] || '', source: row[18] || '', source_activity_id: row[19] || '',
     raw_ref: row[20] || '', fit_ref: row[21] || '', fit_fetched_at: row[22] || '',
-    synced_at: row[23] || '', started_at_utc: row[24] || '', calories: row[25] || '',
+    synced_at: row[23] || '', started_at_utc: row[24] || '', calories: row[25] || '', estimated_seconds: row[26] || '',
     sheetRow: i + 2,
   }));
 }
@@ -185,7 +191,7 @@ describe('AC2: a workout write never targets another workout\'s row', () => {
       id: 'w_ghost', date: '2026-09-01', time: '09:00', type: 'weight', name: 'Ghost',
       template_id: '', notes: '', elapsed_seconds: '', created: '', copied_from: '', status: 'active',
       moving_seconds: '', effort: '', distance_m: '', ascent_m: '', descent_m: '', avg_hr: '',
-      sub_type: '', source: '', source_activity_id: '', raw_ref: '', fit_ref: '', fit_fetched_at: '', synced_at: '', started_at_utc: '', calories: '',
+      sub_type: '', source: '', source_activity_id: '', raw_ref: '', fit_ref: '', fit_fetched_at: '', synced_at: '', started_at_utc: '', calories: '', estimated_seconds: '',
       sheetRow: 2,
     };
     workouts.value = [staleWorkout];
@@ -214,7 +220,7 @@ describe('AC2: a workout write never targets another workout\'s row', () => {
       id: 'w_planned', date: '', time: '', type: 'weight', name: 'Planned',
       template_id: '', notes: '', elapsed_seconds: '', created: '', copied_from: '', status: 'planned',
       moving_seconds: '', effort: '', distance_m: '', ascent_m: '', descent_m: '', avg_hr: '',
-      sub_type: '', source: '', source_activity_id: '', raw_ref: '', fit_ref: '', fit_fetched_at: '', synced_at: '', started_at_utc: '', calories: '',
+      sub_type: '', source: '', source_activity_id: '', raw_ref: '', fit_ref: '', fit_fetched_at: '', synced_at: '', started_at_utc: '', calories: '', estimated_seconds: '',
       sheetRow: 2,
     };
     workouts.value = [staleWorkout];
@@ -278,5 +284,61 @@ describe('AC4: deleting one of two same-id rows removes only one', () => {
     const lastToast = toasts.value[toasts.value.length - 1];
     expect(lastToast.type).toBe('success');
     expect(lastToast.text).toBe('Workout deleted');
+  });
+});
+
+// #145: the estimate lives in AA, is written by saveWorkoutForLater, and is
+// never turned into elapsed time.
+describe('#145: a planned workout estimate', () => {
+  it('saveWorkoutForLater writes the estimate to AA and leaves H blank', async () => {
+    await saveWorkoutForLater({ type: 'weight', name: 'Pull A', date: '2099-12-31', estimated_seconds: '2820' }, TOKEN);
+    const row = sheet.Workouts[0];
+    expect(row).toHaveLength(27);
+    expect(row[26]).toBe('2820');
+    expect(row[7]).toBe('');
+    expect(row[10]).toBe('planned');
+  });
+
+  it('saveWorkoutForLater with no estimate writes a blank AA, never 0', async () => {
+    await saveWorkoutForLater({ type: 'weight', name: 'Pull A', date: '2099-12-31' }, TOKEN);
+    expect(sheet.Workouts[0][26]).toBe('');
+  });
+
+  it('starting a plan keeps AA and leaves elapsed blank (AC4)', async () => {
+    sheet.Workouts = [
+      workoutRow({ id: 'w_p', date: '2099-12-31', time: '', type: 'weight', name: 'Pull A', status: 'planned', estimated_seconds: '2820' }),
+    ];
+    workouts.value = workoutsFromSheet();
+
+    await startPlannedWorkout('w_p', TOKEN);
+
+    const row = sheet.Workouts[0];
+    expect(row[10]).toBe('active');
+    expect(row[7]).toBe('');
+    expect(row[26]).toBe('2820');
+    expect(workouts.value[0].elapsed_seconds).toBe('');
+    expect(workouts.value[0].estimated_seconds).toBe('2820');
+  });
+
+  it('finishing it records elapsed from the clock, never from the estimate', async () => {
+    const now = new Date();
+    const start = new Date(now.getTime() - 20 * 60 * 1000);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const date = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
+    const time = `${pad(start.getHours())}:${pad(start.getMinutes())}`;
+    sheet.Workouts = [
+      workoutRow({ id: 'w_p', date, time, type: 'weight', name: 'Pull A', status: 'active', estimated_seconds: '2820' }),
+    ];
+    workouts.value = workoutsFromSheet();
+    activeWorkoutId.value = 'w_p';
+
+    await finishWorkout('w_p', '', '', TOKEN);
+
+    const row = sheet.Workouts[0];
+    const elapsed = Number(row[7]);
+    expect(elapsed).toBeGreaterThan(19 * 60);
+    expect(elapsed).toBeLessThan(22 * 60);
+    expect(row[7]).not.toBe('2820');
+    expect(row[26]).toBe('2820');
   });
 });

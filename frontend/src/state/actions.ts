@@ -278,7 +278,11 @@ export async function removeExercise(
 // ── Workouts ─────────────────────────────────────────────────────────
 
 export async function saveWorkoutForLater(
-  data: { type: WorkoutType; name: string; template_id?: string; exercises?: BuilderExercise[]; date?: string },
+  data: {
+    type: WorkoutType; name: string; template_id?: string; exercises?: BuilderExercise[]; date?: string;
+    /** #145: seconds, or '' / omitted when nobody estimated it. Never defaulted. */
+    estimated_seconds?: string;
+  },
   token: string,
 ): Promise<void> {
   try {
@@ -288,6 +292,7 @@ export async function saveWorkoutForLater(
       template_id: data.template_id,
       date: data.date,
       status: 'planned',
+      estimated_seconds: data.estimated_seconds,
     }, token);
 
     const withRow = await resolveNewWorkoutRow(workout, token);

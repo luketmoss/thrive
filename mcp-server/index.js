@@ -31,7 +31,7 @@ import {
 import {
   WORKOUT_TYPES, EFFORTS, SECTIONS,
   normalizeDate, normalizeRangeToMax, secondsToMinutes, metersToMiles, metersToFeet,
-  parseDurationMinutes, findUnknownFields,
+  parseDurationMinutes, parseEstimateMinutes, findUnknownFields,
   formatWeight, describeLoad, isSetLogged, prepareSchedule,
   slotKey, groupSetsByExercise, describeSetState,
   provenanceOf, PROVENANCES, typeLabel, provenanceTag, describeSyncedFields,
@@ -211,6 +211,8 @@ tool(
       if (w.type === 'weight') parts.push(`— ${exercises} exercises, ${logged}/${mine.length} sets logged`);
       const mins = secondsToMinutes(w.elapsed_seconds);
       if (mins !== null) parts.push(`— ${mins} min`);
+      const est = secondsToMinutes(w.estimated_seconds);
+      if (isPlanned(w) && est) parts.push(`— est. ${est} min`);
       if (w.effort) parts.push(`— ${w.effort}`);
       if (w.distance_m) parts.push(`— ${metersToMiles(w.distance_m)} mi`);
       if (w.notes) parts.push(`— "${w.notes}"`);
@@ -241,6 +243,9 @@ tool(
     ];
     const mins = secondsToMinutes(w.elapsed_seconds);
     if (mins !== null) out.push(`- Duration: ${mins} min`);
+    // #145: what the plan said it would take. Never a duration taken.
+    const est = secondsToMinutes(w.estimated_seconds);
+    if (est) out.push(`- Estimated duration: ${est} min${isPlanned(w) ? '' : ' (as planned)'}`);
     if (w.effort) out.push(`- Session effort: ${w.effort}`);
     if (w.distance_m) out.push(`- Distance: ${metersToMiles(w.distance_m)} mi`);
     if (w.ascent_m) out.push(`- Ascent: ${metersToFeet(w.ascent_m)} ft`);
@@ -476,6 +481,10 @@ const scheduleShape = {
     'Validated as a whole before anything is written: any problem rejects the call and lists every problem.',
   ),
   notes: z.string().optional().describe('Workout notes'),
+  estimated_min: z.union([z.number(), z.string()]).optional().describe(
+    'How long the session is expected to take, in whole MINUTES, e.g. 45. Stored as seconds. ' +
+    'Omit when there is no estimate; it is never guessed or defaulted.',
+  ),
   status: z
     .enum(['planned', 'completed'])
     .optional()
@@ -534,6 +543,7 @@ tool(
         `Scheduled **${workout.name}** for ${workout.date} [${workout.type}]${workout.status === 'planned' ? ' (planned)' : ''}`,
         `- id: ${workout.id}`,
         workout.template_id ? `- From template: ${input.template} (${workout.template_id})` : null,
+        workout.estimated_seconds ? `- Estimated duration: ${secondsToMinutes(workout.estimated_seconds)} min` : null,
         rows.length ? `- ${plan.length} exercises, ${rows.length} planned sets:` : '- No exercises attached.',
         ...detail,
       ].filter(Boolean).join('\n'),
@@ -606,7 +616,8 @@ tool(
         `Scheduled ${prepared.length} workout${prepared.length > 1 ? 's' : ''}:`,
         ...prepared.map(({ workout: w, rows }) =>
           `- ${w.date} **${w.name}** [${w.type}]${w.status === 'planned' ? ' (planned)' : ''} — ` +
-          `${rows.length} planned sets (id: ${w.id})`),
+          `${rows.length} planned sets` +
+          `${w.estimated_seconds ? `, est. ${secondsToMinutes(w.estimated_seconds)} min` : ''} (id: ${w.id})`),
       ].join('\n'),
     );
   },
@@ -679,7 +690,7 @@ tool(
 
 tool(
   'thrive_update_workout',
-  'Fix a workout record: change its date, name, type, notes, duration, session effort, cardio attributes, or flip it between planned and completed. ' +
+  'Fix a workout record: change its date, name, type, notes, duration, estimated duration, session effort, cardio attributes, or flip it between planned and completed. ' +
     'Only pass the fields you want to change.',
   {
     workout_id: z.string().describe('Workout id'),
@@ -693,6 +704,10 @@ tool(
     ),
     elapsed_seconds: z.string().optional().describe(
       'New elapsed time, in SECONDS (the unit the sheet stores). 45 minutes is "2700".',
+    ),
+    estimated_min: z.union([z.number(), z.string()]).optional().describe(
+      "A planned workout's estimated duration, in whole MINUTES, e.g. 45. Stored as seconds. " +
+      'Pass "" to clear. Not the time a session took: that is duration_min.',
     ),
     distance_m: z.string().optional().describe(
       'Distance in METERS (canonical storage unit). 12.4 miles is "19956". Pass "" to clear.',
@@ -716,12 +731,13 @@ tool(
       .optional()
       .describe("'planned' marks it upcoming; 'completed' marks it done"),
   },
-  async ({ workout_id, date, name, type, notes, duration_min, elapsed_seconds, effort,
+  async ({ workout_id, date, name, type, notes, duration_min, elapsed_seconds, estimated_min, effort,
            distance_m, ascent_m, descent_m, avg_hr, status }) => {
     if (duration_min !== undefined && elapsed_seconds !== undefined) {
       throw new Error('Pass duration_min (whole minutes) or elapsed_seconds (seconds), not both.');
     }
     const seconds = duration_min !== undefined ? parseDurationMinutes(duration_min) : elapsed_seconds;
+    const estimate = estimated_min !== undefined ? parseEstimateMinutes(estimated_min) : undefined;
 
     const w = await resolveWorkout(workout_id);
 
@@ -745,6 +761,13 @@ tool(
       changes.push(mins === null ? 'duration cleared' : `duration -> ${mins} min`);
       updated.elapsed_seconds = seconds;
       fields.elapsed_seconds = seconds;
+    }
+    if (estimate !== undefined) {
+      const was = secondsToMinutes(w.estimated_seconds);
+      const now = secondsToMinutes(estimate);
+      changes.push(`estimate ${was === null ? '(unset)' : `${was} min`} -> ${now === null ? '(unset)' : `${now} min`}`);
+      updated.estimated_seconds = estimate;
+      fields.estimated_seconds = estimate;
     }
     if (effort !== undefined) {
       changes.push(`effort ${w.effort || '(unset)'} -> ${effort || '(unset)'}`);

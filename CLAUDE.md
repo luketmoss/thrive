@@ -39,9 +39,10 @@ Personal workout tracker: Preact SPA → Google Sheets REST API.
 Google Sheet "Groundwork" with these tabs:
 - **Exercises** (A:E): id, Name, Tags, Notes, Created
 - **Templates** (A:H): template_id, Template Name, Order, exercise_id, Exercise Name, Section, Sets, Reps
-- **Workouts** (A:Z): id, Date, Time, Type, Name, template_id, Notes, Elapsed (s), Created, copied_from, status,
+- **Workouts** (A:AA): id, Date, Time, Type, Name, template_id, Notes, Elapsed (s), Created, copied_from, status,
   Moving (s), Effort, Distance (m), Ascent (m), Descent (m), Avg HR (bpm),
-  sub_type, source, source_activity_id, raw_ref, fit_ref, fit_fetched_at, synced_at, started_at_utc, calories
+  sub_type, source, source_activity_id, raw_ref, fit_ref, fit_fetched_at, synced_at, started_at_utc, calories,
+  estimated_seconds
 - **Sets** (A:J): workout_id, exercise_id, Exercise Name, Section, Exercise Order, Set #, Planned Reps, Weight (lbs), Reps, Effort
 - **Labels** (A:D): id, name, color_key, created
 - **DailyHealth** (A:R): date, resting_hr, hrv, steps, calories, sleep_total_s,
@@ -84,6 +85,12 @@ whole minutes. `frontend/src/api/duration.ts` is the only conversion boundary.
 no code path may default them to `0`. `Workouts!R-Z` are the sync provenance
 columns, nullable for the same reason; a blank `source` positively means
 "logged by hand", so nothing may default it to a vendor name.
+`Workouts!AA` `estimated_seconds` (#145) is how long a *planned* session is
+meant to take, typed per plan in whole minutes and stored in seconds through
+the same `duration.ts` boundary. It is not time taken: starting a plan never
+copies it into `Elapsed (s)`, nothing sums it, and the sync never writes it.
+It stays on the row after the workout starts, as the plan's record. Blank
+means nobody estimated it; `0` is refused.
 
 ### Workout Types
 - `weight` — structured weight training with exercises, sets, reps, effort

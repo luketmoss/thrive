@@ -12,14 +12,18 @@ import type { WorkoutWithRow } from '../../api/types';
 
 let sheet: { Workouts: string[][]; Sets: string[][] };
 
+/** Column letters -> zero-based index: A = 0, Z = 25, AA = 26 (#145). */
+const colIndex = (letters: string) =>
+  [...letters].reduce((n, c) => n * 26 + (c.charCodeAt(0) - 64), 0) - 1;
+
 function parseRange(range: string) {
   const [tab, cells] = range.split('!');
   const m = cells.match(/^([A-Z]+)(\d*):([A-Z]+)(\d*)$/);
   if (!m) throw new Error(`Unsupported range: ${range}`);
   return {
     tab: tab as 'Workouts' | 'Sets',
-    colStart: m[1].charCodeAt(0) - 65,
-    colEnd: m[3].charCodeAt(0) - 65,
+    colStart: colIndex(m[1]),
+    colEnd: colIndex(m[3]),
     rowStart: m[2] ? Number(m[2]) : null,
     rowEnd: m[4] ? Number(m[4]) : null,
   };
@@ -84,7 +88,7 @@ const SYNCED: WorkoutWithRow = {
   distance_m: '430', ascent_m: '37', descent_m: '41', avg_hr: '128',
   sub_type: 'outdoor', source: 'coros', source_activity_id: 'act_0001',
   raw_ref: 'raw/act_0001.json', fit_ref: 'fit/act_0001.fit', fit_fetched_at: '2026-09-20T13:00:00Z',
-  synced_at: '2026-09-20T13:00:00Z', started_at_utc: '2026-09-20T14:05:00Z', calories: '212',
+  synced_at: '2026-09-20T13:00:00Z', started_at_utc: '2026-09-20T14:05:00Z', calories: '212', estimated_seconds: '',
   sheetRow: 2,
 };
 
@@ -95,7 +99,7 @@ const ENRICHED: WorkoutWithRow = {
   copied_from: '', status: '', moving_seconds: '290', effort: 'Medium',
   distance_m: '', ascent_m: '', descent_m: '', avg_hr: '112',
   sub_type: '', source: '', source_activity_id: 'act_0002', raw_ref: 'raw/act_0002.json',
-  fit_ref: '', fit_fetched_at: '', synced_at: '2026-09-21T13:00:00Z', started_at_utc: '', calories: '180',
+  fit_ref: '', fit_fetched_at: '', synced_at: '2026-09-21T13:00:00Z', started_at_utc: '', calories: '180', estimated_seconds: '',
   sheetRow: 3,
 };
 
