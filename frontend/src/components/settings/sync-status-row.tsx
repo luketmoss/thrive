@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import type { ComponentChildren } from 'preact';
 import { syncLog } from '../../state/store';
 import { loadSyncLog } from '../../state/actions';
 import { summarizeSyncLog, formatAge, statusWords, syncTone } from '../../api/sync-status';
@@ -25,7 +26,7 @@ export function SyncStatusRow({ token }: { token: string | null }) {
   }, [token]);
 
   const log = syncLog.value;
-  let body;
+  let body: ComponentChildren;
 
   if (log.state === 'idle' || log.state === 'loading') {
     body = <span class="sync-status-line">Checking…</span>;
