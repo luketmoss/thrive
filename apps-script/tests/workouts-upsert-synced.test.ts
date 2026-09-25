@@ -247,3 +247,57 @@ describe('AC4: the three-way merge keeps edits made in Thrive', () => {
     expect(rows[0][C.avg_hr]).toBe('');
   });
 });
+
+describe('#154: fit_ref and fit_fetched_at are sync-owned, and optional', () => {
+  const FIT = 'drive-fit-0001';
+
+  it('a created row carries them when sent', () => {
+    const { res, rows } = upsert([], { fit_ref: FIT, fit_fetched_at: T1 });
+    expect(res.success, res.error).toBe(true);
+    expect(rows[0][C.fit_ref]).toBe(FIT);
+    expect(rows[0][C.fit_fetched_at]).toBe(T1);
+  });
+
+  it('an existing row has them overwritten, never merged', () => {
+    const { res, rows } = upsert([syncedRow({ fit_ref: 'old-fit', fit_fetched_at: T1 })], {
+      last_written: RIDE, fit_ref: FIT, fit_fetched_at: T2, synced_at: T2,
+    });
+    expect(res.data.status).toBe('updated');
+    expect(rows[0][C.fit_ref]).toBe(FIT);
+    expect(rows[0][C.fit_fetched_at]).toBe(T2);
+    // Not merged fields: they never appear in `written` or `edited`.
+    expect(res.data.written).not.toHaveProperty('fit_ref');
+    expect(res.data.written.edited).toEqual([]);
+  });
+
+  it('sending neither leaves V and W as they were', () => {
+    const { rows } = upsert([syncedRow({ fit_ref: FIT, fit_fetched_at: T1 })], { last_written: RIDE, synced_at: T2 });
+    expect(rows[0][C.fit_ref]).toBe(FIT);
+    expect(rows[0][C.fit_fetched_at]).toBe(T1);
+  });
+
+  it('"no FIT will be fetched" is fit_fetched_at set with fit_ref blank', () => {
+    const { res, rows } = upsert([], { fit_ref: '', fit_fetched_at: T1 });
+    expect(res.success, res.error).toBe(true);
+    expect(rows[0][C.fit_ref]).toBe('');
+    expect(rows[0][C.fit_fetched_at]).toBe(T1);
+  });
+
+  it('refuses a fit_ref that is not a Drive file ID, without echoing it, and writes nothing', () => {
+    const url = 'https://s3.coros.com/fit/000000000000/000000000000000000.fit';
+    for (const bad of [url, 'folder/file', 'file.fit']) {
+      const { res, rows } = upsert([], { fit_ref: bad, fit_fetched_at: T1 });
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch(/fit_ref must be a Drive file ID/);
+      expect(res.error).not.toContain(bad);
+      expect(rows).toHaveLength(0);
+    }
+  });
+
+  it('refuses one without the other, a fit_ref with no instant, and a non-ISO instant', () => {
+    expect(upsert([], { fit_ref: FIT }).res.error).toMatch(/together or not at all/);
+    expect(upsert([], { fit_fetched_at: T1 }).res.error).toMatch(/together or not at all/);
+    expect(upsert([], { fit_ref: FIT, fit_fetched_at: '' }).res.error).toMatch(/fit_ref needs fit_fetched_at/);
+    expect(upsert([], { fit_ref: FIT, fit_fetched_at: '2026-09-24' }).res.error).toMatch(/ISO 8601 instant/);
+  });
+});

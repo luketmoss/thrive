@@ -7,7 +7,8 @@ import assert from 'node:assert/strict';
 import { CorosGrantDeadError, DriveAuthError } from '../src/errors.mjs';
 import { buildSyncLogRow, createRunOutput, runIdFor } from '../src/run-log.mjs';
 import { REQUIRED_TOOLS } from '../src/ingest.mjs';
-import { syncRun } from '../src/sync-run.mjs';
+import { FIT_TOOL } from '../src/fit.mjs';
+import { fitBudgetOverride, fitSummary, syncRun } from '../src/sync-run.mjs';
 import { ThriveApiError, fitErrorDetail, createThriveApi, MAX_ENCODED_PAYLOAD } from '../src/thrive-api.mjs';
 import { scriptedFetch } from './helpers.mjs';
 
@@ -38,7 +39,7 @@ function fakes({ ingestResult, sheetResult, api: apiOverride, ...overrides } = {
     createTokenStore: () => ({}),
     getAccessToken: async () => ({ accessToken: 'at', refreshed: false }),
     connectCoros: async () => ({
-      async listTools() { return { tools: REQUIRED_TOOLS.map((name) => ({ name })) }; },
+      async listTools() { return { tools: [...REQUIRED_TOOLS, FIT_TOOL].map((name) => ({ name })) }; },
       async close() {},
     }),
     createArchive: () => ({}),
@@ -61,6 +62,14 @@ function fakes({ ingestResult, sheetResult, api: apiOverride, ...overrides } = {
   };
   return { deps, api, rows: api.rows ?? rows };
 }
+
+/** A FIT step that was handed nothing to fetch. */
+const fakeFit = ({ counts = {}, failures = [], remaining = 'unread' } = {}) => ({
+  counts: { requested: 0, stored: 0, adopted: 0, failed: 0, gaveUp: 0, waiting: 0, ...counts },
+  failures,
+  remaining,
+  async ensure() { return { fit_ref: '', fit_fetched_at: '' }; },
+});
 
 /** Run with captured output. */
 async function run({ env = ACTIONS_ENV, ...fakeOpts } = {}) {
@@ -204,7 +213,7 @@ test('AC5: summary mode prints counts and the run_id, and no COROS-derived text'
   for (const r of [clean, partial, failed]) {
     for (const canary of CANARIES) assert.ok(!r.text.includes(canary), `summary log leaked "${canary}":\n${r.text}`);
   }
-  assert.match(clean.text, /Run schedule-36024934026-1: ok\. Window 2026-09-14 to 2026-09-25\. 3 activities listed; Workouts 1 created, 1 updated; 0 failure\(s\)\./);
+  assert.match(clean.text, /Run schedule-36024934026-1: ok\. Window 2026-09-14 to 2026-09-25\. 3 activities listed; Workouts 1 created, 1 updated; 0 FIT requested; 0 failure\(s\)\./);
   assert.match(partial.text, /1 failure\(s\)\. They are in SyncLog row schedule-36024934026-1, not in this public log\./);
   assert.match(failed.text, /Aborted by Error\. See "When a run fails" in sync\/README\.md; the message is in SyncLog row schedule-36024934026-1\./);
   // The detail still reaches the private row.
@@ -251,4 +260,58 @@ test('AC1: the client appends by action appendSyncLog and reads getSyncLog with 
   assert.deepEqual(JSON.parse(first.get('payload')), { row: { run_id: 'r' } });
   assert.deepEqual(await api.getSyncLog(1), [{ run_id: 'r', started_at: START }]);
   assert.equal(new URL(calls[2].url).searchParams.get('limit'), '1');
+});
+
+// --- FIT (#154) -----------------------------------------------------------------
+
+test('#154 AC1: n_fit_fetched is the FIT step\'s requests, and its failures reach the row', async () => {
+  const fit = fakeFit({
+    counts: { requested: 3, stored: 2, failed: 1, waiting: 1 },
+    failures: ['activity a2: FIT request 1 of 3 failed; the next run tries again: COROS answered 500'],
+    remaining: 0,
+  });
+  let handed;
+  const { rows, exitCode } = await run({
+    createFitStep: (opts) => { handed = opts; return fit; },
+    writeSheet: async (opts) => {
+      assert.equal(opts.fit, fit, 'the step reaches the sheet step');
+      return { activities: { created: 1, updated: 0 }, failures: [] };
+    },
+  });
+  assert.equal(rows[0].n_fit_fetched, 3);
+  assert.equal(rows[0].status, 'partial');
+  assert.match(rows[0].error_detail, /FIT request 1 of 3 failed/);
+  assert.equal(exitCode, 1);
+  assert.equal(handed.startedAt, START, 'the budget is measured back from the run\'s start');
+});
+
+test('#154 AC2: the FIT line is counts only, and safe in a summary log', async () => {
+  const fit = fakeFit({ counts: { requested: 2, stored: 2, waiting: 2 }, remaining: 0 });
+  const { text, rows } = await run({ env: { ...ACTIONS_ENV, SYNC_LOG: 'summary' }, createFitStep: () => fit });
+  assert.match(text, /FIT: 2 requested, 2 stored, 0 already in Drive, 0 failed; 2 waiting for budget; 0 of 50 left in the rolling 24 h\./);
+  assert.match(text, /2 FIT requested;/);
+  assert.equal(rows[0].status, 'ok', 'hitting the cap is not a failure');
+  for (const canary of CANARIES) assert.ok(!text.includes(canary));
+  assert.equal(fitSummary(fakeFit()), 'FIT: 0 requested, 0 stored, 0 already in Drive, 0 failed; 0 waiting for budget; budget not needed, so not read.');
+});
+
+test('#154: a COROS without the FIT tool fails loudly and requests nothing, and the rest still runs', async () => {
+  let created = false;
+  const { rows } = await run({
+    connectCoros: async () => ({
+      async listTools() { return { tools: REQUIRED_TOOLS.map((name) => ({ name })) }; },
+      async close() {},
+    }),
+    createFitStep: () => { created = true; return fakeFit(); },
+  });
+  assert.equal(created, false);
+  assert.equal(rows[0].n_fit_fetched, 0);
+  assert.equal(rows[0].n_new, 1, 'the sheet step still ran');
+  assert.match(rows[0].error_detail, /COROS no longer offers downloadActivityFitFiles/);
+});
+
+test('#154 AC2: THRIVE_FIT_BUDGET is read as a whole number, or ignored', () => {
+  assert.equal(fitBudgetOverride({ THRIVE_FIT_BUDGET: '0' }), 0);
+  assert.equal(fitBudgetOverride({ THRIVE_FIT_BUDGET: '2' }), 2);
+  for (const v of [undefined, '', '-1', '1.5', 'lots']) assert.equal(fitBudgetOverride({ THRIVE_FIT_BUDGET: v }), undefined);
 });

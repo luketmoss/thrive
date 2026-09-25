@@ -89,3 +89,21 @@ test('every request carries the bot account\'s bearer token', async () => {
   await createDrive({ getToken, fetchImpl }).findFiles({ kind: 'x' });
   assert.equal(calls[0].init.headers.Authorization, 'Bearer google-access-token-xxxx');
 });
+
+test('#154: a FIT is uploaded as binary, byte for byte, tagged and foldered', async () => {
+  const { fetchImpl, calls } = scriptedFetch([{ body: { id: 'fit-file-1' } }]);
+  const bytes = Buffer.from([0x0e, 0x20, 0x00, 0xff, 0x2e, 0x46, 0x49, 0x54, 0x0d, 0x0a]);
+  const id = await createDrive({ getToken, fetchImpl }).createBinary({
+    name: '42.fit', parentId: 'folder-9', props: { source: 'coros', kind: 'fit', fit_activity_id: '42' }, bytes,
+  });
+  assert.equal(id, 'fit-file-1');
+  const body = calls[0].init.body;
+  assert.ok(Buffer.isBuffer(body));
+  const boundary = calls[0].init.headers['Content-Type'].match(/boundary=(.+)$/)[1];
+  const text = body.toString('latin1');
+  assert.match(text, /"appProperties":\{"source":"coros","kind":"fit","fit_activity_id":"42"\}/);
+  assert.match(text, /"parents":\["folder-9"\]/);
+  const start = body.indexOf('Content-Type: application/octet-stream\r\n\r\n') + 'Content-Type: application/octet-stream\r\n\r\n'.length;
+  assert.deepEqual(body.subarray(start, start + bytes.length), bytes);
+  assert.ok(text.endsWith(`\r\n--${boundary}--`));
+});

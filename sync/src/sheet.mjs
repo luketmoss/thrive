@@ -53,10 +53,11 @@ export async function syncDailyHealth({ archive, api, runDate, syncedAt, log = c
  * @param {{ archive: object, api: object, window: { start: string, runDate: string },
  *   activityIds?: string[], syncedAt: string, log?: (line: string) => void }} opts
  *   `activityIds` is every activity the run's list named (ingest's summary).
+ *   `fit` is the run's FIT step (src/fit.mjs, #154), or null for none.
  * @returns {Promise<{ health: object | null, activities: object | null,
  *   rollup: object | null, failures: string[] }>}
  */
-export async function writeSheet({ archive, api, window, activityIds = [], syncedAt, log = console.log }) {
+export async function writeSheet({ archive, api, window, activityIds = [], syncedAt, fit = null, log = console.log }) {
   const out = { health: null, activities: null, rollup: null, failures: [] };
 
   try {
@@ -69,7 +70,7 @@ export async function writeSheet({ archive, api, window, activityIds = [], synce
   }
 
   try {
-    out.activities = await syncActivities({ archive, api, activityIds, syncedAt, log });
+    out.activities = await syncActivities({ archive, api, activityIds, syncedAt, fit, log });
     out.failures.push(...out.activities.failures);
     const a = out.activities;
     log(`  Workouts: ${a.created} created, ${a.updated} updated, ${a.unchanged} unchanged, ${a.deleted} deleted in Thrive and left so, ${a.skipped} skipped`);

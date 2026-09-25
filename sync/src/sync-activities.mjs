@@ -6,6 +6,10 @@
 //
 // Every activity is merged on every run, not only those whose payload changed:
 // the merge is idempotent, and a parser fix then re-applies without a replay.
+//
+// Before its merge, each activity passes the run's FIT step (#154,
+// src/fit.mjs), whose `fit_ref` / `fit_fetched_at` ride on the same upsert as
+// sync-owned fields.
 
 import { ActivityFormatError, ACTIVITY_FIELDS, normalizeActivity } from './normalize-activity.mjs';
 import { redact } from './redact.mjs';
@@ -32,13 +36,18 @@ const sameNormalized = (a, b) =>
  *   `n_updated`, #156); the API answers `updated` for every existing row, because
  *   `synced_at` always moves, so a row that held what it already held is `unchanged`.
  */
-export async function syncActivities({ archive, api, activityIds, syncedAt, log = console.log }) {
+export async function syncActivities({ archive, api, activityIds, syncedAt, fit = null, log = console.log }) {
   const out = { created: 0, updated: 0, unchanged: 0, deleted: 0, skipped: 0, failures: [] };
   const fail = (message) => {
     out.failures.push(message);
     log(`  FAILED ${message}`);
   };
 
+  // Read, classify and normalize every activity first, then write them oldest
+  // first. The order only matters for FITs (#154): when the budget runs out,
+  // the activities left waiting are the newest, which stay in the window
+  // longest and so get the most later runs to be fetched in.
+  const ready = [];
   for (const id of activityIds) {
     try {
       const file = await archive.readActivity(id);
@@ -67,6 +76,22 @@ export async function syncActivities({ archive, api, activityIds, syncedAt, log 
         fail(`activity ${id}: not written, unrecognized format in getActivityDetail: ${err.message}`);
         continue;
       }
+      ready.push({ id, file, incoming });
+    } catch (err) {
+      fail(`activity ${id}: ${redact(err.message || String(err))}`);
+    }
+  }
+  ready.sort((a, b) => a.file.data.list_entry.startTimestamp - b.file.data.list_entry.startTimestamp);
+
+  for (const { id, file, incoming } of ready) {
+    try {
+      // The FIT first, so a new activity's row is created with its fit_ref in
+      // one write, and every later run re-sends what the archive records.
+      const fitFields = fit
+        ? await fit.ensure({
+          activityId: id, fileId: file.fileId, record: file.data.fit, args: file.data.args, localDate: incoming.date,
+        })
+        : {};
 
       const lastWritten = file.data.normalized ?? null;
       const result = await api.upsertSyncedWorkout({
@@ -76,6 +101,7 @@ export async function syncActivities({ archive, api, activityIds, syncedAt, log 
         last_written: lastWritten,
         raw_ref: file.fileId,
         synced_at: syncedAt,
+        ...fitFields,
       });
 
       if (result.status === 'deleted') {

@@ -11,6 +11,7 @@
 import { createArchive } from './archive.mjs';
 import { syncWindow } from './dates.mjs';
 import { createDrive } from './drive.mjs';
+import { createFitStep, FIT_ALLOWANCE, FIT_TOOL } from './fit.mjs';
 import { googleTokenProvider, loadGoogleCredentials } from './google.mjs';
 import { ingest, REQUIRED_TOOLS } from './ingest.mjs';
 import { connectCoros } from './mcp.mjs';
@@ -30,7 +31,31 @@ export const defaultDeps = {
   ingest,
   writeSheet,
   createApi: (env) => createThriveApi(loadThriveApiConfig(env)),
+  createFitStep,
 };
+
+/**
+ * `THRIVE_FIT_BUDGET`, a whole number, caps what a run may spend below what
+ * SyncLog says is left, to test the cap stop without spending the real
+ * allowance (#154). It can only lower the budget. Anything else is ignored.
+ */
+export function fitBudgetOverride(env) {
+  const v = env.THRIVE_FIT_BUDGET;
+  return typeof v === 'string' && /^\d+$/.test(v) ? Number(v) : undefined;
+}
+
+/** The FIT step's account, counts only, so it is safe in a summary-mode log. */
+export function fitSummary(fit) {
+  const c = fit.counts;
+  const r = fit.remaining;
+  const left = r === 'unread' ? 'budget not needed, so not read'
+    : r === 'unknown' ? 'budget unknown'
+      : `${r} of ${FIT_ALLOWANCE} left in the rolling 24 h`;
+  return (
+    `FIT: ${c.requested} requested, ${c.stored} stored, ${c.adopted} already in Drive, ${c.failed} failed` +
+    `${c.gaveUp ? ` (${c.gaveUp} given up)` : ''}; ${c.waiting} waiting for budget; ${left}.`
+  );
+}
 
 /**
  * @param {{ env?: object, force?: boolean, now?: () => Date, deps?: object,
@@ -60,6 +85,7 @@ export async function syncRun({ env = process.env, force = false, now = () => ne
   const failures = [];
   let fatal = null;
   let client = null;
+  let fit = null;
   try {
     const drive = d.createDrive(env);
     const store = d.createTokenStore(drive);
@@ -85,9 +111,17 @@ export async function syncRun({ env = process.env, force = false, now = () => ne
     );
 
     if (api) {
+      // FITs need the API too: the budget is read from SyncLog (#154).
+      if (tools.some((t) => t.name === FIT_TOOL)) {
+        fit = d.createFitStep({
+          client, archive, api, startedAt, log: out.detail, budgetOverride: fitBudgetOverride(env),
+        });
+      } else {
+        failures.push(`COROS no longer offers ${FIT_TOOL}, so no FIT was requested. Check tools/list and update sync/src/fit.mjs.`);
+      }
       const sheet = await d.writeSheet({
         archive, api, window: summary.window, activityIds: summary.activityIds, syncedAt: startedAt,
-        log: out.detail,
+        fit, log: out.detail,
       });
       failures.push(...sheet.failures);
       counts.created = sheet.activities?.created ?? 0;
@@ -101,6 +135,14 @@ export async function syncRun({ env = process.env, force = false, now = () => ne
     if (client) {
       try { await client.close(); } catch { /* closing a dead connection is not news */ }
     }
+  }
+
+  // Counted whatever happened after them: every request may have spent
+  // allowance, and the next run's budget is summed from this row.
+  if (fit) {
+    counts.fitFetched = fit.counts.requested;
+    failures.push(...fit.failures);
+    out.info(fitSummary(fit));
   }
 
   const row = buildSyncLogRow({

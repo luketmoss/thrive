@@ -63,9 +63,12 @@ var WORKOUT_TYPES = ['weight', 'stretch', 'bike', 'hike', 'run', 'walk'];
  *
  * Sync-owned: always overwritten. Not user-editable.
  *
+ * FIT: `fit_ref` / `fit_fetched_at` (#154) are sync-owned too, but optional:
+ * overwritten when the payload sends them (together), untouched when it
+ * sends neither. See normalizeSyncedFit in workouts.js.
+ *
  * Every other column is never set by the action: `effort`, `notes`,
- * `status`, `template_id`, `copied_from` stay the user's, and `fit_ref` /
- * `fit_fetched_at` belong to #154's FIT step.
+ * `status`, `template_id`, `copied_from` stay the user's.
  */
 var SYNC_MERGED_FIELDS = [
   'date', 'time', 'type', 'sub_type', 'name',

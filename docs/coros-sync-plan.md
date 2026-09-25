@@ -433,6 +433,25 @@ prefer a JS FIT parser and avoid the Python dependency entirely. Verify the
 parser works at Phase 4, not later. *(This repo's `fit-files` skill bundles a
 working parser and is worth reading before choosing one.)*
 
+**As built (#154).** Phase 4 fetches and stores. It does not parse:
+`docs/data-architecture.md` §4 keeps FIT out of normalization, so the parser
+choice moves to whichever issue first reads a FIT.
+- The tool is `downloadActivityFitFiles` (`labelId`, `sportType`), which
+  returns the file as a base64 MCP resource. It is not
+  `queryActivityFitFileDownloadUrls`, so the unauthenticated S3 URL never
+  exists in the sync.
+- The bytes are checked (header, size, CRCs) and stored at
+  `Thrive COROS/fit/<YYYY>/<MM>/<activityId>.fit`. `fit_ref` is the Drive
+  file ID.
+- Every activity with a row gets its FIT, indoor included, oldest first.
+  Strength and unmapped codes get none.
+- The budget is the rolling 24-hour `SyncLog` sum above. `n_fit_fetched`
+  counts requests, failed ones included.
+- A FIT is requested once per run. After 3 failed requests the sync gives up
+  on it: `fit_fetched_at` is set and `fit_ref` stays blank.
+- The per-activity record lives in the activity's archive file.
+- Details are in `sync/README.md`, "FIT files".
+
 ---
 
 ## 5. Data model
@@ -657,10 +676,11 @@ run_nightly_sync():
             normalized = normalize(detail)
             merge_into_workouts(normalized)    # §8 — preserves user edits
 
-        if row.fit_ref is null and fit_budget > 0:
-            url = mcp.get_fit_url(a.id)
-            download and store blob in Drive; set fit_ref, fit_fetched_at
-            fit_budget -= 1
+        if row.fit_fetched_at is null and fit_budget > 0:   # oldest first
+            blob = mcp.downloadActivityFitFiles(a.id)  # never the URL tool
+            store blob in Drive; set fit_ref, fit_fetched_at
+            fit_budget -= 1                    # failed requests count too
+            # 3 failed requests -> fit_fetched_at set, fit_ref blank (#154)
 
     # --- daily health + evolab ---
     # range calls, one per tool, covering the window — not one per day.
@@ -924,7 +944,7 @@ than a wait — tracked as keel#360, a half-day spike gated on this epic.
 | Token rotation not persisted | Next run's refresh 4xx | Write the new refresh token to Drive *before* any other work — a crash mid-sync must not orphan it |
 | COROS API down / 5xx | Non-2xx from MCP | Retry with backoff, 3 attempts, then fail the run and log. Next night recovers via lookback. **See §2 — this is expected, not exceptional** |
 | Rate limited (429) | Status code | Honor `Retry-After` if present, else exponential backoff |
-| FIT cap hit | Local counter at 50 | Stop fetching FITs cleanly, log remaining backlog, continue the rest of the sync. Next night resumes |
+| FIT cap hit | `50 − sum(n_fit_fetched)` over the last 24 h of `SyncLog` reaches 0 (#154) | Stop fetching FITs cleanly, log remaining backlog, continue the rest of the sync. The next run resumes |
 | Unmapped sport type | Normalization raises | **Keep the raw payload, skip the sheet write for that row, log it.** Never let a normalization failure block raw ingestion |
 | Sheets row-index drift | `WorkoutRowMismatchError` | The frontend already guards this (#95). The sync must verify row identity by id before writing, not trust a cached index |
 | Ambiguous strength match | §7 matching | Not an error. Log and skip; raw payload is retained |

@@ -99,6 +99,13 @@ export function memoryDrive() {
       writes.push({ op: 'create', id, name });
       return id;
     },
+    async createBinary({ name, parentId, props, bytes, mimeType = 'application/octet-stream' }) {
+      if (drive.failBinary) throw drive.failBinary;
+      const id = `file-${++seq}`;
+      files.set(id, { id, name, props, parentId, mimeType, bytes: Buffer.from(bytes), modifiedTime: '2026-09-24T17:41:12.345Z' });
+      writes.push({ op: 'create', id, name });
+      return id;
+    },
     async readJson(id) {
       return JSON.parse(JSON.stringify(files.get(id).data));
     },
