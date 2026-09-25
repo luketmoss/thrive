@@ -9,7 +9,7 @@ export interface LabelColor {
 
 export const LABEL_COLORS: LabelColor[] = [
   { key: 'red',     name: 'Red',     light: { bg: '#fde8e8', text: '#c53030' }, dark: { bg: '#3b1515', text: '#fca5a5' } },
-  { key: 'orange',  name: 'Orange',  light: { bg: '#fff3e0', text: '#e65100' }, dark: { bg: '#2d1b06', text: '#ffb74d' } },
+  { key: 'orange',  name: 'Orange',  light: { bg: '#fff3e0', text: '#c2410c' }, dark: { bg: '#2d1b06', text: '#ffb74d' } },
   { key: 'amber',   name: 'Amber',   light: { bg: '#fef7e8', text: '#b45309' }, dark: { bg: '#2d2210', text: '#fbbf24' } },
   { key: 'green',   name: 'Green',   light: { bg: '#e8f5e9', text: '#2e7d32' }, dark: { bg: '#14291a', text: '#86efac' } },
   { key: 'teal',    name: 'Teal',    light: { bg: '#e0f2f1', text: '#00695c' }, dark: { bg: '#0a2623', text: '#80cbc4' } },
