@@ -77,7 +77,7 @@ export function displayOf(value: CellValue | undefined): string {
  * every write through the script API goes through `storeAsTyped`, as it would
  * in Sheets.
  */
-export function makeSheet(rows: CellValue[][], columnCount = 26) {
+export function makeSheet(rows: CellValue[][], columnCount = 27) {
   return {
     rows,
     getLastRow() {
@@ -514,7 +514,7 @@ export function callEntry<T = ApiWorkout[]>(
 }
 
 /**
- * A full 26-cell Workouts row, with only the named fields set.
+ * A full 27-cell Workouts row, with only the named fields set.
  *
  * Defaults mirror a hand-logged weight session: everything nullable empty.
  */
@@ -533,6 +533,7 @@ export function workoutRow(overrides: Record<string, CellValue> = {}): CellValue
     'moving_seconds', 'effort', 'distance_m', 'ascent_m', 'descent_m', 'avg_hr',
     'sub_type', 'source', 'source_activity_id', 'raw_ref', 'fit_ref',
     'fit_fetched_at', 'synced_at', 'started_at_utc', 'calories',
+    'estimated_seconds',
   ];
   return ORDER.map((f) => fields[f] ?? '');
 }

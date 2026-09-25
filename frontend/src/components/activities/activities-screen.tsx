@@ -26,7 +26,7 @@ import {
 import { LabelBadge } from '../shared/label-badge';
 import { ProvenanceMark } from '../shared/provenance-mark';
 import { provenanceMark } from '../../api/provenance';
-import { formatDuration } from '../../api/duration';
+import { formatDuration, formatEstimate } from '../../api/duration';
 import { formatDistance, formatElevation, metersToMiles, metersToFeet } from '../../api/units';
 
 /** Type-color map for inset box-shadow accent (light theme). */
@@ -191,12 +191,15 @@ export function ActivitiesScreen() {
             const dateLabel = formatPlannedDate(w.date, todayStr);
             const overdue = isOverdue(w.date, todayStr);
             const countLabel = exerciseCount > 0 ? pluralExercise(exerciseCount) : 'No exercises yet';
+            // #145: omitted entirely when nobody estimated it.
+            const estimate = formatEstimate(w.estimated_seconds);
             const ariaLabel = [
               w.name || w.type,
               overdue ? 'overdue' : 'planned',
               `${overdue ? 'was scheduled for' : 'scheduled for'} ${spokenDate(dateLabel)}`,
               countLabel,
-            ].join(', ');
+              formatEstimate(w.estimated_seconds, true),
+            ].filter(Boolean).join(', ');
 
             return (
               <button
@@ -214,6 +217,7 @@ export function ActivitiesScreen() {
                     <span class={`planned-date${dateLabel === 'Today' || dateLabel === 'Tomorrow' ? ' planned-date-imminent' : ''}`}>
                       {dateLabel}
                     </span>
+                    {estimate && ` · ${estimate}`}
                   </span>
                   {tags.length > 0 && (
                     <div class="workout-card-tags">

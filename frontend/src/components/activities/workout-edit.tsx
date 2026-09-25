@@ -113,7 +113,7 @@ function PlannedWorkoutEditor({ workoutId }: { workoutId: string }) {
     return orderA - orderB;
   });
 
-  const handleSave = async (name: string, exercises: PlannerExercise[], date: string) => {
+  const handleSave = async (name: string, exercises: PlannerExercise[], date: string, estimatedSeconds: string) => {
     if (!token) return;
     setSaving(true);
     try {
@@ -128,6 +128,10 @@ function PlannedWorkoutEditor({ workoutId }: { workoutId: string }) {
       //
       // Prescribed weights aren't shown in the planner, so they are carried
       // over from the existing sets or the re-create would wipe them (#118).
+      //
+      // The estimate (#145) comes back from the planner, pre-filled from the
+      // row, so it is forwarded like `date`: unchanged unless the user
+      // changed it, blank only if they cleared it.
       const builderExercises: BuilderExercise[] = exercises.map((ex) => ({
         exercise_id: ex.exercise_id,
         exercise_name: ex.exercise_name,
@@ -139,7 +143,7 @@ function PlannedWorkoutEditor({ workoutId }: { workoutId: string }) {
 
       await deleteWorkout(workoutId, token);
       await saveWorkoutForLater(
-        { type: 'weight', name, exercises: builderExercises, date },
+        { type: 'weight', name, exercises: builderExercises, date, estimated_seconds: estimatedSeconds },
         token,
       );
       navigate('/');
@@ -159,6 +163,7 @@ function PlannedWorkoutEditor({ workoutId }: { workoutId: string }) {
       initialName={workout.name}
       initialExercises={initialExercises}
       initialDate={workout.date}
+      initialEstimatedSeconds={workout.estimated_seconds}
       onSave={handleSave}
       onDiscard={handleDiscard}
       saving={saving}

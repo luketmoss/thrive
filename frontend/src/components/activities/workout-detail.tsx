@@ -5,7 +5,7 @@ import { useAuth } from '../../auth/auth-context';
 import { navigate } from '../../router/router';
 import { ExerciseDetail, groupSetsIntoExercises } from './exercise-detail';
 import { ExerciseCompactCard } from '../shared/exercise-compact-card';
-import { formatDuration } from '../../api/duration';
+import { formatDuration, formatEstimate } from '../../api/duration';
 import { formatDistance, formatElevation, formatHeartRate } from '../../api/units';
 import { provenanceDetail } from '../../api/provenance';
 import { WatchGlyph } from '../shared/provenance-mark';
@@ -162,6 +162,11 @@ export function WorkoutDetail({ workoutId }: Props) {
             ? <span class="type-badge badge-planned">Planned</span>
             : <span class={`type-badge badge-${workout.type}`}>{workout.type}</span>
           }
+          {/* #145: the plan's estimate, only while it is a plan. Once started,
+              elapsed time is the only duration shown. */}
+          {isPlanned && formatEstimate(workout.estimated_seconds) && (
+            <span class="detail-duration detail-estimate">{formatEstimate(workout.estimated_seconds)}</span>
+          )}
           {!isPlanned && <span class="detail-date">{workout.date}</span>}
           {!isPlanned && workout.time && <span class="detail-time">{workout.time}</span>}
           {!isPlanned && workout.elapsed_seconds && (

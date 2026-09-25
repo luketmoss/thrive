@@ -1,4 +1,4 @@
-// Read and write actions for the Workouts tab (A:Z).
+// Read and write actions for the Workouts tab (A:AA).
 
 var WORKOUTS_SHEET = 'Workouts';
 
@@ -108,6 +108,15 @@ function normalizeWorkoutFields(data) {
   if (out.effort !== undefined) validateEnum('effort', out.effort, EFFORTS);
   if (out.status !== undefined) validateEnum('status', out.status, WORKOUT_STATUSES);
   if (out.date !== undefined) validateDate('date', out.date);
+  // #145: seconds, never minutes, and never 0 — a plan nobody estimated is
+  // blank, not a zero-minute session.
+  if (out.estimated_seconds !== undefined && out.estimated_seconds !== '' &&
+      !/^[1-9]\d*$/.test(out.estimated_seconds)) {
+    throw new Error(
+      'estimated_seconds must be a positive whole number of seconds, or "" to clear, got "' +
+      out.estimated_seconds + '"'
+    );
+  }
 
   return out;
 }
@@ -149,7 +158,7 @@ function createWorkout(data) {
  *
  * Only the keys present in `changes` are touched (#130 AC3). This is the
  * difference between an update and an overwrite, and it is why the whole row
- * is read first: a 26-cell write built from `changes` alone would blank every
+ * is read first: a 27-cell write built from `changes` alone would blank every
  * column the caller happened not to mention. #122 is that bug, in the MCP
  * server, and it is worth not shipping twice.
  */

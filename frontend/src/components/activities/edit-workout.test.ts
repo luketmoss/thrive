@@ -22,7 +22,7 @@ const WORKOUT_WEIGHT: WorkoutWithRow = {
   ascent_m: '',
   descent_m: '',
   avg_hr: '',
-  sub_type: '', source: '', source_activity_id: '', raw_ref: '', fit_ref: '', fit_fetched_at: '', synced_at: '', started_at_utc: '', calories: '',
+  sub_type: '', source: '', source_activity_id: '', raw_ref: '', fit_ref: '', fit_fetched_at: '', synced_at: '', started_at_utc: '', calories: '', estimated_seconds: '',
   sheetRow: 2,
 };
 
@@ -44,7 +44,7 @@ const WORKOUT_STRETCH: WorkoutWithRow = {
   ascent_m: '',
   descent_m: '',
   avg_hr: '',
-  sub_type: '', source: '', source_activity_id: '', raw_ref: '', fit_ref: '', fit_fetched_at: '', synced_at: '', started_at_utc: '', calories: '',
+  sub_type: '', source: '', source_activity_id: '', raw_ref: '', fit_ref: '', fit_fetched_at: '', synced_at: '', started_at_utc: '', calories: '', estimated_seconds: '',
   sheetRow: 3,
 };
 

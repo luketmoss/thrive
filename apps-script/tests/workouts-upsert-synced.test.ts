@@ -15,6 +15,7 @@ const ORDER = [
   'moving_seconds', 'effort', 'distance_m', 'ascent_m', 'descent_m', 'avg_hr',
   'sub_type', 'source', 'source_activity_id', 'raw_ref', 'fit_ref',
   'fit_fetched_at', 'synced_at', 'started_at_utc', 'calories',
+  'estimated_seconds',
 ];
 const C = Object.fromEntries(ORDER.map((f, i) => [f, i])) as Record<string, number>;
 
@@ -59,7 +60,7 @@ describe('AC3: no row with that vendor ID appends one, like createWorkout', () =
     expect(res.data.id).toBe('w_a1b2c3d4');
     expect(rows).toHaveLength(1);
     const r = rows[0];
-    expect(r).toHaveLength(26);
+    expect(r).toHaveLength(27);
     expect(r[C.id]).toBe('w_a1b2c3d4');
     expect(r[C.created]).toBe(NOW.toISOString());
     expect(r[C.source]).toBe('coros');
@@ -157,7 +158,7 @@ describe('AC3: one matching row is updated, two are refused', () => {
     expect(second.res.data.status).toBe('updated');
     expect(second.rows).toHaveLength(1);
     const twice = display(second.rows[0]);
-    for (let i = 0; i < 26; i++) {
+    for (let i = 0; i < 27; i++) {
       if (i === C.synced_at) continue;
       expect(twice[i], ORDER[i]).toBe(once[i]);
     }

@@ -4,6 +4,7 @@ import { ExerciseCompactCard } from '../shared/exercise-compact-card';
 import { SectionPicker } from '../shared/section-picker';
 import type { ExerciseWithRow } from '../../api/types';
 import { toLocalDateStr } from '../activities/activities-helpers';
+import { estimateMinutesToSeconds, secondsToMinutesInput } from '../../api/duration';
 
 export interface PlannerExercise {
   exercise_id: string;
@@ -18,25 +19,35 @@ interface Props {
   initialExercises?: PlannerExercise[];
   /** Scheduled date (YYYY-MM-DD). Defaults to today for new plans. */
   initialDate?: string;
-  onSave: (name: string, exercises: PlannerExercise[], date: string) => Promise<void>;
+  /**
+   * The plan's estimate as stored, in seconds (#145). Blank for a new plan:
+   * there is no template default, so nothing is pre-filled.
+   */
+  initialEstimatedSeconds?: string;
+  /** `estimatedSeconds` is seconds for `Workouts!AA`, or '' when left blank. */
+  onSave: (name: string, exercises: PlannerExercise[], date: string, estimatedSeconds: string) => Promise<void>;
   onDiscard: () => void;
   saving: boolean;
 }
 
-export function WorkoutPlanner({ initialName = '', initialExercises = [], initialDate, onSave, onDiscard, saving }: Props) {
+export function WorkoutPlanner({ initialName = '', initialExercises = [], initialDate, initialEstimatedSeconds = '', onSave, onDiscard, saving }: Props) {
   const startName = initialName || 'Custom Workout';
   const startDate = initialDate || toLocalDateStr(new Date());
+  const startEstimate = secondsToMinutesInput(initialEstimatedSeconds);
   const [name, setName] = useState(startName);
   const [date, setDate] = useState(startDate);
+  // Whole minutes, as typed. Converted to seconds only on save.
+  const [estimate, setEstimate] = useState(startEstimate);
   const [exercises, setExercises] = useState<PlannerExercise[]>(initialExercises);
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [editingIndex, setEditingIndex] = useState(-1);
 
-  const initialSnapshot = useRef({ name: startName, date: startDate, exercises: JSON.stringify(initialExercises) });
+  const initialSnapshot = useRef({ name: startName, date: startDate, estimate: startEstimate, exercises: JSON.stringify(initialExercises) });
 
   const isDirty = () => {
     if (name !== initialSnapshot.current.name) return true;
     if (date !== initialSnapshot.current.date) return true;
+    if (estimate !== initialSnapshot.current.estimate) return true;
     if (JSON.stringify(exercises) !== initialSnapshot.current.exercises) return true;
     return false;
   };
@@ -90,7 +101,7 @@ export function WorkoutPlanner({ initialName = '', initialExercises = [], initia
 
   const handleSave = async () => {
     if (exercises.length === 0) return;
-    await onSave(name.trim() || 'Custom Workout', exercises, date);
+    await onSave(name.trim() || 'Custom Workout', exercises, date, estimateMinutesToSeconds(estimate));
   };
 
   return (
@@ -135,6 +146,21 @@ export function WorkoutPlanner({ initialName = '', initialExercises = [], initia
           type="date"
           value={date}
           onInput={(e) => setDate((e.target as HTMLInputElement).value)}
+        />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="planner-estimate">Estimated duration (minutes, optional)</label>
+        <input
+          id="planner-estimate"
+          class="form-input"
+          type="number"
+          inputMode="numeric"
+          min="1"
+          step="1"
+          placeholder="e.g. 45"
+          value={estimate}
+          onInput={(e) => setEstimate((e.target as HTMLInputElement).value)}
         />
       </div>
 

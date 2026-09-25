@@ -18,19 +18,19 @@ export class WorkoutRowMismatchError extends Error {
   }
 }
 
-// ── Workouts tab (A:Z) ──────────────────────────────────────────────
+// ── Workouts tab (A:AA) ──────────────────────────────────────────────
 
 export async function fetchWorkouts(token: string): Promise<WorkoutWithRow[]> {
   if (isDemo()) return [...DEMO_WORKOUTS];
 
   return withReauth(token, async (t) => {
-    const rows = await sheetsGet('Workouts!A2:Z', t);
+    const rows = await sheetsGet('Workouts!A2:AA', t);
     return rows.map((row, i) => rowToWorkout(row, i + 2));
   });
 }
 
 /**
- * Reads a `Workouts!A:Z` row. The Sheets API drops trailing empty cells, so a
+ * Reads a `Workouts!A:AA` row. The Sheets API drops trailing empty cells, so a
  * short row is normal and every missing cell reads as `''`.
  */
 export function rowToWorkout(row: string[], sheetRow: number): WorkoutWithRow {
@@ -63,6 +63,9 @@ export function rowToWorkout(row: string[], sheetRow: number): WorkoutWithRow {
     synced_at: row[23] || '',
     started_at_utc: row[24] || '',
     calories: row[25] || '',
+    // #145 AA. Blank on every row planned before it existed, and on every
+    // row nobody estimated.
+    estimated_seconds: row[26] || '',
     sheetRow,
   };
 }
@@ -80,7 +83,7 @@ export async function findWorkoutRow(workoutId: string, token: string): Promise<
 }
 
 /**
- * Builds a `Workouts!A:Z` row. Both the create and the edit path go through
+ * Builds a `Workouts!A:AA` row. Both the create and the edit path go through
  * here: `sheetsAppend`/`sheetsUpdate` write every value handed to them
  * regardless of the range, so two builders that had to agree — and didn't —
  * is exactly how #100 nearly resurrected a deleted column.
@@ -113,13 +116,14 @@ export function workoutToRow(w: Workout): (string | number)[] {
     w.synced_at,
     w.started_at_utc,
     w.calories,
+    w.estimated_seconds,
   ];
 }
 
 export async function createWorkout(
   data: { type: WorkoutType; name: string; template_id?: string; notes?: string; elapsed_seconds?: string; effort?: Effort | '';
     distance_m?: string; ascent_m?: string; descent_m?: string; avg_hr?: string;
-    copied_from?: string; date?: string; status?: string; sub_type?: string },
+    copied_from?: string; date?: string; status?: string; sub_type?: string; estimated_seconds?: string },
   token: string,
 ): Promise<Workout> {
   const id = `w_${crypto.randomUUID().slice(0, 8)}`;
@@ -160,11 +164,13 @@ export async function createWorkout(
     synced_at: '',
     started_at_utc: '',
     calories: '',
+    // #145: only a plan carries one, and only when the user typed it.
+    estimated_seconds: data.estimated_seconds || '',
   };
 
   if (!isDemo()) {
     await withReauth(token, (t) =>
-      sheetsAppend('Workouts!A:Z', [workoutToRow(workout)], t),
+      sheetsAppend('Workouts!A:AA', [workoutToRow(workout)], t),
     );
   }
 
@@ -206,7 +212,7 @@ export async function updateWorkout(
   if (isDemo()) return { ...workout, ...patch, id: workout.id, sheetRow };
 
   return withReauth(token, async (t) => {
-    const range = `Workouts!A${sheetRow}:Z${sheetRow}`;
+    const range = `Workouts!A${sheetRow}:AA${sheetRow}`;
     const current = await sheetsGet(range, t);
     if (!current[0] || (current[0][0] || '') !== workout.id) {
       throw new WorkoutRowMismatchError(workout.id);

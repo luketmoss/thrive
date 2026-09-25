@@ -136,11 +136,18 @@ export function buildSchedulePlan(specs, resolve) {
  * `resolveExercise(ref)` and `resolveTemplate(ref)` return a match or throw.
  */
 export function prepareSchedule(input, { library, resolveExercise, resolveTemplate }) {
-  const { date, name, type = 'weight', template, exercises, notes, status = 'planned' } = input;
+  const { date, name, type = 'weight', template, exercises, notes, status = 'planned', estimated_min } = input;
   const errors = [];
 
   const when = normalizeDate(date);
   if (!when) errors.push(`could not read "${date}" as a date — use YYYY-MM-DD, 'today', 'tomorrow' or '+3d'`);
+
+  let estimatedSeconds = '';
+  try {
+    estimatedSeconds = parseEstimateMinutes(estimated_min);
+  } catch (err) {
+    errors.push(err.message);
+  }
 
   let plan = [];
   let templateId = '';
@@ -193,6 +200,7 @@ export function prepareSchedule(input, { library, resolveExercise, resolveTempla
     template_id: templateId,
     notes,
     status: status === 'planned' ? 'planned' : '',
+    estimated_seconds: estimatedSeconds,
   });
   const rows = plan.flatMap((ex, i) => Array.from({ length: ex.sets }, (_, k) => ({
     workout_id: workout.id,
@@ -326,6 +334,24 @@ export function parseDurationMinutes(value) {
 }
 
 /**
+ * A planned workout's estimate (#145), in whole minutes as an agent passes
+ * them -> seconds for `estimated_seconds`, or '' for none. Strict for the same
+ * reason as parseDurationMinutes, and stricter about zero: a zero-minute plan
+ * is not a plan with an estimate, and the API refuses it too.
+ */
+export function parseEstimateMinutes(value) {
+  const v = String(value ?? '').trim();
+  if (v === '') return '';
+  if (!/^\d+$/.test(v) || Number(v) < 1) {
+    throw new Error(
+      `estimated_min must be whole minutes as a plain number of at least 1, e.g. 45 — got "${value}". ` +
+      'It is stored as seconds. Omit it, or pass "" on an update, for no estimate.',
+    );
+  }
+  return String(Number(v) * 60);
+}
+
+/**
  * Argument keys a tool's schema doesn't declare. The MCP SDK strips these
  * before the handler runs, so without this check a misnamed field is a silent
  * no-op (#117).
@@ -368,6 +394,8 @@ export function buildWorkout(data) {
     synced_at: '',
     started_at_utc: '',
     calories: '',
+    // #145: a plan's estimate, seconds. Only ever what the caller said.
+    estimated_seconds: data.estimated_seconds || '',
   };
   return workout;
 }

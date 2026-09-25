@@ -70,8 +70,9 @@ describe('templateRowValues', () => {
   });
 });
 
-// Issue #128 — the Workouts tab is A:Z: eleven original columns, six nullable
-// activity attributes (#101) and nine sync provenance columns.
+// Issue #128 — the Workouts tab was A:Z: eleven original columns, six nullable
+// activity attributes (#101) and nine sync provenance columns. #145 appends
+// AA, estimated_seconds.
 describe('workoutToRow', () => {
   const workout: Workout = {
     id: 'w_001',
@@ -100,12 +101,21 @@ describe('workoutToRow', () => {
     synced_at: '',
     started_at_utc: '',
     calories: '',
+    estimated_seconds: '',
   };
 
   // AC2: sheetsAppend writes every value it is handed regardless of the range,
   // so a short row would leave stale cells behind on an edit.
-  it('emits exactly twenty-six cells, spanning A:Z', () => {
-    expect(workoutToRow(workout)).toHaveLength(26);
+  it('emits exactly twenty-seven cells, spanning A:AA', () => {
+    expect(workoutToRow(workout)).toHaveLength(27);
+  });
+
+  // #145 AC1: the estimate is AA, after calories, and ships blank.
+  it('writes estimated_seconds at AA, and a blank one as an empty cell', () => {
+    expect(workoutToRow(workout)[26]).toBe('');
+    const row = workoutToRow({ ...workout, estimated_seconds: '2820' });
+    expect(row[26]).toBe('2820');
+    expect(row[7]).toBe('3720');                        // H elapsed untouched
   });
 
   it('keeps Created, copied_from and status at I, J, K so they do not shift', () => {
@@ -125,7 +135,7 @@ describe('workoutToRow', () => {
   // would write the string "undefined" into R:Z.
   it('writes the nine sync columns as empty strings, never undefined', () => {
     const row = workoutToRow(workout);
-    expect(row.slice(17)).toEqual(['', '', '', '', '', '', '', '', '']);
+    expect(row.slice(17, 26)).toEqual(['', '', '', '', '', '', '', '', '']);
     for (const cell of row) expect(cell).not.toBeUndefined();
   });
 

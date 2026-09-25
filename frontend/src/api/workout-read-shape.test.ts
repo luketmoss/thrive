@@ -45,9 +45,15 @@ describe('fetchWorkouts on a pre-migration row', () => {
     sheetsGet.mockResolvedValue([PRE_MIGRATION_ROW]);
   });
 
-  it('reads the tab as A:Z', async () => {
+  it('reads the tab as A:AA (#145)', async () => {
     await fetchWorkouts('token');
-    expect(sheetsGet).toHaveBeenCalledWith('Workouts!A2:Z', 't');
+    expect(sheetsGet).toHaveBeenCalledWith('Workouts!A2:AA', 't');
+  });
+
+  // #145 AC1: every row written before AA existed has no cell there.
+  it('reads a missing estimate as blank, never 0', async () => {
+    const [w] = await fetchWorkouts('token');
+    expect(w.estimated_seconds).toBe('');
   });
 
   it('reads all nine sync fields as empty strings', async () => {
@@ -87,5 +93,17 @@ describe('fetchWorkouts on a pre-migration row', () => {
     expect(w.source).toBe('coros');
     expect(w.started_at_utc).toBe('2026-03-15T07:00:00-06:00');
     expect(w.calories).toBe('612');
+    expect(w.estimated_seconds).toBe('');
+  });
+
+  it('reads AA as estimated_seconds (#145)', async () => {
+    sheetsGet.mockResolvedValue([[
+      ...PRE_MIGRATION_ROW,
+      '', '', '', '', '', '', '', '', '',
+      '2820',
+    ]]);
+    const [w] = await fetchWorkouts('token');
+    expect(w.estimated_seconds).toBe('2820');
+    expect(w.elapsed_seconds).toBe('3720');
   });
 });

@@ -6,7 +6,7 @@
 // every consumer arriving later (the COROS sync, the Journal) calls the API
 // instead of adding another copy.
 
-// Column indices for the Workouts sheet (0-based), A:Z after #128/#129.
+// Column indices for the Workouts sheet (0-based), A:AA after #128/#129/#145.
 var COL = {
   ID: 0,                  // A
   DATE: 1,                // B  local calendar date, YYYY-MM-DD
@@ -34,9 +34,10 @@ var COL = {
   SYNCED_AT: 23,          // X
   STARTED_AT_UTC: 24,     // Y
   CALORIES: 25,           // Z
+  ESTIMATED_SECONDS: 26,  // AA planned duration, seconds, typed per plan (#145)
 };
 
-var WORKOUT_COLUMN_COUNT = 26;
+var WORKOUT_COLUMN_COUNT = 27;
 
 /**
  * The field name for each column, in sheet order. The read and write mappers
@@ -49,6 +50,7 @@ var WORKOUT_FIELDS = [
   'moving_seconds', 'effort', 'distance_m', 'ascent_m', 'descent_m', 'avg_hr',
   'sub_type', 'source', 'source_activity_id', 'raw_ref', 'fit_ref',
   'fit_fetched_at', 'synced_at', 'started_at_utc', 'calories',
+  'estimated_seconds',
 ];
 
 var WORKOUT_TYPES = ['weight', 'stretch', 'bike', 'hike', 'run', 'walk'];
@@ -68,7 +70,8 @@ var WORKOUT_TYPES = ['weight', 'stretch', 'bike', 'hike', 'run', 'walk'];
  * sends neither. See normalizeSyncedFit in workouts.js.
  *
  * Every other column is never set by the action: `effort`, `notes`,
- * `status`, `template_id`, `copied_from` stay the user's.
+ * `status`, `template_id`, `copied_from` and `estimated_seconds` (#145) stay
+ * the user's.
  */
 var SYNC_MERGED_FIELDS = [
   'date', 'time', 'type', 'sub_type', 'name',

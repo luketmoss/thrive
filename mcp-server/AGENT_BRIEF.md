@@ -106,8 +106,12 @@ exactly what you'd give `thrive_schedule_workout` (template or exercises, with l
 Problems are reported per workout (`workouts[1] …`) and nothing is scheduled until the
 whole week is valid. Show me the week before you send it.
 
-**Repair** — `thrive_update_workout` (date, name, type, notes, duration, session
-effort, cardio attributes, planned/completed), `thrive_update_set`,
+**Estimates are mine to give.** `estimated_min` (whole minutes) records how long a planned
+session should take. Pass it only when I've said how long; never guess one from the
+exercise count. It is not the time a session took, which is `duration_min`.
+
+**Repair** — `thrive_update_workout` (date, name, type, notes, duration, estimated
+duration, session effort, cardio attributes, planned/completed), `thrive_update_set`,
 `thrive_update_sets`, `thrive_update_exercise`, `thrive_update_template`,
 `thrive_delete_workout`, `thrive_delete_exercise`.
 

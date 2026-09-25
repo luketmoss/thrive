@@ -1,4 +1,4 @@
-// #130 AC2 — reads return the full A:Z shape, with unset meaning '' and a
+// #130 AC2 — reads return the full A:AA shape (A:Z, plus #145's AA), with unset meaning '' and a
 // pre-#128 row reading identically to one written after it.
 
 import { describe, it, expect } from 'vitest';
@@ -14,21 +14,21 @@ const ACTIVITY_FIELDS = [
 ];
 
 /** Exactly what the Sheets API hands back for a row written before #128: it
- *  truncates at the last non-empty cell, so the row is 17 long, not 26. */
+ *  truncates at the last non-empty cell, so the row is 17 long, not 27. */
 const PRE_128_ROW = [
   'w_old', '2026-03-15', '07:00', 'weight', 'Upper Push A', 'tpl_001',
   'Felt strong', '3720', '2026-03-15T07:00:00.000Z', '', '',
   '', 'Hard', '', '', '', '',
 ];
 
-describe('AC2: the full 26-column shape', () => {
-  it('returns all 26 columns', () => {
+describe('AC2: the full 27-column shape', () => {
+  it('returns all 27 columns', () => {
     const { sandbox } = loadApi([workoutRow()]);
     const [w] = callDoGet(sandbox, { action: 'getWorkouts' }).data;
     for (const f of sandbox.WORKOUT_FIELDS) {
       expect(w, f).toHaveProperty(f);
     }
-    expect(sandbox.WORKOUT_FIELDS).toHaveLength(26);
+    expect(sandbox.WORKOUT_FIELDS).toHaveLength(27);
   });
 
   it('carries the sheet row so a caller can write back without re-scanning', () => {
@@ -98,7 +98,7 @@ describe('AC2: a pre-#128 row reads identically to a post-#128 one', () => {
     for (const f of SYNC_FIELDS) expect(w[f], f).toBe('');
   });
 
-  it('gives the same keys as a row written with all 26 cells', () => {
+  it('gives the same keys as a row written with all 27 cells', () => {
     const { sandbox: a } = loadApi([PRE_128_ROW]);
     const { sandbox: b } = loadApi([workoutRow({ id: 'w_old' })]);
     const before = callDoGet(a, { action: 'getWorkouts' }).data[0];

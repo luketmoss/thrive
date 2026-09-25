@@ -32,6 +32,17 @@ export function minutesToSeconds(minutes: string): string {
 }
 
 /**
+ * A planned workout's estimate (#145), whole minutes as typed → seconds for
+ * `Workouts!AA`. As `minutesToSeconds`, except that anything under one minute
+ * is `''`: a zero-minute plan is not a plan with an estimate, so `0` means
+ * nobody said rather than being stored as a number.
+ */
+export function estimateMinutesToSeconds(minutes: string): string {
+  const seconds = minutesToSeconds(minutes);
+  return seconds !== '' && Number(seconds) >= 60 ? seconds : '';
+}
+
+/**
  * Seconds → the string a minutes `<input>` should start with: the whole
  * minutes, or `''` when unset. Going through `String(secondsToMinutes(x))`
  * directly would put the literal `"null"` in the field for a garbled cell.
@@ -45,4 +56,14 @@ export function secondsToMinutesInput(elapsedSeconds: string): string {
 export function formatDuration(elapsedSeconds: string): string {
   const mins = secondsToMinutes(elapsedSeconds);
   return mins === null ? '' : `${mins} min`;
+}
+
+/**
+ * A planned workout's estimate (#145) for display: `"about 47 min"`, or `''`
+ * when there is none. `spoken` spells the unit out for an `aria-label`.
+ */
+export function formatEstimate(estimatedSeconds: string, spoken = false): string {
+  const mins = secondsToMinutes(estimatedSeconds);
+  if (mins === null || mins < 1) return '';
+  return spoken ? `about ${mins} minute${mins === 1 ? '' : 's'}` : `about ${mins} min`;
 }

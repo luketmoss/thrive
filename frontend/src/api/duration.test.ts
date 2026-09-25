@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { secondsToMinutes, minutesToSeconds, secondsToMinutesInput, formatDuration } from './duration';
+import { secondsToMinutes, minutesToSeconds, secondsToMinutesInput, formatDuration, estimateMinutesToSeconds, formatEstimate } from './duration';
 
 // Issue #101 — Workouts!H stores elapsed seconds; the UI reads and writes
 // whole minutes. These are the only two places that conversion happens.
@@ -78,5 +78,29 @@ describe('secondsToMinutesInput', () => {
   // Guards the literal string "null" reaching an input from a garbled cell.
   it('gives an empty field for a non-numeric cell, never the text "null"', () => {
     expect(secondsToMinutesInput('abc')).toBe('');
+  });
+});
+
+// #145: a planned workout's estimate. Same boundary, stricter about zero.
+describe('estimateMinutesToSeconds', () => {
+  it('converts whole minutes to seconds', () => {
+    expect(estimateMinutesToSeconds('47')).toBe('2820');
+    expect(estimateMinutesToSeconds('1')).toBe('60');
+  });
+
+  it.each(['', '  ', '0', '-5', 'abc'])('treats %j as no estimate, never 0', (typed) => {
+    expect(estimateMinutesToSeconds(typed)).toBe('');
+  });
+});
+
+describe('formatEstimate', () => {
+  it('reads "about 47 min", and spells it out when spoken', () => {
+    expect(formatEstimate('2820')).toBe('about 47 min');
+    expect(formatEstimate('2820', true)).toBe('about 47 minutes');
+    expect(formatEstimate('60', true)).toBe('about 1 minute');
+  });
+
+  it.each(['', '0', 'garbled'])('shows nothing for %j', (stored) => {
+    expect(formatEstimate(stored)).toBe('');
   });
 });

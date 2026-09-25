@@ -63,6 +63,11 @@ export interface Workout {
   synced_at: string;
   started_at_utc: string;
   calories: string;
+  // #145, column AA: how long a *planned* session is meant to take, in
+  // seconds, typed per plan. Nullable: '' means nobody estimated it — never a
+  // zero-minute session. Not time taken: that is `elapsed_seconds`, and
+  // starting a plan never copies one into the other.
+  estimated_seconds: string;
 }
 export interface WorkoutWithRow extends Workout { sheetRow: number; }
 
