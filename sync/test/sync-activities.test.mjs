@@ -45,12 +45,18 @@ async function archiveWith(files) {
  * with the incoming values, and reports `deleted` for a row that is gone
  * while `last_written` is set — the contract, not the merge.
  */
-function fakeApi({ rows = new Map(), fail = {} } = {}) {
+function fakeApi({ rows = new Map(), fail = {}, enrich = () => ({ status: 'unmatched', reason: 'no match', candidates: [] }) } = {}) {
   const calls = [];
   let seq = 0;
   return {
     calls,
     rows,
+    /** #155's contract, scripted: the matching itself is tested against the real source. */
+    async enrichWorkout(payload) {
+      calls.push({ action: 'enrichWorkout', ...payload });
+      if (fail[payload.source_activity_id]) throw fail[payload.source_activity_id];
+      return enrich(payload);
+    },
     async upsertSyncedWorkout(payload) {
       calls.push({ action: 'upsertSyncedWorkout', ...payload });
       if (fail[payload.source_activity_id]) throw fail[payload.source_activity_id];
@@ -83,20 +89,23 @@ test('AC1/AC3: the four mapped activities are upserted by vendor ID, with raw_re
   const out = await syncActivities({ archive, api, activityIds: allIds, syncedAt: SYNCED, log: (l) => lines.push(l) });
 
   assert.deepEqual(out.failures, []);
-  assert.deepEqual({ created: out.created, updated: out.updated, skipped: out.skipped }, { created: 4, updated: 0, skipped: 2 });
-  assert.equal(api.calls.length, 4);
-  for (const call of api.calls) {
+  assert.deepEqual({ created: out.created, updated: out.updated, skipped: out.skipped }, { created: 4, updated: 0, skipped: 1 });
+  const upserts = api.calls.filter((c) => c.action === 'upsertSyncedWorkout');
+  assert.equal(upserts.length, 4);
+  for (const call of upserts) {
     assert.equal(call.source, 'coros');
     assert.equal(call.raw_ref, ids[call.source_activity_id], 'raw_ref is the archive file ID');
     assert.equal(call.synced_at, SYNCED);
     assert.equal(call.last_written, null, 'a first sync has nothing to compare');
   }
-  const typed = Object.fromEntries(api.calls.map((c) => [c.incoming.name, `${c.incoming.type}/${c.incoming.sub_type}`]));
+  const typed = Object.fromEntries(upserts.map((c) => [c.incoming.name, `${c.incoming.type}/${c.incoming.sub_type}`]));
   assert.deepEqual(typed, {
     'Gravel Bike': 'bike/gravel', Walk: 'walk/outdoor', Hike: 'hike/', 'Indoor Cycling': 'bike/indoor',
   });
-  // AC1: strength is left to #155, and gym cardio (400) is logged with its ID and code.
-  assert.ok(lines.some((l) => l.includes(STRENGTH.activity_id) && /left to #155/.test(l)));
+  // Strength goes to enrichWorkout (#155), never upsertSyncedWorkout, and gym
+  // cardio (400) is logged with its ID and code.
+  assert.ok(!upserts.some((c) => c.source_activity_id === STRENGTH.activity_id));
+  assert.equal(api.calls.filter((c) => c.action === 'enrichWorkout').length, 1);
   assert.ok(lines.some((l) => l.includes(GYM.activity_id) && /sport code 400 is not mapped/.test(l)));
 });
 
@@ -227,4 +236,91 @@ test('#156 AC2: a re-sync that changes nothing counts as unchanged, not updated'
   const second = await syncActivities({ archive, api, activityIds: ids, syncedAt: '2026-09-25T15:17:02.000Z', log: (l) => lines.push(l) });
   assert.deepEqual({ created: second.created, updated: second.updated, unchanged: second.unchanged }, { created: 0, updated: 1, unchanged: 1 });
   assert.ok(lines.some((l) => l.includes(HIKE.activity_id) && /: unchanged w_/.test(l)));
+});
+
+// --- strength enrichment (#155) -----------------------------------------------
+
+const enrichCalls = (api) => api.calls.filter((c) => c.action === 'enrichWorkout');
+
+test('#155 AC1: a strength session is offered to enrichWorkout with its local start and four fields, never a row', async () => {
+  const { archive, ids } = await archiveWith([STRENGTH]);
+  const api = fakeApi();
+  await syncActivities({ archive, api, activityIds: [STRENGTH.activity_id], syncedAt: SYNCED, log: () => {} });
+  const [call] = enrichCalls(api);
+  assert.deepEqual(call.activity, {
+    date: '2026-09-23', time: '07:30',
+    elapsed_seconds: '124', moving_seconds: '124', avg_hr: '88', calories: '21',
+  });
+  assert.equal(call.source_activity_id, STRENGTH.activity_id);
+  assert.equal(call.raw_ref, ids[STRENGTH.activity_id]);
+  assert.equal(call.synced_at, SYNCED);
+  assert.equal(call.last_written, null);
+  assert.equal(api.calls.filter((c) => c.action === 'upsertSyncedWorkout').length, 0, 'no row of its own');
+});
+
+test('#155 AC1/AC3: an enrichment is counted, recorded in normalized, and a re-run with nothing new writes nothing', async () => {
+  const { drive, archive } = await archiveWith([STRENGTH]);
+  const written = { workout_id: 'w_lift0001', filled: ['moving_seconds', 'avg_hr', 'calories'] };
+  let linked = false;
+  const api = fakeApi({
+    enrich: (p) => {
+      if (!linked) {
+        linked = true;
+        return { status: 'enriched', id: 'w_lift0001', linked: true, filled: written.filled, written };
+      }
+      assert.deepEqual(p.last_written, written, 'the next run sends what the archive recorded');
+      return { status: 'unchanged', id: 'w_lift0001', linked: false, filled: [], written };
+    },
+  });
+  const lines = [];
+  const first = await syncActivities({ archive, api, activityIds: [STRENGTH.activity_id], syncedAt: SYNCED, log: (l) => lines.push(l) });
+  assert.deepEqual({ enriched: first.enriched, unmatched: first.unmatched, failures: first.failures, notes: first.notes },
+    { enriched: 1, unmatched: 0, failures: [], notes: [] });
+  assert.deepEqual(fileOf(drive, STRENGTH.activity_id).data.normalized, { enrichment: written });
+  assert.equal(fileOf(drive, STRENGTH.activity_id).data.payload, STRENGTH.payload, 'the payload is never touched');
+  assert.ok(lines.some((l) => /enriched w_lift0001 \(linked; filled moving_seconds, avg_hr, calories\)/.test(l)));
+
+  drive.writes.length = 0;
+  const second = await syncActivities({ archive, api, activityIds: [STRENGTH.activity_id], syncedAt: '2026-09-25T15:17:02.000Z', log: () => {} });
+  assert.deepEqual({ enriched: second.enriched, unchanged: second.unchanged }, { enriched: 0, unchanged: 1 });
+  assert.deepEqual(drive.writes, [], 'normalized unchanged, so nothing written to Drive');
+});
+
+test('#155 AC2: no match or an ambiguous one is a note, not a failure, and nothing is recorded', async () => {
+  const { drive, archive } = await archiveWith([STRENGTH]);
+  for (const [result, expected] of [
+    [{ status: 'unmatched', reason: 'no match', candidates: [] },
+      `strength ${STRENGTH.activity_id} on 2026-09-23 at 07:30: no match; no workout enriched`],
+    [{ status: 'unmatched', reason: 'ambiguous', candidates: [{ id: 'w_a', time: '07:31' }, { id: 'w_b', time: '' }] },
+      `strength ${STRENGTH.activity_id} on 2026-09-23 at 07:30: ambiguous (candidates: w_a at 07:31, w_b with no time); no workout enriched`],
+  ]) {
+    drive.writes.length = 0;
+    const api = fakeApi({ enrich: () => result });
+    const out = await syncActivities({ archive, api, activityIds: [STRENGTH.activity_id], syncedAt: SYNCED, log: () => {} });
+    assert.deepEqual(out.failures, []);
+    assert.equal(out.unmatched, 1);
+    assert.equal(out.enriched, 0);
+    assert.deepEqual(out.notes, [expected]);
+    assert.deepEqual(drive.writes, [], 'nothing recorded, so a later run can still match');
+    assert.equal(fileOf(drive, STRENGTH.activity_id).data.normalized, null);
+  }
+});
+
+test('#155: a strength payload with an unrecognized line fails that activity, like any other', async () => {
+  const broken = { ...STRENGTH, payload: STRENGTH.payload.replace('Average Heart Rate: 88 bpm', 'Average Heart Rate: 88') };
+  const { archive } = await archiveWith([broken]);
+  const api = fakeApi();
+  const out = await syncActivities({ archive, api, activityIds: [STRENGTH.activity_id], syncedAt: SYNCED, log: () => {} });
+  assert.equal(out.failures.length, 1);
+  assert.match(out.failures[0], /Average Heart Rate: 88/);
+  assert.equal(enrichCalls(api).length, 0);
+});
+
+test('#155: an API refusal fails the strength session alone', async () => {
+  const { archive } = await archiveWith([STRENGTH, GRAVEL]);
+  const api = fakeApi({ fail: { [STRENGTH.activity_id]: new Error('enrichWorkout: 2 Workouts rows are enriched from activity') } });
+  const out = await syncActivities({ archive, api, activityIds: [STRENGTH.activity_id, GRAVEL.activity_id], syncedAt: SYNCED, log: () => {} });
+  assert.equal(out.failures.length, 1);
+  assert.match(out.failures[0], /2 Workouts rows are enriched/);
+  assert.equal(out.created, 1);
 });

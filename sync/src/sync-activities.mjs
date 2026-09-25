@@ -10,12 +10,40 @@
 // Before its merge, each activity passes the run's FIT step (#154,
 // src/fit.mjs), whose `fit_ref` / `fit_fetched_at` ride on the same upsert as
 // sync-owned fields.
+//
+// A strength session (402) never gets a row of its own (#155, sync plan §7).
+// It goes to `enrichWorkout`, which fills blanks on the matching hand-logged
+// `weight` row, and gets no FIT. No match, or an ambiguous one, is a note for
+// SyncLog, not a failure. The archive's `normalized` for it is
+// `{ enrichment: { workout_id, filled } }`, the fields it has filled there,
+// which are never written again.
 
 import { ActivityFormatError, ACTIVITY_FIELDS, normalizeActivity } from './normalize-activity.mjs';
 import { redact } from './redact.mjs';
 import { classifySport } from './sport-codes.mjs';
 
 export const SOURCE = 'coros';
+
+/** Parsed like any activity: `Workout Time`, `Total Time`, HR, calories. `Sets:` is unused. */
+const STRENGTH_MAPPING = { type: 'weight', sub_type: '' };
+
+/** What a strength session offers the hand-logged row: its local start, and the fields it may fill. */
+export const strengthActivity = (incoming) => ({
+  date: incoming.date,
+  time: incoming.time,
+  elapsed_seconds: incoming.elapsed_seconds,
+  moving_seconds: incoming.moving_seconds,
+  avg_hr: incoming.avg_hr,
+  calories: incoming.calories,
+});
+
+/** The SyncLog note for a session left unmatched: private detail, never the public log. */
+export function unmatchedNote(id, activity, result) {
+  const who = result.candidates?.length
+    ? ` (candidates: ${result.candidates.map((c) => `${c.id}${c.time ? ` at ${c.time}` : ' with no time'}`).join(', ')})`
+    : '';
+  return `strength ${id} on ${activity.date} at ${activity.time}: ${result.reason}${who}; no workout enriched`;
+}
 
 /**
  * `normalized` as the archive holds it: every merged field as the sheet holds
@@ -31,13 +59,18 @@ const sameNormalized = (a, b) =>
  * @param {{ archive: object, api: object, activityIds: string[], syncedAt: string,
  *   log?: (line: string) => void }} opts
  * @returns {Promise<{ created: number, updated: number, unchanged: number, deleted: number,
- *   skipped: number, failures: string[] }>}  `failures` fails the run; a skip or a deleted
- *   row does not. `updated` counts rows whose merged fields changed (SyncLog's
- *   `n_updated`, #156); the API answers `updated` for every existing row, because
+ *   skipped: number, enriched: number, unmatched: number, notes: string[], failures: string[] }>}
+ *   `failures` fails the run; a skip, a deleted row or an unmatched strength
+ *   session (`notes`) does not. `enriched` counts hand-logged rows written to
+ *   (SyncLog's `n_enriched`); an enriched row with nothing new is `unchanged`.
+ *   `updated` counts rows whose merged fields changed (SyncLog's `n_updated`, #156); the API answers `updated` for every existing row, because
  *   `synced_at` always moves, so a row that held what it already held is `unchanged`.
  */
 export async function syncActivities({ archive, api, activityIds, syncedAt, fit = null, log = console.log }) {
-  const out = { created: 0, updated: 0, unchanged: 0, deleted: 0, skipped: 0, failures: [] };
+  const out = {
+    created: 0, updated: 0, unchanged: 0, deleted: 0, skipped: 0,
+    enriched: 0, unmatched: 0, notes: [], failures: [],
+  };
   const fail = (message) => {
     out.failures.push(message);
     log(`  FAILED ${message}`);
@@ -56,35 +89,36 @@ export async function syncActivities({ archive, api, activityIds, syncedAt, fit 
       const code = file.data?.args?.sportType ?? file.data?.list_entry?.sportType;
 
       const sport = classifySport(code);
-      if (sport.kind === 'strength') {
-        out.skipped += 1;
-        log(`  activity ${id}: strength (${code}), archived and left to #155`);
-        continue;
-      }
       if (sport.kind === 'unmapped') {
         out.skipped += 1;
         log(`  activity ${id}: sport code ${code} is not mapped, so no row was written (archived)`);
         continue;
       }
 
+      const strength = sport.kind === 'strength';
       let incoming;
       try {
-        incoming = normalizeActivity(file.data, sport);
+        incoming = normalizeActivity(file.data, strength ? STRENGTH_MAPPING : sport);
       } catch (err) {
         if (!(err instanceof ActivityFormatError)) throw err;
         // Names the activity and the line, so the parser fix is obvious.
         fail(`activity ${id}: not written, unrecognized format in getActivityDetail: ${err.message}`);
         continue;
       }
-      ready.push({ id, file, incoming });
+      ready.push({ id, file, incoming, strength });
     } catch (err) {
       fail(`activity ${id}: ${redact(err.message || String(err))}`);
     }
   }
   ready.sort((a, b) => a.file.data.list_entry.startTimestamp - b.file.data.list_entry.startTimestamp);
 
-  for (const { id, file, incoming } of ready) {
+  for (const { id, file, incoming, strength } of ready) {
     try {
+      if (strength) {
+        await enrich({ id, file, incoming });
+        continue;
+      }
+
       // The FIT first, so a new activity's row is created with its fit_ref in
       // one write, and every later run re-sends what the archive records.
       const fitFields = fit
@@ -123,4 +157,37 @@ export async function syncActivities({ archive, api, activityIds, syncedAt, fit 
     }
   }
   return out;
+
+  /** One strength session: enrich its hand-logged row, or note why not. */
+  async function enrich({ id, file, incoming }) {
+    const activity = strengthActivity(incoming);
+    const lastWritten = file.data.normalized?.enrichment ?? null;
+    const result = await api.enrichWorkout({
+      source_activity_id: id,
+      activity,
+      last_written: lastWritten,
+      raw_ref: file.fileId,
+      synced_at: syncedAt,
+    });
+
+    if (result.status === 'unmatched') {
+      out.unmatched += 1;
+      const note = unmatchedNote(id, activity, result);
+      out.notes.push(note);
+      log(`  activity ${id} (strength): ${note}`);
+      return;
+    }
+    if (result.status === 'enriched') {
+      out.enriched += 1;
+      const how = result.linked ? 'linked' : 'already linked';
+      const what = result.filled.length ? `filled ${result.filled.join(', ')}` : 'nothing blank to fill';
+      log(`  activity ${id} (strength): enriched ${result.id} (${how}; ${what})`);
+    } else {
+      out.unchanged += 1;
+      log(`  activity ${id} (strength): unchanged ${result.id}, nothing left to fill`);
+    }
+    if (JSON.stringify(result.written) !== JSON.stringify(lastWritten)) {
+      await archive.writeNormalized(file.fileId, { enrichment: result.written });
+    }
+  }
 }

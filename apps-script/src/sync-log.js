@@ -1,4 +1,4 @@
-// SyncLog tab (A:M) — one row per COROS sync run (#156, sync plan §5).
+// SyncLog tab (A:N) — one row per COROS sync run (#156, sync plan §5; N is #155).
 // Appended by the sync through appendSyncLog; read newest first by getSyncLog,
 // which the dead-man's switch (sync/deadman.mjs) and #157's Settings line use.
 //
@@ -8,7 +8,7 @@ var SYNC_LOG_SHEET = 'SyncLog';
 
 var ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 
-/** A SyncLog row -> an object with all 13 fields, '' where unset. */
+/** A SyncLog row -> an object with all 14 fields, '' where unset. */
 function rowToSyncLog(row) {
   var entry = {};
   for (var i = 0; i < SYNC_LOG_FIELDS.length; i++) {
@@ -96,7 +96,10 @@ function getSyncLog(options) {
   var sheet = getSheet(SYNC_LOG_SHEET);
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
-  var rows = sheet.getRange(2, 1, lastRow - 1, SYNC_LOG_COLUMN_COUNT).getDisplayValues();
+  // A tab migrated before #155 has no column N; read what it has, and the
+  // missing fields come back ''.
+  var width = Math.min(SYNC_LOG_COLUMN_COUNT, sheet.getLastColumn());
+  var rows = sheet.getRange(2, 1, lastRow - 1, width).getDisplayValues();
   var entries = [];
   for (var i = 0; i < rows.length; i++) {
     var entry = rowToSyncLog(rows[i]);
