@@ -3158,18 +3158,16 @@ input, select, textarea {
 }
 
 /* ===== Last Synced (#157) ===== */
+/* Centred, like every other row: .settings-row stacks and centres its label
+   and detail. */
 .sync-status {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
   gap: 2px;
-  text-align: right;
+  text-align: center;
   font-size: var(--text-sm);
   color: var(--color-text-secondary);
-}
-
-.sync-status-row > span:first-child {
-  flex: none;
 }
 
 .sync-tone-danger {
