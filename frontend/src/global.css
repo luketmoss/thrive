@@ -69,6 +69,9 @@
   --color-primary-focus-ring: rgba(255, 107, 53, 0.25);
   --color-danger: #d32f2f;
   --color-danger-hover: #b71c1c;
+  /* Danger as small TEXT on the page background (#157). --color-danger is
+     4.44:1 on --color-bg and fails AA; this measures 5.86:1. */
+  --color-danger-text: #b71c1c;
   --color-success: #2e7d32;
   --color-success-light: #e8f5e9;
   --color-warning: #a05d00;
@@ -104,6 +107,7 @@
   --color-primary-focus-ring: rgba(255, 107, 53, 0.3);
   --color-danger: #ef5350;
   --color-danger-hover: #e53935;
+  --color-danger-text: #ef5350;
   --color-success: #66bb6a;
   --color-success-light: #1b5e20;
   --color-warning: #ffb74d;
@@ -3123,4 +3127,55 @@ input, select, textarea {
 [data-theme="dark"] .workout-effort-hard {
   background: #241313;
   color: #ef9a9a;
+}
+
+/* ===== Sync Provenance (#157) ===== */
+/* A quiet mark, not a second chip (sync plan §8): no background, no border,
+   sentence weight. --color-text-secondary rather than the meta line's muted
+   grey, which measures 2.9:1 on the card. inline-flex makes the glyph and the
+   word one unit, so a wrap at 375px breaks before the glyph, never inside. */
+.provenance-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  vertical-align: bottom;
+}
+
+.provenance-glyph {
+  flex: none;
+}
+
+.detail-provenance {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  margin-top: var(--space-xs);
+}
+
+/* ===== Last Synced (#157) ===== */
+/* Centred, like every other row: .settings-row stacks and centres its label
+   and detail. */
+.sync-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.sync-tone-danger {
+  color: var(--color-danger-text);
+  font-weight: 600;
+}
+
+.sync-tone-warning {
+  color: var(--color-warning);
+  font-weight: 600;
 }

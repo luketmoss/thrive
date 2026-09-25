@@ -24,6 +24,8 @@ import {
   workoutCardAriaLabel,
 } from './activities-helpers';
 import { LabelBadge } from '../shared/label-badge';
+import { ProvenanceMark } from '../shared/provenance-mark';
+import { provenanceMark } from '../../api/provenance';
 import { formatDuration } from '../../api/duration';
 import { formatDistance, formatElevation, metersToMiles, metersToFeet } from '../../api/units';
 
@@ -268,6 +270,10 @@ export function ActivitiesScreen() {
                           {formatDuration(w.elapsed_seconds)}
                           {w.elapsed_seconds && exerciseCount > 0 ? ' · ' : ''}
                           {exerciseCount > 0 ? `${exerciseCount} exercise${exerciseCount !== 1 ? 's' : ''}` : ''}
+                          {/* #157: the separator sits outside the mark, so a
+                              375px wrap breaks before the glyph, never inside. */}
+                          {provenanceMark(w) && (w.elapsed_seconds || exerciseCount > 0) ? ' · ' : ''}
+                          <ProvenanceMark workout={w} />
                         </span>
                         {tags.length > 0 && (
                           <div class="workout-card-tags">

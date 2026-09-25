@@ -1,5 +1,6 @@
 import type { WorkoutWithRow, SetWithRow, ExerciseWithRow, Effort } from '../../api/types';
 import { formatDuration } from '../../api/duration';
+import { provenanceSpeech } from '../../api/provenance';
 
 // ── Equipment / non-muscle tags to exclude from card pills ───────────
 export const EQUIPMENT_TAGS = new Set(['BB', 'DB', 'FT', 'Warmup']);
@@ -453,7 +454,8 @@ export function effortForSpeech(effort: Effort | ''): string {
  *
  * Effort is appended last so the opening of the label stays stable — screen
  * reader users scan these by their first words, and an unrated card's label is
- * unchanged from what it has always been.
+ * unchanged from what it has always been. Provenance (#157) goes after it for
+ * the same reason: a manual card, most of them, keeps exactly its old label.
  */
 export function workoutCardAriaLabel(
   w: WorkoutWithRow,
@@ -466,5 +468,6 @@ export function workoutCardAriaLabel(
     formatDuration(w.elapsed_seconds),
     exerciseCount > 0 ? pluralExercise(exerciseCount) : '',
     effortForSpeech(w.effort),
+    provenanceSpeech(w),
   ].filter(Boolean).join(', ');
 }

@@ -1,5 +1,6 @@
 import { signal, computed } from '@preact/signals';
 import type { ExerciseWithRow, LabelWithRow, Template, WorkoutWithRow, SetWithRow, WorkoutType } from '../api/types';
+import type { SyncLogEntryWithRow } from '../api/sync-log-api';
 import { sortPlannedWorkouts } from '../components/activities/activities-helpers';
 
 // Core data signals
@@ -86,6 +87,16 @@ export function labelUsageCount(labelName: string): number {
     ex.tags.split(',').map(t => t.trim()).filter(Boolean).includes(labelName),
   ).length;
 }
+
+// COROS SyncLog (#157), read when Settings opens rather than on initial load:
+// only the "Last synced" line uses it. Not to be confused with the offline
+// write queue below, which is the app's own "sync".
+export type SyncLogState =
+  | { state: 'idle' }
+  | { state: 'loading' }
+  | { state: 'error' }
+  | { state: 'loaded'; entries: SyncLogEntryWithRow[] };
+export const syncLog = signal<SyncLogState>({ state: 'idle' });
 
 // Offline sync queue state
 export const pendingSyncCount = signal(0);

@@ -2,6 +2,7 @@
 
 import type { ExerciseWithRow, LabelWithRow, TemplateRowWithRow, Template, WorkoutWithRow, SetWithRow } from './types';
 import { colorKeyFromName } from './label-colors';
+import type { SyncLogEntryWithRow } from './sync-log-api';
 
 let _isDemo: boolean | null = null;
 
@@ -110,9 +111,15 @@ export const DEMO_WORKOUTS: WorkoutWithRow[] = [
   { id: 'w_demo007', date: '2025-01-10', time: '15:00', type: 'walk', name: 'Neighborhood Walk', template_id: '', notes: '', elapsed_seconds: '2700', created: '2025-01-10T15:00:00.000Z', copied_from: '', status: '', moving_seconds: '', effort: '', distance_m: '3219', ascent_m: '46', descent_m: '', avg_hr: '', sub_type: 'outdoor', source: '', source_activity_id: '', raw_ref: '', fit_ref: '', fit_fetched_at: '', synced_at: '', started_at_utc: '', calories: '', sheetRow: 8 },
   // #172: one COROS-synced hike with a duration and distance that the edit
   // form's whole minutes and tenths of a mile cannot represent, so demo mode
-  // can show that an untouched measure survives a save exactly. Deliberately
-  // minimal; the full synced/enriched fixture set is #157.
+  // can show that an untouched measure survives a save exactly. It is also
+  // #157's Synced example.
   { id: 'w_demo008', date: '2025-01-09', time: '08:10', type: 'hike', name: 'Ridge Trail', template_id: '', notes: '', elapsed_seconds: '5143', created: '2025-01-09T16:00:00.000Z', copied_from: '', status: '', moving_seconds: '4620', effort: '', distance_m: '6512', ascent_m: '293', descent_m: '288', avg_hr: '131', sub_type: 'outdoor', source: 'coros', source_activity_id: 'demo_act_001', raw_ref: 'demo/raw/demo_act_001.json', fit_ref: '', fit_fetched_at: '', synced_at: '2025-01-09T18:00:00.000Z', started_at_utc: '2025-01-09T16:10:00.000Z', calories: '540', sheetRow: 9 },
+  // #157: the Enriched example (sync plan §7). Logged by hand, so `source`
+  // stays blank, then matched to a COROS strength activity, which filled only
+  // the blanks: moving time, heart rate and calories. The hand-timed elapsed
+  // and the effort are the user's and were left alone. `synced_at` is when it
+  // was enriched.
+  { id: 'w_demo009', date: '2025-01-08', time: '06:45', type: 'weight', name: 'Leg Day', template_id: '', notes: '', elapsed_seconds: '3947', created: '2025-01-08T13:45:00.000Z', copied_from: '', status: '', moving_seconds: '3611', effort: 'Medium', distance_m: '', ascent_m: '', descent_m: '', avg_hr: '112', sub_type: '', source: '', source_activity_id: 'demo_act_002', raw_ref: 'demo/raw/demo_act_002.json', fit_ref: '', fit_fetched_at: '', synced_at: '2025-01-08T15:02:37.000Z', started_at_utc: '', calories: '387', sheetRow: 10 },
   { id: 'w_demo005', date: workoutDate, time: '06:30', type: 'weight', name: 'Upper Pull A', template_id: 'tpl_demo002', notes: '', elapsed_seconds: '', created: '2025-01-14T06:30:00.000Z', copied_from: '', status: 'planned', moving_seconds: '', effort: '', distance_m: '', ascent_m: '', descent_m: '', avg_hr: '', sub_type: '', source: '', source_activity_id: '', raw_ref: '', fit_ref: '', fit_fetched_at: '', synced_at: '', started_at_utc: '', calories: '', sheetRow: 6 },
 ];
 
@@ -172,4 +179,67 @@ export const DEMO_SETS: SetWithRow[] = [
   { workout_id: 'w_demo005', exercise_id: 'ex_demo013', exercise_name: 'Crunch FT', section: 'burnout', exercise_order: 6, set_number: 1, planned_reps: '15', weight: '', reps: '', effort: '', sheetRow: 42 },
   { workout_id: 'w_demo005', exercise_id: 'ex_demo013', exercise_name: 'Crunch FT', section: 'burnout', exercise_order: 6, set_number: 2, planned_reps: '15', weight: '', reps: '', effort: '', sheetRow: 43 },
   { workout_id: 'w_demo005', exercise_id: 'ex_demo013', exercise_name: 'Crunch FT', section: 'burnout', exercise_order: 6, set_number: 3, planned_reps: '15', weight: '', reps: '', effort: '', sheetRow: 44 },
+
+  // ── Enriched workout (w_demo009 — Leg Day, Jan 8, #157) ──
+  { workout_id: 'w_demo009', exercise_id: 'ex_demo004', exercise_name: 'Squat BB', section: 'primary', exercise_order: 1, set_number: 1, planned_reps: '5', weight: '225', reps: '5', effort: 'Medium', sheetRow: 45 },
+  { workout_id: 'w_demo009', exercise_id: 'ex_demo004', exercise_name: 'Squat BB', section: 'primary', exercise_order: 1, set_number: 2, planned_reps: '5', weight: '225', reps: '5', effort: 'Medium', sheetRow: 46 },
+  { workout_id: 'w_demo009', exercise_id: 'ex_demo004', exercise_name: 'Squat BB', section: 'primary', exercise_order: 1, set_number: 3, planned_reps: '5', weight: '225', reps: '4', effort: 'Hard', sheetRow: 47 },
+  { workout_id: 'w_demo009', exercise_id: 'ex_demo006', exercise_name: 'RDL BB', section: 'SS1', exercise_order: 2, set_number: 1, planned_reps: '8', weight: '185', reps: '8', effort: 'Medium', sheetRow: 48 },
+  { workout_id: 'w_demo009', exercise_id: 'ex_demo006', exercise_name: 'RDL BB', section: 'SS1', exercise_order: 2, set_number: 2, planned_reps: '8', weight: '185', reps: '7', effort: 'Hard', sheetRow: 49 },
+  { workout_id: 'w_demo009', exercise_id: 'ex_demo005', exercise_name: 'Bulgarian Split Squats DB', section: 'SS1', exercise_order: 3, set_number: 1, planned_reps: '10', weight: '40', reps: '10', effort: 'Medium', sheetRow: 50 },
+  { workout_id: 'w_demo009', exercise_id: 'ex_demo005', exercise_name: 'Bulgarian Split Squats DB', section: 'SS1', exercise_order: 3, set_number: 2, planned_reps: '10', weight: '40', reps: '9', effort: 'Hard', sheetRow: 51 },
 ];
+
+// ── Demo SyncLog (#157) ──────────────────────────────────────────────
+//
+// Generated relative to `now`, since the Settings line shows an age: fixed
+// dates would read as stale forever. `?demo=true&synclog=<scenario>` previews
+// each state; the default is a healthy log.
+
+export type DemoSyncScenario = 'ok' | 'stale' | 'failed' | 'partial' | 'empty' | 'error';
+
+const DEMO_SYNC_SCENARIOS: Record<Exclude<DemoSyncScenario, 'error'>, { hoursAgo: number; status: 'ok' | 'partial' | 'failed' }[]> = {
+  // Newest first. Gaps echo the real 4/5/6/9 h schedule; minutes are odd on
+  // purpose so nothing reads as a rounded fixture.
+  ok:      [{ hoursAgo: 2.37, status: 'ok' }, { hoursAgo: 7.37, status: 'ok' }, { hoursAgo: 11.37, status: 'ok' }, { hoursAgo: 20.37, status: 'ok' }],
+  // The job stopped: nothing for 19 h, past the watchdog's 16.
+  stale:   [{ hoursAgo: 19.62, status: 'ok' }, { hoursAgo: 25.62, status: 'ok' }, { hoursAgo: 29.62, status: 'ok' }],
+  // Two failed runs, so the "last successful" line has something to say.
+  failed:  [{ hoursAgo: 1.21, status: 'failed' }, { hoursAgo: 6.21, status: 'failed' }, { hoursAgo: 10.21, status: 'ok' }],
+  partial: [{ hoursAgo: 3.08, status: 'partial' }, { hoursAgo: 8.08, status: 'ok' }],
+  empty:   [],
+};
+
+export function demoSyncScenario(): DemoSyncScenario {
+  const raw = new URLSearchParams(window.location.search).get('synclog');
+  return raw && (raw === 'error' || raw in DEMO_SYNC_SCENARIOS) ? raw as DemoSyncScenario : 'ok';
+}
+
+/** The demo SyncLog as the sheet would hold it, oldest row first. */
+export function demoSyncLog(now: Date, scenario: DemoSyncScenario = demoSyncScenario()): SyncLogEntryWithRow[] {
+  if (scenario === 'error') throw new Error('Demo: SyncLog unreadable (synclog=error)');
+  const runs = DEMO_SYNC_SCENARIOS[scenario];
+  return runs.slice().reverse().map((run, i) => {
+    const started = new Date(now.getTime() - Math.round(run.hoursAgo * 3600_000));
+    const finished = new Date(started.getTime() + 47_318);
+    const failed = run.status === 'failed';
+    return {
+      run_id: `schedule-demo${1000 + i}-1`,
+      started_at: started.toISOString(),
+      finished_at: finished.toISOString(),
+      // D - 10 to D + 1, as the sync's window is (#156).
+      window_start: new Date(started.getTime() - 10 * 86400_000).toISOString().slice(0, 10),
+      window_end: new Date(started.getTime() + 86400_000).toISOString().slice(0, 10),
+      n_seen: failed ? '0' : '3',
+      n_new: '0',
+      n_updated: '0',
+      n_enriched: '0',
+      n_fit_fetched: failed ? '0' : '1',
+      n_errors: run.status === 'ok' ? '0' : '1',
+      status: run.status,
+      error_detail: failed ? 'CorosApiError: demo failure (never shown in the app)' : run.status === 'partial' ? 'demo_act_003: demo failure (never shown in the app)' : '',
+      notes: '',
+      sheetRow: i + 2,
+    };
+  });
+}

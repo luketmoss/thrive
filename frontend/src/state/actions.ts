@@ -1,4 +1,5 @@
-import { exercises, labels, templates, workouts, sets, loading, activeWorkoutId, activeWorkoutSets, activeWarmupExercises, isEditMode, showToast } from './store';
+import { exercises, labels, templates, workouts, sets, loading, activeWorkoutId, activeWorkoutSets, activeWarmupExercises, isEditMode, showToast, syncLog } from './store';
+import { fetchSyncLog } from '../api/sync-log-api';
 import { enqueueSet, initPendingCount } from '../api/sync-queue';
 import { isDemo } from '../api/demo-data';
 import { fetchExercises, createExercise, updateExercise as updateExerciseApi, deleteExercise as deleteExerciseApi } from '../api/exercises-api';
@@ -1153,5 +1154,25 @@ export async function removeLabel(
     if (isReauthFailure(err)) throw err;
     showToast('Failed to delete label', 'error');
     throw err;
+  }
+}
+
+// ── COROS SyncLog (#157) ─────────────────────────────────────────────
+
+/**
+ * Read SyncLog for the Settings screen's "Last synced" line. A revisit keeps
+ * the rows on screen while it re-reads, so the line does not flicker back to
+ * "Checking…". A failure is shown in place, never as a toast: this line is a
+ * monitor, and its failure is itself the thing to show.
+ */
+export async function loadSyncLog(token: string): Promise<void> {
+  if (syncLog.value.state !== 'loaded') syncLog.value = { state: 'loading' };
+  try {
+    const entries = await fetchSyncLog(token);
+    syncLog.value = { state: 'loaded', entries };
+  } catch (err) {
+    if (isReauthFailure(err)) return; // auth-provider handles this
+    console.error('Failed to read SyncLog:', err);
+    syncLog.value = { state: 'error' };
   }
 }
