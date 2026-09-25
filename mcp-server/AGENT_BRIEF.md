@@ -12,9 +12,19 @@ workouts, extend my exercise library, and repair bad data.
 
 ## The data model
 
-- **Workouts** — one per session. Four types: `weight`, `stretch`, `bike`, `hike`.
-  Only `weight` workouts have exercises and sets. A workout is either **completed**
-  (logged) or **planned** (scheduled for a future date, sets not yet filled in).
+- **Workouts** — one per session. Six types: `weight`, `stretch`, `bike`, `hike`, `run`,
+  `walk`. Cardio types may carry a venue, shown as `[bike:gravel]`: `mountain`, `gravel`,
+  `indoor`, `outdoor`. Only `weight` workouts have exercises and sets. A workout is either
+  **completed** (logged) or **planned** (scheduled for a future date, sets not yet
+  filled in).
+- **Where a workout came from.** My COROS watch syncs automatically. A workout is
+  **synced** (created by the sync: distance, HR, calories and times come from the watch),
+  **enriched** (I logged it by hand and the sync filled in HR, calories and duration from
+  the matching watch session), or **hand-logged**. `thrive_get_workout` says which.
+- **Daily health** — one row per day from the watch: resting HR, HRV, steps, calories,
+  sleep and its stages, sleep score, bed and wake time, VO2max, recovery, training load.
+- **Daily summary** — one row per day rolled up from the workouts and daily health.
+  Derived: if it disagrees with the workouts, the workouts are right.
 - **Sets** — one row per set: planned reps, weight (lbs), actual reps, effort.
 - **Exercises** — my library, tagged by movement pattern, muscle and equipment.
 - **Templates** — reusable workout blueprints that expand into planned sets.
@@ -49,10 +59,29 @@ signal — several `Easy` sessions on a lift mean it's time to add load.
 ## Tools
 
 **Read and analyze** — `thrive_list_workouts`, `thrive_get_workout`,
-`thrive_list_exercises`, `thrive_list_templates`, `thrive_exercise_history`.
+`thrive_list_exercises`, `thrive_list_templates`, `thrive_exercise_history`,
+`thrive_daily_health`, `thrive_daily_summary`.
 
 `thrive_exercise_history` is the one for progression decisions: it returns every logged
 set of a lift over time, newest first, with effort.
+
+`thrive_daily_health` is the one for recovery and readiness; `thrive_daily_summary` for
+volume and load across days. Both take `date_from` / `date_to` and default to the last 7
+days. Read these before you trust a number from them:
+
+- **Blank means unknown, never zero.** `—` in a line, or a measurement missing from a
+  workout, means nobody recorded it. A day with no row is listed as such. Don't treat
+  either as a rest day, zero sleep or zero steps.
+- **Sleep is filed under the day I woke up**, and its total **includes** time awake.
+- **VO2max and recovery are snapshots**, written only on the day each sync ran, so they
+  are blank on most days by design.
+- **Steps include indoor walks and runs.** Never add steps to activity distance or
+  calories; that counts the same walking twice.
+- **Summary distance and ascent are outdoor only.** On a day with an indoor ride or
+  treadmill session they will not equal the sum of that day's workout distances.
+- **You cannot read the raw watch data.** The full COROS payload and FIT file (max HR,
+  cadence, laps, GPS) are archived, and `thrive_get_workout` says so, but this server
+  cannot open them. Work from what the tools return.
 
 **Schedule and author** — `thrive_schedule_workout` (creates a `planned` workout from a
 template or an explicit exercise list), `thrive_create_exercise`,
@@ -111,6 +140,8 @@ tool doesn't recognise is rejected by name — read the error rather than retryi
 ## Things worth doing
 
 - "How has my bench progressed since June, and should I add weight?"
+- "How have I slept this week, and does it line up with my hard sessions?"
+- "How many outdoor miles did I ride in September?"
 - "Look at my last month and tell me which lifts have stalled."
 - "Schedule next week from my rotation, starting Monday."
 - "I bought a dip station — what could I add, and to which template?"

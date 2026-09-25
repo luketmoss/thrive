@@ -135,19 +135,11 @@ function summarizeEffort(workouts) {
  * seen a payload, and #165 replaced it with sync plan §5's.
  */
 function getDailyHealth() {
-  var spreadsheet = getSpreadsheet();
-  var sheet = spreadsheet.getSheetByName(DAILY_HEALTH_SHEET);
-  // The sync brings this tab. Until then every day is legitimately
-  // health-less, which is not the same as a day of zeros (#131 AC2).
-  if (!sheet) return {};
-
-  var rows = getAllRows(sheet);
+  // readDailyHealthRows (daily-health.js) returns [] while the tab does not
+  // exist: every day is then legitimately health-less (#131 AC2).
+  var rows = readDailyHealthRows();
   var byDate = {};
-  for (var i = 0; i < rows.length; i++) {
-    var health = rowToDailyHealth(rows[i]);
-    if (!health.date) continue;
-    byDate[health.date] = health;
-  }
+  for (var i = 0; i < rows.length; i++) byDate[rows[i].date] = rows[i];
   return byDate;
 }
 

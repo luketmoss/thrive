@@ -149,6 +149,10 @@ export const fetchSets = (workoutId) => apiGet('getSets', { workout_id: workoutI
 export const fetchExercises = () => apiGet('getExercises');
 /** Templates arrive grouped, exercises ordered, templates sorted by name. */
 export const fetchTemplates = () => apiGet('getTemplates');
+/** DailyHealth rows in an inclusive date range, oldest first (#158). */
+export const fetchDailyHealth = (from, to) => apiGet('getDailyHealth', { from, to });
+/** DailySummary rows in an inclusive date range. Derived, never authoritative. */
+export const fetchDailySummary = (from, to) => apiGet('getDailySummary', { from, to });
 
 // --- writes ---------------------------------------------------------
 

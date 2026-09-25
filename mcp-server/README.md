@@ -95,8 +95,10 @@ The server exits at startup with a message naming whichever is missing.
 
 | Tool | Description |
 |------|-------------|
-| `thrive_list_workouts` | Workouts newest first; filter by date range, type, planned/completed, name |
-| `thrive_get_workout` | One workout in full — every exercise, every set |
+| `thrive_list_workouts` | Workouts newest first; filter by date range, type, planned/completed, name, and source (`synced` / `enriched` / `manual`). Shows the venue (`[bike:gravel]`) and marks COROS-synced and COROS-enriched rows |
+| `thrive_get_workout` | One workout in full — every exercise, every set, its activity measurements, and its provenance: synced, enriched or hand-logged, with the COROS activity id, last sync, and whether the raw payload and FIT file are archived |
+| `thrive_daily_health` | `DailyHealth` for a date range (default: the 7 days ending today): resting HR, HRV, steps, calories, sleep and its stages, sleep score, bed and wake time, VO2max, recovery, training load |
+| `thrive_daily_summary` | `DailySummary` for a date range: the per-day rollup of activities and health. Derived, and its distance and ascent are **outdoor only** |
 | `thrive_list_exercises` | The exercise library, filterable by search text or tag |
 | `thrive_list_templates` | Templates with their exercises, sections, sets and reps |
 | `thrive_exercise_history` | Progression for one exercise over time — the tool for deciding whether to add weight or volume |
@@ -174,6 +176,23 @@ measures each write and splits one that would not fit:
 - **`thrive_schedule_week`** — set rows are chunked the same way, then the workouts are
   created. A failure partway says what already landed.
 
+### Synced data, and what an agent cannot see (#158)
+
+The COROS sync (`sync/`) writes activities into `Workouts` and a row per day into
+`DailyHealth`, and rebuilds `DailySummary` from both. Every one of those values is
+nullable: a blank means COROS did not say, never zero, and the tools print it as `—` or
+leave the line out rather than as `0`. Two caveats are repeated in the tool descriptions
+because they are easy to get wrong in analysis:
+
+- `DailySummary`'s distance and ascent are **outdoor only**, so they will not equal the sum
+  of a day's activity distances on any day with an indoor session.
+- `DailyHealth.steps` includes steps taken during indoor walks and runs. It is context,
+  never an addend to activity distance or calories (`docs/data-architecture.md` §5).
+
+The raw COROS payload (`raw_ref`) and FIT file (`fit_ref`) live in the sync bot's Drive.
+This server has no Drive credential, so it reports that they exist, not what is in them
+(#179).
+
 ## Dates
 
 Relative dates (`today`, `tomorrow`, `+3d`) resolve against the **machine's** local
@@ -187,8 +206,9 @@ cd mcp-server
 npm test
 ```
 
-No network and no credentials: `domain.test.js` covers the pure planning and
-narration helpers, `set-updates.test.js` drives the set-update logic against a fake API
+No network and no credentials: `domain.test.js` and `daily.test.js` cover the pure
+planning and narration helpers, `tools.test.js` drives the real tools over MCP stdio
+against a fake API on localhost, `set-updates.test.js` drives the set-update logic against a fake API
 that resolves the way the real one does, and `api.test.js` stubs `fetch`. Row mapping
 and resolution are tested where they live, in `apps-script/tests/`.
 
@@ -200,4 +220,5 @@ and resolution are tested where they live, in `apps-script/tests/`.
 | `api.js` | The Apps Script API client — the only file that talks to the outside world |
 | `set-updates.js` | Set corrections: local checks, error remapping, chunking |
 | `domain.js` | Pure logic — schedule planning, narration, unit and date helpers |
+| `daily.js` | Pure narration for the per-day tools — daily health and daily summary |
 | `*.test.js` | Tests for each of the above |
