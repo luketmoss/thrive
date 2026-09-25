@@ -1,4 +1,4 @@
-// DailySummary tab (A:R) — one row per local calendar day, rolled up from
+// DailySummary tab (A:T) — one row per local calendar day, rolled up from
 // Workouts and DailyHealth.
 //
 // **Derived, never authoritative.** Every row is rebuildable at any time from
@@ -41,6 +41,7 @@ function isOutdoorCardio(workout) {
 
 /**
  * Sums one nullable numeric field, counting how many values contributed.
+ * Distance, ascent and (#181) the two durations all go through here.
  *
  * `{ total, withData, of }` is deliberately the same shape as `sumCovered` in
  * activities-helpers.ts rather than a parallel notion: a sum over nullable
@@ -62,14 +63,20 @@ function sumCovered(workouts, field) {
   return { total: total, withData: withData, of: workouts.length };
 }
 
-/** A plain sum over every activity, blank-safe. Used for the duration totals. */
-function sumField(workouts, field) {
-  var total = 0;
-  for (var i = 0; i < workouts.length; i++) {
-    var n = parseInt(workouts[i][field], 10);
-    if (!isNaN(n)) total += n;
-  }
-  return total;
+/**
+ * A covered total as its cells: `{ total, withData }`, both blank when there
+ * was nothing to cover, and the total blank when nothing contributed (#181).
+ *
+ * The sum of no values is not 0. Writing it as 0 claims "moved for no time"
+ * on a day where the truth is "nobody recorded it", the one thing
+ * blank-never-zero forbids.
+ */
+function coveredCells(covered) {
+  if (!covered.of) return { total: '', withData: '' };
+  return {
+    total: covered.withData ? String(covered.total) : '',
+    withData: String(covered.withData),
+  };
 }
 
 /**
@@ -158,13 +165,18 @@ function buildDaySummary(date, workouts, health, computedAt) {
   var distance = sumCovered(outdoorCardio, 'distance_m');
   var ascent = sumCovered(outdoorCardio, 'ascent_m');
   var effort = summarizeEffort(workouts);
+  // Duration applies to every activity type, so its `of` is every activity
+  // that day (B), not the outdoor cardio (H) that qualifies distance and
+  // ascent (#181).
+  var moving = coveredCells(sumCovered(workouts, 'moving_seconds'));
+  var elapsed = coveredCells(sumCovered(workouts, 'elapsed_seconds'));
 
   return {
     date: date,
     activity_count: workouts.length ? String(workouts.length) : '',
     activity_types: describeActivityTypes(workouts),
-    total_moving_s: workouts.length ? String(sumField(workouts, 'moving_seconds')) : '',
-    total_elapsed_s: workouts.length ? String(sumField(workouts, 'elapsed_seconds')) : '',
+    total_moving_s: moving.total,
+    total_elapsed_s: elapsed.total,
     // Outdoor only. This will NOT equal the sum of the day's activity
     // distances on any day with an indoor session — correct, and surprising,
     // so it is documented wherever this is displayed.
@@ -182,6 +194,9 @@ function buildDaySummary(date, workouts, health, computedAt) {
     sleep_total_s: health_ ? health_.sleep_total_s : '',
     training_load: health_ ? health_.training_load : '',
     computed_at: computedAt,
+    // Appended after R, not beside D and E, so no column almanac reads moves.
+    moving_withdata: moving.withData,
+    elapsed_withdata: elapsed.withData,
   };
 }
 

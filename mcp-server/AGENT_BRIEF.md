@@ -79,8 +79,9 @@ days. Read these before you trust a number from them:
   calories; that counts the same walking twice.
 - **Summary distance and ascent are outdoor only.** On a day with an indoor ride or
   treadmill session they will not equal the sum of that day's workout distances.
-- **Summary moving and elapsed time are plain sums.** A session with no recorded moving
-  time adds nothing, so "moving 0 min" beside a logged session means unrecorded.
+- **Summary totals say what they cover.** "moving 42 min (recorded on 1 of 2 sessions)"
+  totals one session; the other's moving time is unknown, not zero. Duration counts every
+  session that day; distance and ascent count outdoor cardio only.
 - **You cannot read the raw watch data.** The full COROS payload and FIT file (max HR,
   cadence, laps, GPS) are archived, and `thrive_get_workout` says so, but this server
   cannot open them. Work from what the tools return.

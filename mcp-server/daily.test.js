@@ -32,7 +32,7 @@ const SUMMARY_FIELDS = [
   'date', 'activity_count', 'activity_types', 'total_moving_s', 'total_elapsed_s',
   'total_distance_m', 'total_ascent_m', 'cardio_activity_count', 'distance_withdata',
   'ascent_withdata', 'max_effort', 'effort_counts', 'steps', 'resting_hr', 'hrv',
-  'sleep_total_s', 'training_load', 'computed_at',
+  'sleep_total_s', 'training_load', 'computed_at', 'moving_withdata', 'elapsed_withdata',
 ];
 const summary = (o) => ({ ...Object.fromEntries(SUMMARY_FIELDS.map((f) => [f, o[f] ?? ''])), sheetRow: 2 });
 
@@ -126,12 +126,14 @@ test('a summary day carries outdoor totals with their coverage', () => {
     date: '2026-09-16', activity_count: '3', activity_types: 'bike:gravel,bike:indoor,weight',
     total_moving_s: '5100', total_elapsed_s: '9000', total_distance_m: '19956', total_ascent_m: '457',
     cardio_activity_count: '1', distance_withdata: '1', ascent_withdata: '1',
+    moving_withdata: '2', elapsed_withdata: '3',
     max_effort: 'Hard', effort_counts: 'Hard:1,Medium:2', steps: '8400', resting_hr: '57',
     hrv: '41', sleep_total_s: '26100', training_load: '7',
   }));
   assert.equal(
     line,
-    '- 2026-09-16: 3 activities (bike:gravel, bike:indoor, weight) · moving 85 min · elapsed 150 min · ' +
+    '- 2026-09-16: 3 activities (bike:gravel, bike:indoor, weight) · ' +
+      'moving 85 min (recorded on 2 of 3 sessions) · elapsed 150 min (recorded on 3 of 3 sessions) · ' +
       'outdoor distance 12.4 mi (measured on 1 of 1 outdoor cardio session) · ' +
       'outdoor ascent 1,500 ft (measured on 1 of 1 outdoor cardio session) · ' +
       'max effort Hard (Hard 1, Medium 2) · steps 8,400 · resting HR 57 bpm · HRV 41 ms · ' +
@@ -148,6 +150,41 @@ test('unmeasured outdoor sessions read as unknown, not as zero miles', () => {
   assert.match(line, /outdoor distance — \(measured on 0 of 2 outdoor cardio sessions\)/);
   assert.match(line, /outdoor ascent — \(measured on 0 of 2/);
   assert.match(line, /max effort —/);
+});
+
+// #181: duration carries coverage against every session that day.
+test('a duration nobody recorded reads as unknown with its coverage, never 0 min', () => {
+  const line = describeSummaryDay(summary({
+    date: '2026-09-20', activity_count: '2', activity_types: 'stretch,weight',
+    total_moving_s: '', total_elapsed_s: '', moving_withdata: '0', elapsed_withdata: '0',
+  }));
+  assert.match(line, /· moving — \(recorded on 0 of 2 sessions\) · elapsed — \(recorded on 0 of 2 sessions\)/);
+  assert.doesNotMatch(line, /0 min/);
+});
+
+test('a partly recorded duration says how many sessions it covers', () => {
+  const line = describeSummaryDay(summary({
+    date: '2026-09-21', activity_count: '2', activity_types: 'bike,weight',
+    total_moving_s: '2520', total_elapsed_s: '3000', moving_withdata: '1', elapsed_withdata: '1',
+  }));
+  assert.match(line, /· moving 42 min \(recorded on 1 of 2 sessions\) · elapsed 50 min \(recorded on 1 of 2 sessions\)/);
+});
+
+test('a one-session day is singular, and a recorded 0 is still 0 min', () => {
+  const line = describeSummaryDay(summary({
+    date: '2026-09-22', activity_count: '1', activity_types: 'bike',
+    total_moving_s: '0', moving_withdata: '1', total_elapsed_s: '600', elapsed_withdata: '1',
+  }));
+  assert.match(line, /· moving 0 min \(recorded on 1 of 1 session\) · elapsed 10 min \(recorded on 1 of 1 session\)/);
+});
+
+// A row written before #181's rebuild has no S or T: the count is unknown.
+test('a row without the coverage columns shows ? rather than guessing', () => {
+  const line = describeSummaryDay(summary({
+    date: '2026-09-23', activity_count: '2', activity_types: 'bike,weight',
+    total_moving_s: '2520', total_elapsed_s: '3000',
+  }));
+  assert.match(line, /· moving 42 min \(recorded on \? of 2 sessions\) · elapsed 50 min \(recorded on \? of 2 sessions\)/);
 });
 
 test('an indoor-only day and a health-only day say what they are', () => {
@@ -168,7 +205,8 @@ test('the summary range states the outdoor-only and derived caveats, oldest firs
   assert.match(text, /OUTDOOR ONLY/);
   assert.match(text, /will not equal the sum of that day's activity distances/);
   assert.match(text, /the workouts are right/);
-  assert.match(text, /"moving 0 min" on a day with activities means unrecorded/);
+  assert.match(text, /"recorded on 1 of 2" means the total covers one session and the other is unknown, not zero/);
+  assert.doesNotMatch(text, /plain sums/);
   assert.match(text, /Oldest row computed at 2026-09-17T09:00:00Z\./);
   assert.match(text, /No DailySummary row for 1 day: 2026-09-18\./);
   assert.ok(text.indexOf('- 2026-09-16') < text.indexOf('- 2026-09-17'));

@@ -154,6 +154,11 @@ second implementation of "catch up" to drift out of step with the one for
 distance is a machine estimate of ground never covered. They will not equal
 the sum of a day's activity distances on any day with an indoor session.
 
+`total_moving_s` and `total_elapsed_s` are **blank when no activity that day
+recorded them**, never `0` (#181). `moving_withdata` (S) and `elapsed_withdata`
+(T) count the activities that did, out of `activity_count` (B), every activity
+of every type. They are appended after `computed_at` so no earlier column moved.
+
 ### DailyHealth (#165, #158)
 
 | Action | Parameters / payload |
