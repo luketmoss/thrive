@@ -42,7 +42,7 @@ describe('AC1: authentication', () => {
 
   // The key lives in script properties, never in source — this repo is public.
   it('errors rather than opening the door when no key is configured', () => {
-    const sandbox = loadSources(['types.js', 'utils.js', 'workouts.js', 'main.js'], {
+    const sandbox = loadSources(['types.js', 'utils.js', 'workouts.js', 'auth.js', 'main.js'], {
       ContentService: makeContentService(),
       PropertiesService: makePropertiesService({ SPREADSHEET_ID: 'sheet-id' }),
     });
@@ -66,8 +66,9 @@ describe('AC1: authentication', () => {
       expect(text, file).not.toMatch(/(apiKey|api_key)\s*=\s*['"][^'"]+['"]/i);
     }
 
-    const main = readFileSync(path.join(dir, 'main.js'), 'utf8');
-    expect(main).toMatch(/PropertiesService\.getScriptProperties\(\)\.getProperty\('API_KEY'\)/);
+    // validateApiKey moved to auth.js with the token check (#144).
+    const auth = readFileSync(path.join(dir, 'auth.js'), 'utf8');
+    expect(auth).toMatch(/PropertiesService\.getScriptProperties\(\)\.getProperty\('API_KEY'\)/);
   });
 });
 

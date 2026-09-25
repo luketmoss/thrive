@@ -1,9 +1,22 @@
 // Entry point for the Thrive Apps Script web app.
 //
-// Everything goes through doGet, including writes: Apps Script answers POST
-// with a redirect, which breaks anonymous callers. Writes pass their data as
-// a URL-encoded `payload` query parameter, which is why that parameter has a
-// length ceiling — see MAX_PAYLOAD_CHARS in types.js.
+// doGet and doPost share one handler over `e.parameter` (#144). Apps Script
+// fills `e.parameter` from a form-encoded POST body exactly as it does from a
+// query string, so a POST behaves identically to a GET.
+//
+// Key callers — the MCP server and the COROS sync — use GET for everything,
+// writes included: Apps Script answers every call with a 302, and a client
+// that does not follow a POST's redirect never sees the answer. Writes pass
+// their data as a URL-encoded `payload` query parameter, which is why that
+// parameter has a length ceiling — see MAX_PAYLOAD_CHARS in types.js.
+//
+// almanac, a browser app, POSTs form-encoded with `access_token` instead of
+// `key`, so a live token never sits in a URL. `fetch` follows the 302 as a
+// GET, and both hops carry `Access-Control-Allow-Origin: *`. A token caller
+// may run only the reads in TOKEN_READ_ACTIONS — see auth.js.
+//
+// Token examples (POST body, or a query string from a terminal):
+//   action=getWorkouts&access_token=...&from=2026-09-21&to=2026-09-27
 //
 // Read examples:
 //   ?action=getWorkouts&key=...
@@ -51,18 +64,16 @@ function envelope(result) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-function fail(message) {
-  return { success: false, error: message };
-}
-
 /**
- * The key lives in script properties, never in source — this file is in a
- * public repo. An unconfigured key is an error, not an open door.
+ * A failure. `code` is optional and additive (#144): `token_invalid`,
+ * `token_forbidden`, `token_unavailable` or `read_only`, so a caller can tell
+ * the cases apart without matching English. Without one, the envelope is
+ * exactly what it was before #144.
  */
-function validateApiKey(key) {
-  var expected = PropertiesService.getScriptProperties().getProperty('API_KEY');
-  if (!expected) throw new Error('API_KEY not configured in script properties');
-  return key === expected;
+function fail(message, code) {
+  var result = { success: false, error: message };
+  if (code) result.code = code;
+  return result;
 }
 
 /**
@@ -95,328 +106,357 @@ function parsePayload(raw) {
 }
 
 function doGet(e) {
+  return handleRequest(e);
+}
+
+function doPost(e) {
+  return handleRequest(e);
+}
+
+/**
+ * Authenticate, authorize, dispatch — for GET and POST alike.
+ *
+ * The caller is resolved before anything else, so an unknown action still
+ * needs a credential. A token caller is checked against the read allow-list
+ * before dispatch, so a refused action never runs.
+ */
+function handleRequest(e) {
   var params = (e && e.parameter) || {};
   var action = params.action;
   var result;
 
   try {
-    if (!validateApiKey(params.key)) {
-      return envelope(fail('Invalid or missing API key'));
+    var caller = resolveCaller(params);
+    if (caller.refusal) return envelope(caller.refusal);
+
+    if (caller.mode === 'token' && !isTokenReadAction(action)) {
+      return envelope(fail(
+        'Read-only caller: action "' + (action || '') + '" is not permitted', 'read_only'));
     }
 
-    var payload = parsePayload(params.payload);
-
-    switch (action) {
-      // --- Reads ---
-      case 'getWorkouts':
-        result = {
-          success: true,
-          data: getWorkouts({
-            date: params.date,
-            from: params.from,
-            to: params.to,
-            type: params.type,
-            status: params.status,
-          }),
-        };
-        break;
-
-      case 'getWorkout':
-        if (!params.id) {
-          result = fail('id parameter required');
-          break;
-        }
-        var found = getWorkout(params.id);
-        result = found
-          ? { success: true, data: found }
-          : fail('Workout "' + params.id + '" not found');
-        break;
-
-      // A date with nothing planned returns [], not an error.
-      case 'getPlannedWorkouts':
-        result = { success: true, data: getPlannedWorkouts(params.date) };
-        break;
-
-      // --- Writes ---
-      case 'createWorkout':
-        if (!payload.data) {
-          result = fail('payload.data field required');
-          break;
-        }
-        result = { success: true, data: createWorkout(payload.data) };
-        break;
-
-      case 'updateWorkout':
-        if (!payload.id) {
-          result = fail('payload.id field required');
-          break;
-        }
-        if (!payload.changes) {
-          result = fail('payload.changes field required');
-          break;
-        }
-        result = { success: true, data: updateWorkout(payload.id, payload.changes) };
-        break;
-
-      // Dry-run lives in the caller: the MCP tool previews from reads, and only
-      // calls this once confirmed (#132 AC6).
-      case 'deleteWorkout':
-        if (!payload.id) {
-          result = fail('payload.id field required');
-          break;
-        }
-        result = { success: true, data: deleteWorkout(payload.id) };
-        break;
-
-      // --- Exercises (#134) ---
-      case 'getExercises':
-        result = { success: true, data: getExercises({ tag: params.tag }) };
-        break;
-
-      case 'getExercise':
-        if (!params.ref) {
-          result = fail('ref parameter required');
-          break;
-        }
-        result = { success: true, data: resolveExercise(params.ref, getExercises()) };
-        break;
-
-      case 'createExercise':
-        if (!payload.data) {
-          result = fail('payload.data field required');
-          break;
-        }
-        result = { success: true, data: createExercise(payload.data) };
-        break;
-
-      // A rename cascades into Templates!E and Sets!C in the same call — #120.
-      case 'updateExercise':
-        if (!payload.id) {
-          result = fail('payload.id field required');
-          break;
-        }
-        if (!payload.changes) {
-          result = fail('payload.changes field required');
-          break;
-        }
-        result = { success: true, data: updateExercise(payload.id, payload.changes) };
-        break;
-
-      // Library row only; referencing rows are left in place (#132 AC6).
-      case 'deleteExercise':
-        if (!payload.id) {
-          result = fail('payload.id field required');
-          break;
-        }
-        result = { success: true, data: deleteExercise(payload.id) };
-        break;
-
-      case 'getExerciseHistory':
-        if (!params.ref) {
-          result = fail('ref parameter required');
-          break;
-        }
-        result = { success: true, data: getExerciseHistory(params.ref, { limit: params.limit }) };
-        break;
-
-      // --- Templates (#134) ---
-      case 'getTemplates':
-        result = { success: true, data: getTemplates() };
-        break;
-
-      case 'getTemplate':
-        if (!params.ref) {
-          result = fail('ref parameter required');
-          break;
-        }
-        result = { success: true, data: resolveTemplate(params.ref, getTemplates()) };
-        break;
-
-      case 'createTemplate':
-        if (!payload.data) {
-          result = fail('payload.data field required');
-          break;
-        }
-        result = { success: true, data: createTemplate(payload.data) };
-        break;
-
-      case 'replaceTemplate':
-        if (!payload.template_id) {
-          result = fail('payload.template_id field required');
-          break;
-        }
-        if (!payload.data) {
-          result = fail('payload.data field required');
-          break;
-        }
-        result = { success: true, data: replaceTemplate(payload.template_id, payload.data) };
-        break;
-
-      // --- Sets (#134) ---
-      case 'getSets':
-        result = {
-          success: true,
-          data: getSets({ workout_id: params.workout_id, exercise_id: params.exercise_id }),
-        };
-        break;
-
-      case 'getWorkoutSets':
-        if (!params.workout_id) {
-          result = fail('workout_id parameter required');
-          break;
-        }
-        result = {
-          success: true,
-          data: groupSetsByExercise(getSets({ workout_id: params.workout_id })),
-        };
-        break;
-
-      case 'appendSets':
-        if (!payload.sets) {
-          result = fail('payload.sets field required');
-          break;
-        }
-        result = { success: true, data: appendSets(payload.sets) };
-        break;
-
-      // AC4: resolution without writing, for a destructive-by-default dry run.
-      case 'previewSetUpdates':
-        if (!payload.workout_id) {
-          result = fail('payload.workout_id field required');
-          break;
-        }
-        if (!payload.updates) {
-          result = fail('payload.updates field required');
-          break;
-        }
-        result = { success: true, data: previewSetUpdates(payload.workout_id, payload.updates) };
-        break;
-
-      // AC2: all-or-nothing. One bad target rejects the batch untouched.
-      case 'updateSets':
-        if (!payload.workout_id) {
-          result = fail('payload.workout_id field required');
-          break;
-        }
-        if (!payload.updates) {
-          result = fail('payload.updates field required');
-          break;
-        }
-        result = { success: true, data: applySetUpdates(payload.workout_id, payload.updates) };
-        break;
-
-      // --- DailySummary (#131) ---
-      case 'getDailySummary':
-        result = {
-          success: true,
-          data: getDailySummaries({ from: params.from, to: params.to }),
-        };
-        break;
-
-      // The range is a parameter: the nightly job and the historical backfill
-      // are the same call with different bounds.
-      case 'rebuildDailySummary':
-        if (!payload.from || !payload.to) {
-          result = fail('payload.from and payload.to are required (YYYY-MM-DD)');
-          break;
-        }
-        result = {
-          success: true,
-          data: rebuildDailySummary(payload.from, payload.to, { computed_at: payload.computed_at }),
-        };
-        break;
-
-      case 'getHistoryDateRange':
-        result = { success: true, data: historyDateRange() };
-        break;
-
-      // --- DailyHealth (#165) ---
-      // A read: from/to exactly as getDailySummary. A missing tab is [], not an
-      // error. It belongs on #144's token read allow-list when that lands.
-      case 'getDailyHealth':
-        result = {
-          success: true,
-          data: getDailyHealthRows({ from: params.from, to: params.to }),
-        };
-        break;
-
-      // Written by the COROS sync alone. A write, so key-only: it must never be
-      // added to #144's token read allow-list when that lands.
-      case 'upsertDailyHealth':
-        if (!Array.isArray(payload.rows)) {
-          result = fail('payload.rows field required (an array of rows keyed by field name)');
-          break;
-        }
-        if (!payload.synced_at) {
-          result = fail('payload.synced_at field required');
-          break;
-        }
-        result = {
-          success: true,
-          data: withScriptLock(function () { return upsertDailyHealth(payload.rows, payload.synced_at); }),
-        };
-        break;
-
-      // --- Synced workouts (#166) ---
-      // The COROS sync's merge, by (source, source_activity_id). A write, so
-      // key-only: it must never be added to #144's token read allow-list.
-      case 'upsertSyncedWorkout':
-        if (!payload.incoming) {
-          result = fail('payload.incoming field required');
-          break;
-        }
-        if (!Object.prototype.hasOwnProperty.call(payload, 'last_written')) {
-          result = fail('payload.last_written field required (null when nothing was written before)');
-          break;
-        }
-        result = {
-          success: true,
-          data: withScriptLock(function () { return upsertSyncedWorkout(payload); }),
-        };
-        break;
-
-      // --- Strength enrichment (#155) ---
-      // A COROS strength session fills blanks on its hand-logged weight row.
-      // A write, so key-only, like the sync's others.
-      case 'enrichWorkout':
-        if (!payload.activity) {
-          result = fail('payload.activity field required');
-          break;
-        }
-        if (!Object.prototype.hasOwnProperty.call(payload, 'last_written')) {
-          result = fail('payload.last_written field required (null when nothing was written before)');
-          break;
-        }
-        result = {
-          success: true,
-          data: withScriptLock(function () { return enrichWorkout(payload); }),
-        };
-        break;
-
-      // --- SyncLog (#156) ---
-      // One row per sync run. A write, so key-only, like the sync's others.
-      case 'appendSyncLog':
-        if (!payload.row) {
-          result = fail('payload.row field required (the run, keyed by field name)');
-          break;
-        }
-        result = {
-          success: true,
-          data: withScriptLock(function () { return appendSyncLog(payload.row); }),
-        };
-        break;
-
-      // Newest first by started_at. The dead-man's switch reads limit=1.
-      case 'getSyncLog':
-        result = { success: true, data: getSyncLog({ limit: params.limit }) };
-        break;
-
-      default:
-        result = fail('Unknown action: "' + (action || '') + '"');
-    }
+    result = dispatch(action, params);
   } catch (err) {
     result = fail(err.message || String(err));
   }
 
+  // No message goes back carrying the caller's token, whatever echoed it.
+  if (result && result.error) result.error = withoutToken(result.error, params.access_token);
   return envelope(result);
+}
+
+/** Run one action for an authenticated, authorized caller. */
+function dispatch(action, params) {
+  var result;
+  var payload = parsePayload(params.payload);
+
+  switch (action) {
+    // --- Reads ---
+    case 'getWorkouts':
+      result = {
+        success: true,
+        data: getWorkouts({
+          date: params.date,
+          from: params.from,
+          to: params.to,
+          type: params.type,
+          status: params.status,
+        }),
+      };
+      break;
+
+    case 'getWorkout':
+      if (!params.id) {
+        result = fail('id parameter required');
+        break;
+      }
+      var found = getWorkout(params.id);
+      result = found
+        ? { success: true, data: found }
+        : fail('Workout "' + params.id + '" not found');
+      break;
+
+    // A date with nothing planned returns [], not an error.
+    case 'getPlannedWorkouts':
+      result = { success: true, data: getPlannedWorkouts(params.date) };
+      break;
+
+    // --- Writes ---
+    case 'createWorkout':
+      if (!payload.data) {
+        result = fail('payload.data field required');
+        break;
+      }
+      result = { success: true, data: createWorkout(payload.data) };
+      break;
+
+    case 'updateWorkout':
+      if (!payload.id) {
+        result = fail('payload.id field required');
+        break;
+      }
+      if (!payload.changes) {
+        result = fail('payload.changes field required');
+        break;
+      }
+      result = { success: true, data: updateWorkout(payload.id, payload.changes) };
+      break;
+
+    // Dry-run lives in the caller: the MCP tool previews from reads, and only
+    // calls this once confirmed (#132 AC6).
+    case 'deleteWorkout':
+      if (!payload.id) {
+        result = fail('payload.id field required');
+        break;
+      }
+      result = { success: true, data: deleteWorkout(payload.id) };
+      break;
+
+    // --- Exercises (#134) ---
+    case 'getExercises':
+      result = { success: true, data: getExercises({ tag: params.tag }) };
+      break;
+
+    case 'getExercise':
+      if (!params.ref) {
+        result = fail('ref parameter required');
+        break;
+      }
+      result = { success: true, data: resolveExercise(params.ref, getExercises()) };
+      break;
+
+    case 'createExercise':
+      if (!payload.data) {
+        result = fail('payload.data field required');
+        break;
+      }
+      result = { success: true, data: createExercise(payload.data) };
+      break;
+
+    // A rename cascades into Templates!E and Sets!C in the same call — #120.
+    case 'updateExercise':
+      if (!payload.id) {
+        result = fail('payload.id field required');
+        break;
+      }
+      if (!payload.changes) {
+        result = fail('payload.changes field required');
+        break;
+      }
+      result = { success: true, data: updateExercise(payload.id, payload.changes) };
+      break;
+
+    // Library row only; referencing rows are left in place (#132 AC6).
+    case 'deleteExercise':
+      if (!payload.id) {
+        result = fail('payload.id field required');
+        break;
+      }
+      result = { success: true, data: deleteExercise(payload.id) };
+      break;
+
+    case 'getExerciseHistory':
+      if (!params.ref) {
+        result = fail('ref parameter required');
+        break;
+      }
+      result = { success: true, data: getExerciseHistory(params.ref, { limit: params.limit }) };
+      break;
+
+    // --- Templates (#134) ---
+    case 'getTemplates':
+      result = { success: true, data: getTemplates() };
+      break;
+
+    case 'getTemplate':
+      if (!params.ref) {
+        result = fail('ref parameter required');
+        break;
+      }
+      result = { success: true, data: resolveTemplate(params.ref, getTemplates()) };
+      break;
+
+    case 'createTemplate':
+      if (!payload.data) {
+        result = fail('payload.data field required');
+        break;
+      }
+      result = { success: true, data: createTemplate(payload.data) };
+      break;
+
+    case 'replaceTemplate':
+      if (!payload.template_id) {
+        result = fail('payload.template_id field required');
+        break;
+      }
+      if (!payload.data) {
+        result = fail('payload.data field required');
+        break;
+      }
+      result = { success: true, data: replaceTemplate(payload.template_id, payload.data) };
+      break;
+
+    // --- Sets (#134) ---
+    case 'getSets':
+      result = {
+        success: true,
+        data: getSets({ workout_id: params.workout_id, exercise_id: params.exercise_id }),
+      };
+      break;
+
+    case 'getWorkoutSets':
+      if (!params.workout_id) {
+        result = fail('workout_id parameter required');
+        break;
+      }
+      result = {
+        success: true,
+        data: groupSetsByExercise(getSets({ workout_id: params.workout_id })),
+      };
+      break;
+
+    case 'appendSets':
+      if (!payload.sets) {
+        result = fail('payload.sets field required');
+        break;
+      }
+      result = { success: true, data: appendSets(payload.sets) };
+      break;
+
+    // AC4: resolution without writing, for a destructive-by-default dry run.
+    case 'previewSetUpdates':
+      if (!payload.workout_id) {
+        result = fail('payload.workout_id field required');
+        break;
+      }
+      if (!payload.updates) {
+        result = fail('payload.updates field required');
+        break;
+      }
+      result = { success: true, data: previewSetUpdates(payload.workout_id, payload.updates) };
+      break;
+
+    // AC2: all-or-nothing. One bad target rejects the batch untouched.
+    case 'updateSets':
+      if (!payload.workout_id) {
+        result = fail('payload.workout_id field required');
+        break;
+      }
+      if (!payload.updates) {
+        result = fail('payload.updates field required');
+        break;
+      }
+      result = { success: true, data: applySetUpdates(payload.workout_id, payload.updates) };
+      break;
+
+    // --- DailySummary (#131) ---
+    case 'getDailySummary':
+      result = {
+        success: true,
+        data: getDailySummaries({ from: params.from, to: params.to }),
+      };
+      break;
+
+    // The range is a parameter: the nightly job and the historical backfill
+    // are the same call with different bounds.
+    case 'rebuildDailySummary':
+      if (!payload.from || !payload.to) {
+        result = fail('payload.from and payload.to are required (YYYY-MM-DD)');
+        break;
+      }
+      result = {
+        success: true,
+        data: rebuildDailySummary(payload.from, payload.to, { computed_at: payload.computed_at }),
+      };
+      break;
+
+    case 'getHistoryDateRange':
+      result = { success: true, data: historyDateRange() };
+      break;
+
+    // --- DailyHealth (#165) ---
+    // A read: from/to exactly as getDailySummary. A missing tab is [], not an
+    // error. It is on the token read allow-list (#144).
+    case 'getDailyHealth':
+      result = {
+        success: true,
+        data: getDailyHealthRows({ from: params.from, to: params.to }),
+      };
+      break;
+
+    // Written by the COROS sync alone. A write, so key-only: it must never be
+    // added to the token read allow-list (#144).
+    case 'upsertDailyHealth':
+      if (!Array.isArray(payload.rows)) {
+        result = fail('payload.rows field required (an array of rows keyed by field name)');
+        break;
+      }
+      if (!payload.synced_at) {
+        result = fail('payload.synced_at field required');
+        break;
+      }
+      result = {
+        success: true,
+        data: withScriptLock(function () { return upsertDailyHealth(payload.rows, payload.synced_at); }),
+      };
+      break;
+
+    // --- Synced workouts (#166) ---
+    // The COROS sync's merge, by (source, source_activity_id). A write, so
+    // key-only: it must never be added to the token read allow-list (#144).
+    case 'upsertSyncedWorkout':
+      if (!payload.incoming) {
+        result = fail('payload.incoming field required');
+        break;
+      }
+      if (!Object.prototype.hasOwnProperty.call(payload, 'last_written')) {
+        result = fail('payload.last_written field required (null when nothing was written before)');
+        break;
+      }
+      result = {
+        success: true,
+        data: withScriptLock(function () { return upsertSyncedWorkout(payload); }),
+      };
+      break;
+
+    // --- Strength enrichment (#155) ---
+    // A COROS strength session fills blanks on its hand-logged weight row.
+    // A write, so key-only, like the sync's others.
+    case 'enrichWorkout':
+      if (!payload.activity) {
+        result = fail('payload.activity field required');
+        break;
+      }
+      if (!Object.prototype.hasOwnProperty.call(payload, 'last_written')) {
+        result = fail('payload.last_written field required (null when nothing was written before)');
+        break;
+      }
+      result = {
+        success: true,
+        data: withScriptLock(function () { return enrichWorkout(payload); }),
+      };
+      break;
+
+    // --- SyncLog (#156) ---
+    // One row per sync run. A write, so key-only, like the sync's others.
+    case 'appendSyncLog':
+      if (!payload.row) {
+        result = fail('payload.row field required (the run, keyed by field name)');
+        break;
+      }
+      result = {
+        success: true,
+        data: withScriptLock(function () { return appendSyncLog(payload.row); }),
+      };
+      break;
+
+    // Newest first by started_at. The dead-man's switch reads limit=1.
+    case 'getSyncLog':
+      result = { success: true, data: getSyncLog({ limit: params.limit }) };
+      break;
+
+    default:
+      result = fail('Unknown action: "' + (action || '') + '"');
+  }
+
+  return result;
 }

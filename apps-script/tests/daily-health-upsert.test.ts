@@ -200,12 +200,10 @@ describe('AC4: only through the key', () => {
     expect(health).toHaveLength(0);
   });
 
-  // No token path exists yet (#144). When one lands, this action stays off it.
-  it('is not on any token read allow-list', () => {
-    const main = readFileSync(
-      path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'main.js'), 'utf8');
-    const allowList = main.match(/(?:READ|TOKEN)_[A-Z_]*ACTIONS\s*=\s*\[([\s\S]*?)\]/);
-    if (allowList) expect(allowList[1]).not.toMatch(/upsertDailyHealth/);
+  // A write, so it stays off the token read allow-list (#144).
+  it('is not on the token read allow-list', () => {
+    const { sandbox } = loadApi();
+    expect(sandbox.TOKEN_READ_ACTIONS).not.toContain('upsertDailyHealth');
   });
 });
 

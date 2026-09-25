@@ -11,6 +11,7 @@
 // `PropertiesService`, `ContentService`, `SpreadsheetApp` and `Utilities`
 // appear only inside function bodies.
 
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createContext, runInContext } from 'node:vm';
 import path from 'node:path';
@@ -136,6 +137,18 @@ export function makeSheet(rows: CellValue[][], columnCount = 26) {
 export function makeUtilities(uuids: string[] = []) {
   let nextUuid = 0;
   return {
+    DigestAlgorithm: { SHA_256: 'SHA_256' },
+    Charset: { UTF_8: 'UTF_8' },
+    /**
+     * The real SHA-256, returned as Apps Script returns it: signed bytes,
+     * -128..127, so the source's conversion to hex is exercised for real.
+     */
+    computeDigest(algorithm: string, value: string, charset: string) {
+      if (algorithm !== 'SHA_256' || charset !== 'UTF_8') {
+        throw new Error('Utilities.computeDigest stub only supports SHA_256 over UTF_8');
+      }
+      return Array.from(createHash('sha256').update(value, 'utf8').digest()).map((b) => (b > 127 ? b - 256 : b));
+    },
     getUuid() {
       return uuids[nextUuid++] ?? 'uuid-' + ++nextUuid;
     },
@@ -194,6 +207,58 @@ export function makeLockService(state: { acquired: number; held: boolean }) {
   };
 }
 
+/** One entry in the fake script cache, with the TTL it was put with. */
+export interface CacheEntry {
+  value: string;
+  ttl: number;
+}
+
+/**
+ * CacheService stub (#144). `store` is the live backing map, so a test
+ * asserts on the keys and values actually written — which is where a leaked
+ * token would show up.
+ */
+export function makeCacheService(store: Map<string, CacheEntry>) {
+  return {
+    getScriptCache() {
+      return {
+        get(key: string) {
+          return store.get(key)?.value ?? null;
+        },
+        put(key: string, value: string, ttl: number) {
+          if (key.length > 250) throw new Error('Cache key over 250 characters');
+          store.set(key, { value, ttl });
+        },
+      };
+    },
+  };
+}
+
+/** What a fake tokeninfo answers: an HTTP status and a body, or a throw. */
+export type FetchReply = { status: number; body: string } | { throws: string };
+
+/**
+ * UrlFetchApp stub (#144). Records every URL fetched, and answers each with
+ * `reply(url)`. Absent unless a test supplies it, like every stub that
+ * affects behaviour.
+ */
+export function makeUrlFetchApp(calls: string[], reply: (url: string) => FetchReply) {
+  return {
+    fetch(url: string, options: { muteHttpExceptions?: boolean } = {}) {
+      calls.push(url);
+      const r = reply(url);
+      if ('throws' in r) throw new Error(r.throws);
+      if (!options.muteHttpExceptions && r.status >= 400) {
+        throw new Error('Request failed for ' + url + ' returned code ' + r.status);
+      }
+      return {
+        getResponseCode: () => r.status,
+        getContentText: () => r.body,
+      };
+    },
+  };
+}
+
 /** PropertiesService stub backed by a plain object of script properties. */
 export function makePropertiesService(properties: Record<string, string>) {
   return {
@@ -239,6 +304,10 @@ export interface LoadedApi {
   syncLogRows?: CellValue[][];
   /** How many times the script lock was taken, and whether it is held now. */
   lock: { acquired: number; held: boolean };
+  /** The script cache's live backing map (#144). */
+  cache: Map<string, CacheEntry>;
+  /** Every URL UrlFetchApp was asked for, in order (#144). */
+  fetches: string[];
 }
 
 /** Tab fixtures for `loadApi`. Each defaults to empty. */
@@ -263,7 +332,15 @@ export interface Fixtures {
  */
 export function loadApi(
   workoutRowsOrFixtures: CellValue[][] | Fixtures = [],
-  options: { apiKey?: string; now?: Date; uuids?: string[] } = {},
+  options: {
+    apiKey?: string;
+    now?: Date;
+    uuids?: string[];
+    /** Extra script properties, e.g. TOKEN_CLIENT_ID (#144). */
+    properties?: Record<string, string>;
+    /** How the fake tokeninfo answers. Without it, any fetch fails the test. */
+    tokeninfo?: (url: string) => FetchReply;
+  } = {},
 ): LoadedApi {
   const apiKey = options.apiKey ?? 'test-key';
 
@@ -277,6 +354,11 @@ export function loadApi(
   const setRows = fixtures.sets ?? [];
   const summaryRows = fixtures.dailySummary ?? [];
   const lock = { acquired: 0, held: false };
+  const cache = new Map<string, CacheEntry>();
+  const fetches: string[] = [];
+  const tokeninfo = options.tokeninfo ?? ((url: string): FetchReply => {
+    throw new Error('Unexpected UrlFetchApp.fetch: ' + url);
+  });
 
   // A fixed clock where one is needed, so `created` and "today" are assertable.
   const FixedDate = options.now
@@ -289,11 +371,15 @@ export function loadApi(
 
   const sandbox = loadSources(
     ['types.js', 'utils.js', 'workouts.js', 'exercises.js', 'templates.js', 'sets.js',
-      'daily-summary.js', 'daily-health.js', 'sync-log.js', 'main.js'],
+      'daily-summary.js', 'daily-health.js', 'sync-log.js', 'auth.js', 'main.js'],
     {
       LockService: makeLockService(lock),
-    ContentService: makeContentService(),
-    PropertiesService: makePropertiesService({ API_KEY: apiKey, SPREADSHEET_ID: 'sheet-id' }),
+      ContentService: makeContentService(),
+      PropertiesService: makePropertiesService({
+        API_KEY: apiKey, SPREADSHEET_ID: 'sheet-id', ...options.properties,
+      }),
+      CacheService: makeCacheService(cache),
+      UrlFetchApp: makeUrlFetchApp(fetches, tokeninfo),
       Utilities: makeUtilities(options.uuids),
       Date: FixedDate,
     }
@@ -328,7 +414,7 @@ export function loadApi(
 
   return {
     sandbox, rows: workoutRows, exerciseRows, templateRows, setRows, summaryRows,
-    healthRows: fixtures.dailyHealth, syncLogRows: fixtures.syncLog, lock,
+    healthRows: fixtures.dailyHealth, syncLogRows: fixtures.syncLog, lock, cache, fetches,
   };
 }
 
@@ -344,6 +430,8 @@ export interface ApiResponse<T = ApiWorkout[]> {
   success: boolean;
   data: T;
   error?: string;
+  /** Present only on the failures that carry one (#144). */
+  code?: 'token_invalid' | 'token_forbidden' | 'token_unavailable' | 'read_only';
 }
 
 /** Call the sandbox's `doGet` with `params` and return the parsed body. */
@@ -353,6 +441,19 @@ export function callDoGet<T = ApiWorkout[]>(
 ): ApiResponse<T> {
   const output = sandbox.doGet({ parameter: { key: 'test-key', ...params } });
   return JSON.parse(output.getContent()) as ApiResponse<T>;
+}
+
+/**
+ * Call the sandbox's `doGet` or `doPost` with exactly `params` — no key added —
+ * and return the raw body text alongside the parsed envelope (#144).
+ */
+export function callEntry<T = ApiWorkout[]>(
+  sandbox: Sandbox,
+  entry: 'doGet' | 'doPost',
+  params: Record<string, string>,
+): { text: string; res: ApiResponse<T> } {
+  const text: string = sandbox[entry]({ parameter: params }).getContent();
+  return { text, res: JSON.parse(text) as ApiResponse<T> };
 }
 
 /**
