@@ -57,7 +57,10 @@
   --color-border-light: #e8eaed;
   --color-text: #1f1f1f;
   --color-text-secondary: #5f6368;
-  --color-text-muted: #8e99a4;
+  /* Muted text meets AA (#182) everywhere it is drawn. The tightest is
+     --color-border-light, the theme toggle track and row hover: 4.51:1.
+     4.85:1 on --color-bg, 5.44:1 on the card. Still under --color-text-secondary. */
+  --color-text-muted: #606b76;
   --color-primary: #FF6B35;
   --color-primary-hover: #D4400A;
   --color-primary-light: #fff0eb;
@@ -65,6 +68,10 @@
      4.17:1 against that tint and fails AA, so a selected control needs its
      own darker step rather than reusing the hover colour. */
   --color-primary-on-light: #B83508;
+  /* The brand orange as TEXT (#182). --color-primary is 2.84:1 on the card and
+     fails AA, so it stays for fills, borders and focus rings, and anything
+     that sets color: uses this. 5.27:1 on --color-bg, 5.33:1 on the tint. */
+  --color-primary-text: #B83508;
   --color-primary-rgb: 255, 107, 53;
   --color-primary-focus-ring: rgba(255, 107, 53, 0.25);
   --color-danger: #d32f2f;
@@ -98,16 +105,19 @@
   --color-border-light: #25252b;
   --color-text: #e8eaed;
   --color-text-secondary: #9aa0a6;
-  --color-text-muted: #6f7681;
+  /* 4.61:1 on --color-surface-raised, the darkest place it is drawn (#182). */
+  --color-text-muted: #868e98;
   --color-primary: #FF6B35;
   --color-primary-hover: #FF9A76;
   --color-primary-light: #2d1a10;
   --color-primary-on-light: #FF9A76;
+  --color-primary-text: #FF6B35;
   --color-primary-rgb: 255, 107, 53;
   --color-primary-focus-ring: rgba(255, 107, 53, 0.3);
   --color-danger: #ef5350;
   --color-danger-hover: #e53935;
-  --color-danger-text: #ef5350;
+  /* #ef5350 is 4.38:1 on --color-surface-raised; this is 5.15:1 (#182). */
+  --color-danger-text: #f26b68;
   --color-success: #66bb6a;
   --color-success-light: #1b5e20;
   --color-warning: #ffb74d;
@@ -143,7 +153,7 @@ body {
 }
 
 a {
-  color: var(--color-primary);
+  color: var(--color-primary-text);
   text-decoration: none;
 }
 
@@ -158,6 +168,13 @@ button {
 input, select, textarea {
   font: inherit;
   color: inherit;
+}
+
+/* Placeholders are text and need AA too (#182). Firefox dims them to 0.54
+   by default, which would take the muted token under 4.5:1 again. */
+::placeholder {
+  color: var(--color-text-muted);
+  opacity: 1;
 }
 
 /* ===== Loading Screen ===== */
@@ -267,8 +284,16 @@ input, select, textarea {
   min-width: 64px;
 }
 
+/* The active tab must read without colour (#182, WCAG 1.4.1): the icons are
+   emoji and ignore `color`, and muted-at-AA sits close to the orange. So the
+   label goes bold and a bar marks the top edge. */
 .bottom-nav-tab.active {
-  color: var(--color-primary);
+  color: var(--color-primary-text);
+  box-shadow: inset 0 2px 0 var(--color-primary);
+}
+
+.bottom-nav-tab.active .bottom-nav-label {
+  font-weight: 700;
 }
 
 .bottom-nav-icon {
@@ -749,7 +774,7 @@ input, select, textarea {
 
 .section-warmup {
   background: #fff3e0;
-  color: #e65100;
+  color: #c2410c;
 }
 
 .section-primary {
@@ -807,7 +832,7 @@ input, select, textarea {
 }
 
 .effort-hard {
-  color: var(--color-danger);
+  color: var(--color-danger-text);
 }
 
 /* ===== Modal ===== */
@@ -970,7 +995,7 @@ input, select, textarea {
   font-size: var(--text-xs);
   font-weight: 500;
   background: var(--color-primary-light);
-  color: var(--color-primary);
+  color: var(--color-primary-text);
   white-space: nowrap;
 }
 
@@ -1056,10 +1081,6 @@ input, select, textarea {
   font-family: var(--font-sans);
   color: var(--color-text);
   padding: var(--space-xs) 0;
-}
-
-.tag-input-field::placeholder {
-  color: var(--color-text-muted);
 }
 
 .tag-badge-removable {
@@ -1253,7 +1274,7 @@ input, select, textarea {
   align-items: center;
   gap: var(--space-sm);
   padding: var(--space-md) var(--space-lg);
-  color: var(--color-primary);
+  color: var(--color-primary-text);
   font-weight: 600;
   cursor: pointer;
   transition: background var(--transition-fast);
@@ -1289,7 +1310,7 @@ input, select, textarea {
 .template-editor-back {
   font-size: var(--text-base);
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-primary-text);
   padding: var(--space-sm) 0;
 }
 
@@ -1720,7 +1741,7 @@ input, select, textarea {
 .add-set-btn {
   margin-top: var(--space-sm);
   padding: var(--space-xs) var(--space-sm);
-  color: var(--color-primary);
+  color: var(--color-primary-text);
   font-weight: 600;
   font-size: var(--text-sm);
 }
@@ -1872,8 +1893,8 @@ input, select, textarea {
 
 .effort-btn-medium.active {
   background: #fff3e0;
-  color: #e65100;
-  border-color: #e65100;
+  color: #c2410c;
+  border-color: #c2410c;
 }
 
 .effort-btn-hard.active {
@@ -2006,7 +2027,7 @@ input, select, textarea {
 
 .filter-clear {
   font-size: var(--text-sm);
-  color: var(--color-primary);
+  color: var(--color-primary-text);
   font-weight: 500;
   min-height: 44px;
   padding: var(--space-xs) 0;
@@ -2061,7 +2082,7 @@ input, select, textarea {
 }
 
 .streak-label.today {
-  color: var(--color-primary);
+  color: var(--color-primary-text);
   font-weight: 600;
 }
 
@@ -2286,7 +2307,7 @@ input, select, textarea {
 
 .btn-link {
   font-size: var(--text-sm);
-  color: var(--color-primary);
+  color: var(--color-primary-text);
   font-weight: 500;
 }
 
@@ -2409,12 +2430,12 @@ input, select, textarea {
 }
 
 .last-time-toggle:hover {
-  color: var(--color-primary);
+  color: var(--color-primary-text);
   border-color: var(--color-primary);
 }
 
 .last-time-toggle[aria-expanded="true"] {
-  color: var(--color-primary);
+  color: var(--color-primary-text);
   border-color: var(--color-primary);
   background: var(--color-primary-light);
 }
@@ -2468,7 +2489,7 @@ input, select, textarea {
   flex: 1;
   min-height: 44px;
   padding: var(--space-xs) var(--space-sm);
-  color: var(--color-primary);
+  color: var(--color-primary-text);
   font-weight: 600;
   font-size: var(--text-sm);
   background: none;
@@ -2601,12 +2622,12 @@ input, select, textarea {
 /* ===== Colored Tag Badges ===== */
 .tag-badge-colored {
   background: var(--label-bg, var(--color-primary-light));
-  color: var(--label-text, var(--color-primary));
+  color: var(--label-text, var(--color-primary-text));
 }
 
 [data-theme="dark"] .tag-badge-colored {
   background: var(--label-bg-dark, var(--color-primary-light));
-  color: var(--label-text-dark, var(--color-primary));
+  color: var(--label-text-dark, var(--color-primary-text));
 }
 
 .tag-badge-colored.active {
@@ -2706,19 +2727,19 @@ input, select, textarea {
 
 .label-chip-active.tag-badge-colored {
   background: var(--label-bg, var(--color-primary-light));
-  color: var(--label-text, var(--color-primary));
+  color: var(--label-text, var(--color-primary-text));
   border-color: var(--label-text, var(--color-primary));
 }
 
 [data-theme="dark"] .label-chip-active.tag-badge-colored {
   background: var(--label-bg-dark, var(--color-primary-light));
-  color: var(--label-text-dark, var(--color-primary));
+  color: var(--label-text-dark, var(--color-primary-text));
   border-color: var(--label-text-dark, var(--color-primary));
 }
 
 .label-chip-create {
   border-style: dashed;
-  color: var(--color-primary);
+  color: var(--color-primary-text);
   border-color: var(--color-primary);
   opacity: 0.6;
 }
@@ -2749,7 +2770,7 @@ input, select, textarea {
 }
 
 .manage-labels-link:hover {
-  color: var(--color-primary);
+  color: var(--color-primary-text);
 }
 
 /* ===== Manage Labels Screen ===== */
@@ -2796,7 +2817,7 @@ input, select, textarea {
 }
 
 .manage-label-name:hover {
-  color: var(--color-primary);
+  color: var(--color-primary-text);
 }
 
 .manage-label-edit-input {
@@ -2891,7 +2912,7 @@ input, select, textarea {
 
 .section-picker-pill-active.section-warmup {
   background: #fff3e0;
-  color: #e65100;
+  color: #c2410c;
 }
 
 .section-picker-pill-active.section-primary {
@@ -3011,7 +3032,7 @@ input, select, textarea {
 }
 
 .exercise-toolbar-remove {
-  color: var(--color-danger);
+  color: var(--color-danger-text);
   border-color: var(--color-danger);
 }
 
@@ -3097,8 +3118,8 @@ input, select, textarea {
   font-weight: 500;
 }
 
-/* Text measures ≥ 4.5:1 on its own tint in both themes. Medium uses #a05d00,
-   not the toggle's #e65100 — that one is ~3.5:1 on white and fails AA. */
+/* Text measures ≥ 4.5:1 on its own tint in both themes. Medium uses #a05d00;
+   the Medium toggle uses #c2410c (#182). Both pass. */
 .workout-effort-easy {
   background: #eef7ef;
   color: #2e7d32;

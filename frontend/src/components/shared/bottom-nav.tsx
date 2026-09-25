@@ -23,6 +23,7 @@ export function BottomNav() {
             class={`bottom-nav-tab ${isActive ? 'active' : ''}`}
             onClick={() => navigate(tab.path)}
             aria-label={tab.label}
+            aria-current={isActive ? 'page' : undefined}
           >
             <span class="bottom-nav-icon">{tab.icon}</span>
             <span class="bottom-nav-label">{tab.label}</span>
