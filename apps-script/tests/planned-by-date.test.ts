@@ -2,7 +2,7 @@
 // against Workouts!B rather than derived from a timestamp.
 
 import { describe, it, expect } from 'vitest';
-import { loadApi, callDoGet, workoutRow } from './apps-script-sandbox';
+import { loadApi, callDoGet, setRow, workoutRow, type Fixtures, type Sandbox } from './apps-script-sandbox';
 
 const ROWS = () => [
   workoutRow({ id: 'w_planned_1', date: '2026-09-21', status: 'planned', name: 'Upper Pull A' }),
@@ -111,5 +111,212 @@ describe('AC4: today defaults to the local calendar day', () => {
     const winter = loadApi([workoutRow({ id: 'w_w', date: '2026-01-15', status: 'planned' })],
       { now: new Date('2026-01-15T19:00:00Z') });
     expect(callDoGet(winter.sandbox, { action: 'getPlannedWorkouts' }).data).toHaveLength(1);
+  });
+});
+
+// #146 — each planned workout carries its non-warmup exercise and set counts,
+// counted server-side from one read of the Sets tab.
+
+const PLAN_DATE = '2026-09-26';
+
+/** A strength plan: 2 warmup slots, then 5 working slots totalling 20 sets. */
+function strengthSets(workoutId: string) {
+  const rows = [
+    setRow({ workout_id: workoutId, exercise_id: 'ex_pushup', section: 'warmup', exercise_order: 1, set_number: 1, planned_reps: '' }),
+    setRow({ workout_id: workoutId, exercise_id: 'ex_bench', section: 'warmup', exercise_order: 2, set_number: 1, planned_reps: '' }),
+  ];
+  const working: [string, string, number, number][] = [
+    ['ex_bench', 'primary', 3, 5],
+    ['ex_row', 'SS1', 4, 4],
+    ['ex_fly', 'SS1', 5, 4],
+    ['ex_curl', 'burnout', 6, 4],
+    ['ex_stretch', 'cooldown', 7, 3],
+  ];
+  for (const [exercise_id, section, exercise_order, sets] of working) {
+    for (let n = 1; n <= sets; n++) {
+      rows.push(setRow({ workout_id: workoutId, exercise_id, section, exercise_order, set_number: n }));
+    }
+  }
+  return rows;
+}
+
+function planned(overrides: Record<string, string> = {}) {
+  return workoutRow({ date: PLAN_DATE, status: 'planned', ...overrides });
+}
+
+function plannedOn(fixtures: Fixtures) {
+  const loaded = loadApi(fixtures);
+  const res = callDoGet(loaded.sandbox, { action: 'getPlannedWorkouts', date: PLAN_DATE });
+  expect(res.success).toBe(true);
+  return { ...loaded, data: res.data as Record<string, unknown>[] };
+}
+
+describe('#146 AC1: counts come back on every planned workout', () => {
+  it('reports exercise_count and set_count as numbers', () => {
+    const { data } = plannedOn({
+      workouts: [planned({ id: 'w_upper', name: 'Upper Push A' })],
+      sets: strengthSets('w_upper'),
+    });
+    expect(data[0].exercise_count).toBe(5);
+    expect(data[0].set_count).toBe(20);
+  });
+
+  it('adds the two fields and changes nothing else', () => {
+    const fixtures = (): Fixtures => ({
+      workouts: [planned({ id: 'w_upper', name: 'Upper Push A', notes: 'Go easy' })],
+      sets: strengthSets('w_upper'),
+    });
+    const { data } = plannedOn(fixtures());
+    const { sandbox } = loadApi(fixtures());
+    const [before] = callDoGet(sandbox, { action: 'getWorkouts', date: PLAN_DATE }).data;
+    const { exercise_count: _e, set_count: _s, ...rest } = data[0];
+    expect(rest).toEqual(before);
+    expect(Object.keys(data[0]).sort())
+      .toEqual([...Object.keys(before), 'exercise_count', 'set_count'].sort());
+  });
+});
+
+describe('#146 AC2: warmups are excluded from both counts', () => {
+  it('ignores warmup rows and slots, whatever their case', () => {
+    const { data } = plannedOn({
+      workouts: [planned({ id: 'w_1' })],
+      sets: [
+        setRow({ workout_id: 'w_1', exercise_id: 'ex_a', section: 'warmup', exercise_order: 1, set_number: 1 }),
+        setRow({ workout_id: 'w_1', exercise_id: 'ex_b', section: 'Warmup', exercise_order: 2, set_number: 1 }),
+        setRow({ workout_id: 'w_1', exercise_id: 'ex_c', section: 'primary', exercise_order: 3, set_number: 1 }),
+      ],
+    });
+    expect(data[0]).toMatchObject({ exercise_count: 1, set_count: 1 });
+  });
+
+  it.each(['primary', 'SS1', 'SS2', 'SS3', 'burnout', 'cooldown'])('counts the %s section', (section) => {
+    const { data } = plannedOn({
+      workouts: [planned({ id: 'w_1' })],
+      sets: [
+        setRow({ workout_id: 'w_1', exercise_id: 'ex_a', section, exercise_order: 1, set_number: 1 }),
+        setRow({ workout_id: 'w_1', exercise_id: 'ex_a', section, exercise_order: 1, set_number: 2 }),
+      ],
+    });
+    expect(data[0]).toMatchObject({ exercise_count: 1, set_count: 2 });
+  });
+
+  it('counts a row with a blank section: only warmups are excluded', () => {
+    const { data } = plannedOn({
+      workouts: [planned({ id: 'w_1' })],
+      sets: [setRow({ workout_id: 'w_1', exercise_id: 'ex_a', section: '', exercise_order: 1, set_number: 1 })],
+    });
+    expect(data[0]).toMatchObject({ exercise_count: 1, set_count: 1 });
+  });
+});
+
+describe('#146 AC3: slot identity follows groupSetsByExercise', () => {
+  it('counts the same exercise in two sections as two slots', () => {
+    const { data } = plannedOn({
+      workouts: [planned({ id: 'w_1' })],
+      sets: [
+        setRow({ workout_id: 'w_1', exercise_id: 'ex_bench', section: 'primary', exercise_order: 2, set_number: 1 }),
+        setRow({ workout_id: 'w_1', exercise_id: 'ex_bench', section: 'primary', exercise_order: 2, set_number: 2 }),
+        setRow({ workout_id: 'w_1', exercise_id: 'ex_bench', section: 'burnout', exercise_order: 6, set_number: 1 }),
+      ],
+    });
+    expect(data[0]).toMatchObject({ exercise_count: 2, set_count: 3 });
+  });
+
+  it('agrees with groupSetsByExercise over the non-warmup rows', () => {
+    const { sandbox, data } = plannedOn({
+      workouts: [planned({ id: 'w_upper' })],
+      sets: strengthSets('w_upper'),
+    });
+    const working = sandbox.getSets({ workout_id: 'w_upper' })
+      .filter((s: { section: string }) => s.section !== 'warmup');
+    const slots = sandbox.groupSetsByExercise(working);
+    expect(data[0].exercise_count).toBe(slots.length);
+    expect(data[0].set_count).toBe(working.length);
+  });
+
+  it("never lets another workout's sets leak in", () => {
+    const { data } = plannedOn({
+      workouts: [
+        planned({ id: 'w_upper', name: 'Upper' }),
+        planned({ id: 'w_lower', name: 'Lower' }),
+        workoutRow({ id: 'w_done', date: PLAN_DATE, status: '' }),
+      ],
+      sets: [
+        ...strengthSets('w_upper'),
+        setRow({ workout_id: 'w_lower', exercise_id: 'ex_squat', section: 'primary', exercise_order: 1, set_number: 1 }),
+        setRow({ workout_id: 'w_lower', exercise_id: 'ex_squat', section: 'primary', exercise_order: 1, set_number: 2 }),
+        ...strengthSets('w_done'),
+      ],
+    });
+    const byId = Object.fromEntries(data.map((w) => [w.id, w]));
+    expect(Object.keys(byId).sort()).toEqual(['w_lower', 'w_upper']);
+    expect(byId.w_upper).toMatchObject({ exercise_count: 5, set_count: 20 });
+    expect(byId.w_lower).toMatchObject({ exercise_count: 1, set_count: 2 });
+  });
+});
+
+describe('#146 AC4: no non-warmup sets is a true zero', () => {
+  it('reports 0 and 0 for a planned workout with no set rows', () => {
+    const { data } = plannedOn({
+      workouts: [planned({ id: 'w_ride', type: 'bike', name: 'Evening Ride' })],
+      sets: strengthSets('w_other'),
+    });
+    expect(data[0].exercise_count).toBe(0);
+    expect(data[0].set_count).toBe(0);
+  });
+
+  it('reports 0 and 0 for a planned workout with only warmup rows', () => {
+    const { data } = plannedOn({
+      workouts: [planned({ id: 'w_1' })],
+      sets: [setRow({ workout_id: 'w_1', exercise_id: 'ex_a', section: 'warmup', exercise_order: 1, set_number: 1 })],
+    });
+    expect(data[0].exercise_count).toBe(0);
+    expect(data[0].set_count).toBe(0);
+  });
+
+  it('reports 0 and 0 when the Sets tab is empty', () => {
+    const { data } = plannedOn({ workouts: [planned({ id: 'w_1' })] });
+    expect(data[0]).toMatchObject({ exercise_count: 0, set_count: 0 });
+  });
+});
+
+describe('#146 AC5: one Sets read, and getWorkouts untouched', () => {
+  function countSetsReads(sandbox: Sandbox) {
+    const reads = { n: 0 };
+    const real = sandbox.getSheet;
+    sandbox.getSheet = (name: string) => {
+      if (name === 'Sets') reads.n += 1;
+      return real(name);
+    };
+    return reads;
+  }
+
+  it('reads Sets once however many workouts are planned', () => {
+    const { sandbox } = loadApi({
+      workouts: [planned({ id: 'w_1' }), planned({ id: 'w_2' }), planned({ id: 'w_3' })],
+      sets: [...strengthSets('w_1'), ...strengthSets('w_2')],
+    });
+    const reads = countSetsReads(sandbox);
+    const res = callDoGet(sandbox, { action: 'getPlannedWorkouts', date: PLAN_DATE });
+    expect(res.data).toHaveLength(3);
+    expect(reads.n).toBe(1);
+  });
+
+  it('does not read Sets when nothing is planned', () => {
+    const { sandbox } = loadApi({ workouts: [planned({ id: 'w_1' })], sets: strengthSets('w_1') });
+    const reads = countSetsReads(sandbox);
+    const res = callDoGet(sandbox, { action: 'getPlannedWorkouts', date: '2026-12-25' });
+    expect(res.data).toEqual([]);
+    expect(reads.n).toBe(0);
+  });
+
+  it('leaves getWorkouts and getWorkout without counts', () => {
+    const { sandbox } = loadApi({ workouts: [planned({ id: 'w_1' })], sets: strengthSets('w_1') });
+    const [listed] = callDoGet(sandbox, { action: 'getWorkouts', date: PLAN_DATE }).data;
+    const single = callDoGet(sandbox, { action: 'getWorkout', id: 'w_1' }).data;
+    for (const w of [listed, single]) {
+      expect(w).not.toHaveProperty('exercise_count');
+      expect(w).not.toHaveProperty('set_count');
+    }
   });
 });

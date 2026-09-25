@@ -149,6 +149,14 @@ GET  <exec url>?action=getWorkouts&access_token=...       (from a terminal)
 ?action=getPlannedWorkouts&key=...&date=2026-09-21
 ```
 
+`getPlannedWorkouts` adds two numbers to each workout (#146), counted from its
+`Sets` rows in one read of the tab: `exercise_count`, its exercise slots, and
+`set_count`, its set rows. **Warmups count in neither** — a warmup row is a
+placeholder, and counting it overstates the session. A slot is `exercise_id`
+plus `exercise_order`, so the same lift in two sections is two slots. A
+workout with no non-warmup rows reports `0` and `0`. `getWorkouts` and
+`getWorkout` do not count.
+
 ### Writes
 
 | Action | Payload |
