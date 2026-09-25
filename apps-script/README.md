@@ -423,13 +423,23 @@ presentation concern, not a data one.
    covers only files the script's own OAuth client created, and the archive
    was created by the sync's client.
 
-   **Whenever a scope is added, the owner re-authorizes once.** Signed in as
-   luketmossbot, open the script (`clasp open-script`), pick `doGet` in the
-   function menu, **Run**, and allow the permissions dialog. `doGet` with no
-   parameters only answers "Invalid or missing API key", so running it
-   changes nothing. Until then, only calls that need the new scope fail, each
-   with a message saying so. #179 confirmed this on a temporary deployment
-   before updating `@2`.
+   **Whenever a scope is added, the owner re-authorizes once.** The editor
+   prompts only for the scopes **the function being run actually uses**, not
+   for everything in the manifest. So running `doGet` (which never touches
+   Drive) grants nothing new — found the hard way in #179. Instead, signed in
+   as luketmossbot, open the script (`clasp open-script`) and paste a
+   throwaway function that calls the new service, e.g. for Drive:
+
+   ```javascript
+   function testDriveAccess() { Logger.log(DriveApp.getRootFolder().getName()); }
+   ```
+
+   Save, pick it in the function menu, **Run**, and allow the dialog. The
+   grant belongs to the account and script, not a deployment, so `@2` uses it
+   at once — **no redeploy**, and don't use the editor's Deploy button, which
+   would publish the throwaway. The next `clasp push` removes it. Until the
+   grant, only calls that need the new scope fail, each with a message saying
+   so. #179 confirmed this on a temporary deployment before updating `@2`.
 4. The deployment URL and key become `THRIVE_API_URL` / `THRIVE_API_KEY` for
    consumers, and GitHub Actions secrets for the sync.
 
