@@ -599,3 +599,92 @@ describe('#181 AC3: S and T are appended, and the migration matches', () => {
     expect(headersIn('migrate-181-daily-summary-coverage.mjs')).toEqual([...sandbox.DAILY_SUMMARY_FIELDS]);
   });
 });
+
+describe('#190 AC1: an outdoor total nobody measured is blank, never 0', () => {
+  it('leaves distance and ascent blank when no outdoor session measured them', () => {
+    const { summaryRows: rows } = rebuild({
+      workouts: [
+        workoutRow({ id: 'w_1', date: '2026-09-15', type: 'hike' }),
+        workoutRow({ id: 'w_2', date: '2026-09-15', type: 'bike', sub_type: 'gravel' }),
+      ],
+    }, '2026-09-15', '2026-09-15');
+    expect(rows[0][COL.total_distance_m]).toBe('');
+    expect(rows[0][COL.total_ascent_m]).toBe('');
+    expect(rows[0][COL.distance_withdata]).toBe('0');
+    expect(rows[0][COL.ascent_withdata]).toBe('0');
+    expect(rows[0][COL.cardio_activity_count]).toBe('2');
+  });
+
+  it('decides distance and ascent independently', () => {
+    const { summaryRows: distanceOnly } = rebuild({
+      workouts: [workoutRow({ id: 'w_1', date: '2026-09-15', type: 'bike', distance_m: '12000' })],
+    }, '2026-09-15', '2026-09-15');
+    expect(distanceOnly[0][COL.total_distance_m]).toBe('12000');
+    expect(distanceOnly[0][COL.total_ascent_m]).toBe('');
+    expect(distanceOnly[0][COL.ascent_withdata]).toBe('0');
+
+    const { summaryRows: ascentOnly } = rebuild({
+      workouts: [workoutRow({ id: 'w_1', date: '2026-09-15', type: 'hike', ascent_m: '600' })],
+    }, '2026-09-15', '2026-09-15');
+    expect(ascentOnly[0][COL.total_distance_m]).toBe('');
+    expect(ascentOnly[0][COL.distance_withdata]).toBe('0');
+    expect(ascentOnly[0][COL.total_ascent_m]).toBe('600');
+  });
+
+  // Rows written before #190 carry 0 in F and G with 0 in I and J. A rebuild
+  // corrects them in place rather than appending a second row.
+  it('heals a pre-#190 row in place', () => {
+    const old = ['2026-09-15', '1', 'hike', '', '3600', '0', '0', '1', '0', '0', '', '', '', '', '', '', '', '2026-09-20T00:00:00.000Z', '0', '1'];
+    const { summaryRows: rows, res } = rebuild({
+      workouts: [workoutRow({ id: 'w_1', date: '2026-09-15', type: 'hike', elapsed_seconds: '3600' })],
+      dailySummary: [old],
+    }, '2026-09-15', '2026-09-15');
+    expect(res.data.updated).toBe(1);
+    expect(rows).toHaveLength(1);
+    expect(rows[0][COL.total_distance_m]).toBe('');
+    expect(rows[0][COL.total_ascent_m]).toBe('');
+    expect(rows[0][COL.distance_withdata]).toBe('0');
+  });
+});
+
+describe('#190 AC2: a measured value, including a measured 0, is still summed', () => {
+  it('shows a measured 0 as 0, with coverage 1', () => {
+    const { summaryRows: rows } = rebuild({
+      workouts: [
+        workoutRow({ id: 'w_1', date: '2026-09-15', type: 'walk', distance_m: '0', ascent_m: '0' }),
+        workoutRow({ id: 'w_2', date: '2026-09-15', type: 'walk' }),
+      ],
+    }, '2026-09-15', '2026-09-15');
+    expect(rows[0][COL.total_distance_m]).toBe('0');
+    expect(rows[0][COL.distance_withdata]).toBe('1');
+    expect(rows[0][COL.total_ascent_m]).toBe('0');
+    expect(rows[0][COL.ascent_withdata]).toBe('1');
+    expect(rows[0][COL.cardio_activity_count]).toBe('2');
+  });
+
+  it('leaves F through J blank on indoor-only and weight-only days', () => {
+    const { summaryRows: rows } = rebuild({
+      workouts: [
+        workoutRow({ id: 'w_1', date: '2026-09-15', type: 'bike', sub_type: 'indoor', distance_m: '15000' }),
+        workoutRow({ id: 'w_2', date: '2026-09-16', type: 'weight' }),
+      ],
+    }, '2026-09-15', '2026-09-16');
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      for (const col of ['total_distance_m', 'total_ascent_m', 'cardio_activity_count', 'distance_withdata', 'ascent_withdata'] as const) {
+        expect(row[COL[col]], `${row[COL.date]} ${col}`).toBe('');
+      }
+    }
+  });
+
+  it('stays idempotent with blank outdoor totals', () => {
+    const workouts = () => [
+      workoutRow({ id: 'w_1', date: '2026-09-15', type: 'hike' }),
+      workoutRow({ id: 'w_2', date: '2026-09-16', type: 'bike', distance_m: '19956' }),
+    ];
+    const first = rebuild({ workouts: workouts() }, '2026-09-15', '2026-09-16');
+    const after = JSON.parse(JSON.stringify(first.summaryRows));
+    const second = rebuild({ workouts: workouts(), dailySummary: after }, '2026-09-15', '2026-09-16');
+    expect(second.summaryRows).toEqual(after);
+  });
+});

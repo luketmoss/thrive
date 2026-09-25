@@ -65,11 +65,12 @@ function sumCovered(workouts, field) {
 
 /**
  * A covered total as its cells: `{ total, withData }`, both blank when there
- * was nothing to cover, and the total blank when nothing contributed (#181).
+ * was nothing to cover, and the total blank when nothing contributed (#181;
+ * distance and ascent since #190).
  *
  * The sum of no values is not 0. Writing it as 0 claims "moved for no time"
- * on a day where the truth is "nobody recorded it", the one thing
- * blank-never-zero forbids.
+ * or "went nowhere" on a day where the truth is "nobody recorded it", the one
+ * thing blank-never-zero forbids.
  */
 function coveredCells(covered) {
   if (!covered.of) return { total: '', withData: '' };
@@ -162,8 +163,10 @@ function buildDaySummary(date, workouts, health, computedAt) {
   if (!workouts.length && !health_) return null;
 
   var outdoorCardio = workouts.filter(isOutdoorCardio);
-  var distance = sumCovered(outdoorCardio, 'distance_m');
-  var ascent = sumCovered(outdoorCardio, 'ascent_m');
+  // Blank when no outdoor session measured it, never 0 (#190, as #181 did for
+  // duration). All four cells are blank on a day with no outdoor cardio.
+  var distance = coveredCells(sumCovered(outdoorCardio, 'distance_m'));
+  var ascent = coveredCells(sumCovered(outdoorCardio, 'ascent_m'));
   var effort = summarizeEffort(workouts);
   // Duration applies to every activity type, so its `of` is every activity
   // that day (B), not the outdoor cardio (H) that qualifies distance and
@@ -180,11 +183,11 @@ function buildDaySummary(date, workouts, health, computedAt) {
     // Outdoor only. This will NOT equal the sum of the day's activity
     // distances on any day with an indoor session — correct, and surprising,
     // so it is documented wherever this is displayed.
-    total_distance_m: outdoorCardio.length ? String(distance.total) : '',
-    total_ascent_m: outdoorCardio.length ? String(ascent.total) : '',
-    cardio_activity_count: outdoorCardio.length ? String(distance.of) : '',
-    distance_withdata: outdoorCardio.length ? String(distance.withData) : '',
-    ascent_withdata: outdoorCardio.length ? String(ascent.withData) : '',
+    total_distance_m: distance.total,
+    total_ascent_m: ascent.total,
+    cardio_activity_count: outdoorCardio.length ? String(outdoorCardio.length) : '',
+    distance_withdata: distance.withData,
+    ascent_withdata: ascent.withData,
     max_effort: effort.max,
     effort_counts: effort.counts,
     // Blank, not zero, on every day before the watch existed (#131 AC2).

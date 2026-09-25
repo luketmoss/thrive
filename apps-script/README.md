@@ -211,6 +211,9 @@ second implementation of "catch up" to drift out of step with the one for
 `total_distance_m` and `total_ascent_m` are **outdoor only**: a treadmill's
 distance is a machine estimate of ground never covered. They will not equal
 the sum of a day's activity distances on any day with an indoor session.
+Each is **blank when no outdoor session that day measured it**, never `0`
+(#190); `distance_withdata` (I) and `ascent_withdata` (J) count those that did,
+out of `cardio_activity_count` (H). A measured `0` is still `0`.
 
 `total_moving_s` and `total_elapsed_s` are **blank when no activity that day
 recorded them**, never `0` (#181). `moving_withdata` (S) and `elapsed_withdata`
