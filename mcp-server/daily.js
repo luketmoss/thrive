@@ -182,6 +182,10 @@ export function describeSummaryRange(rows, { from, to }) {
     "that day's activity distances. Derived from Workouts + DailyHealth: where it disagrees with " +
     'thrive_list_workouts, the workouts are right and this row is stale. "—" means unknown, never zero.',
   );
+  out.push(
+    'Moving and elapsed are plain sums with no coverage count: a session that recorded no moving time ' +
+    'adds nothing, so "moving 0 min" on a day with activities means unrecorded, not stationary.',
+  );
   const stamps = sorted.map((r) => r.computed_at).filter((v) => !isBlank(v)).sort();
   if (stamps.length) out.push(`Oldest row computed at ${stamps[0]}.`);
   const missing = missingDaysLine(sorted, from, to, 'DailySummary');

@@ -168,6 +168,7 @@ test('the summary range states the outdoor-only and derived caveats, oldest firs
   assert.match(text, /OUTDOOR ONLY/);
   assert.match(text, /will not equal the sum of that day's activity distances/);
   assert.match(text, /the workouts are right/);
+  assert.match(text, /"moving 0 min" on a day with activities means unrecorded/);
   assert.match(text, /Oldest row computed at 2026-09-17T09:00:00Z\./);
   assert.match(text, /No DailySummary row for 1 day: 2026-09-18\./);
   assert.ok(text.indexOf('- 2026-09-16') < text.indexOf('- 2026-09-17'));

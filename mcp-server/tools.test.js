@@ -97,6 +97,7 @@ test('both new tools are registered, and their descriptions carry the caveats', 
   assert.match(health.description, /never add them to activity distance/);
   assert.match(summary.description, /OUTDOOR ONLY/);
   assert.match(summary.description, /the workouts are right/);
+  assert.match(summary.description, /means unrecorded, not stationary/);
   assert.ok(byName.thrive_list_workouts.inputSchema.properties.source);
 });
 
