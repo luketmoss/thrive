@@ -66,6 +66,8 @@ Google Sheet "Groundwork" with these tabs:
   `total_distance_m`/`total_ascent_m` are **outdoor only**, so they will not
   equal the sum of a day's activity distances on any day with an indoor
   session — correct, and surprising, so say so wherever it is displayed.
+  They are likewise blank when no outdoor session measured them, with I/J
+  counting those that did out of H (#190). A measured `0` stays `0`.
 - **SyncLog** (A:N) — one row per COROS sync run (#156): run_id, started_at,
   finished_at, window_start, window_end, n_seen, n_new, n_updated, n_enriched,
   n_fit_fetched, n_errors, status (`ok`/`partial`/`failed`), error_detail,

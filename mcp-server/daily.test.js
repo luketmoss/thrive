@@ -141,15 +141,38 @@ test('a summary day carries outdoor totals with their coverage', () => {
   );
 });
 
+// #190: F and G are blank when no outdoor session measured them.
 test('unmeasured outdoor sessions read as unknown, not as zero miles', () => {
   const line = describeSummaryDay(summary({
     date: '2026-09-17', activity_count: '2', activity_types: 'hike',
-    total_distance_m: '0', total_ascent_m: '0', cardio_activity_count: '2',
+    total_distance_m: '', total_ascent_m: '', cardio_activity_count: '2',
     distance_withdata: '0', ascent_withdata: '0',
   }));
   assert.match(line, /outdoor distance — \(measured on 0 of 2 outdoor cardio sessions\)/);
   assert.match(line, /outdoor ascent — \(measured on 0 of 2/);
+  assert.doesNotMatch(line, /0 mi|0 ft/);
   assert.match(line, /max effort —/);
+});
+
+// A row written before #190's rebuild still carries 0 with 0 coverage.
+test('a pre-#190 row with 0 distance and 0 coverage reads the same way', () => {
+  const line = describeSummaryDay(summary({
+    date: '2026-09-17', activity_count: '1', activity_types: 'hike',
+    total_distance_m: '0', total_ascent_m: '0', cardio_activity_count: '1',
+    distance_withdata: '0', ascent_withdata: '0',
+  }));
+  assert.match(line, /outdoor distance — \(measured on 0 of 1 outdoor cardio session\)/);
+  assert.match(line, /outdoor ascent — \(measured on 0 of 1 outdoor cardio session\)/);
+});
+
+test('a measured 0 distance is still 0 mi', () => {
+  const line = describeSummaryDay(summary({
+    date: '2026-09-17', activity_count: '1', activity_types: 'walk',
+    total_distance_m: '0', total_ascent_m: '', cardio_activity_count: '1',
+    distance_withdata: '1', ascent_withdata: '0',
+  }));
+  assert.match(line, /outdoor distance 0 mi \(measured on 1 of 1 outdoor cardio session\)/);
+  assert.match(line, /outdoor ascent — \(measured on 0 of 1/);
 });
 
 // #181: duration carries coverage against every session that day.

@@ -380,8 +380,8 @@ scrolls, and Sheets reads are whole-range fetches.
 | C | `activity_types` | e.g. `bike:mountain,weight` |
 | D | `total_moving_s` | Blank when no activity recorded it, never `0` (thrive#181). S is its coverage |
 | E | `total_elapsed_s` | Blank when no activity recorded it, never `0` (thrive#181). T is its coverage |
-| F | `total_distance_m` | **Outdoor only** — see below |
-| G | `total_ascent_m` | **Outdoor only** |
+| F | `total_distance_m` | **Outdoor only** — see below. Blank when no outdoor session measured it, never `0` (thrive#190). I is its coverage |
+| G | `total_ascent_m` | **Outdoor only**. Blank when no outdoor session measured it, never `0` (thrive#190). J is its coverage |
 | H | `cardio_activity_count` | The `of` — outdoor cardio activities that day |
 | I | `distance_withdata` | How many of H contributed to F |
 | J | `ascent_withdata` | How many of H contributed to G |
@@ -404,6 +404,13 @@ elapsed) time is now **blank**, where it used to be `0`. All history was
 rebuilt with the new rule. A reader that treated `0` as "no data" should now
 treat blank that way, and can show coverage as " · 1/2 sessions" when S or T
 is less than B.
+
+**F and G follow the same rule (thrive#190), for almanac.** On a day with
+outdoor cardio where no session measured distance, F is now **blank**, where
+it used to be `0`; likewise G for ascent. I and J (`0` on those days) and H are
+unchanged, no column moved, and all history was rebuilt. A measured `0` (a
+flat walk's 0 m ascent) is still `0`, with I or J counting it. On a day with
+no outdoor cardio, F–J were already blank.
 
 Duration's `of` is `activity_count` (B), **not** `cardio_activity_count` (H):
 every activity type has a duration, indoor and weight sessions included.
@@ -808,6 +815,10 @@ In the order they were taken.
   out of B. Appended rather than placed beside D and E, because almanac reads
   the tab by column. Additive for readers apart from D and E's `0` becoming
   blank.
+- **§5 — outdoor totals blank-never-zero too** (thrive#190). `total_distance_m`
+  (F) and `total_ascent_m` (G) are blank when I or J is `0`, through the same
+  helper as D and E. No schema change; values only, history rebuilt. Kept out
+  of thrive#181 because it changes values almanac reads.
 - **§6 — Thrive gets an Apps Script API**, following Hive's pattern. Caps
   the mirror count at two permanently; does not reduce it to one, because
   the SPA keeps its direct Sheets path as Hive's does.
