@@ -272,7 +272,7 @@ tool(
   'thrive_get_workout_payload',
   "Read a synced or enriched workout's archived COROS detail payload: COROS's own text for the activity, " +
     'which carries what the workout fields do not, such as max and average speed, training effect and, ' +
-    'where COROS includes them, max heart rate and laps.Use it only when a question needs one of those; the ' +
+    'where COROS includes them, max heart rate and laps. Use it only when a question needs one of those; the ' +
     'workout fields from thrive_get_workout are what Thrive uses, and win where the two disagree. ' +
     'Returns up to 20,000 characters per call. A longer payload ends with a [Truncated: ...] line giving ' +
     'the offset for the next page; nothing is ever cut off without that line. Hand-logged workouts have no ' +
