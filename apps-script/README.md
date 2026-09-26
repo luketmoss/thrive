@@ -230,6 +230,19 @@ recorded them**, never `0` (#181). `moving_withdata` (S) and `elapsed_withdata`
 (T) count the activities that did, out of `activity_count` (B), every activity
 of every type. They are appended after `computed_at` so no earlier column moved.
 
+`weight_kg` (U), `fat_ratio_pct` (V), `systolic_mmhg` (W), `diastolic_mmhg` (X)
+and `bp_count` (Y) are rolled up from `BodyMeasurements` (#198, #203), appended
+after `elapsed_withdata` for the same column-position reason. Weight and fat
+ratio come from the day's **first** scale reading with a weight, by
+`measured_at_utc`, never a mean — a morning weigh-in is the comparable figure
+day to day, and fat ratio is read from that same reading, never mixed in from
+another. Blood pressure is the **mean** of the day's BP readings, systolic and
+diastolic independently, rounded half up to whole mmHg, with `bp_count`
+counting the readings (rows), not the values that happened to be present in
+them. A day with no scale or no BP reading leaves that half blank, never `0`;
+a day with only body readings still gets a row, with every other column blank
+as usual. A missing `BodyMeasurements` tab leaves U:Y blank everywhere.
+
 ### DailyHealth (#165, #158)
 
 | Action | Parameters / payload |

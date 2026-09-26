@@ -1,5 +1,5 @@
-// DailySummary tab (A:T) — one row per local calendar day, rolled up from
-// Workouts and DailyHealth.
+// DailySummary tab (A:Y) — one row per local calendar day, rolled up from
+// Workouts, DailyHealth and BodyMeasurements (#203).
 //
 // **Derived, never authoritative.** Every row is rebuildable at any time from
 // its sources. Nothing writes here by hand and no consumer may treat it as a
@@ -152,15 +152,93 @@ function getDailyHealth() {
 }
 
 /**
+ * Every BodyMeasurements row, grouped by local date into its scale and BP
+ * readings (#203). A missing tab leaves this `{}`, exactly as a missing
+ * DailyHealth tab leaves `getDailyHealth` `{}`: a day with no BodyMeasurements
+ * is legitimately body-less, not a day of zeros.
+ */
+function getBodyMeasurementsByDate() {
+  var rows = readBodyMeasurementRows();
+  var byDate = {};
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    if (!Object.prototype.hasOwnProperty.call(byDate, r.date)) {
+      byDate[r.date] = { scale: [], bp: [] };
+    }
+    if (r.kind === 'scale') byDate[r.date].scale.push(r);
+    else if (r.kind === 'bp') byDate[r.date].bp.push(r);
+  }
+  return byDate;
+}
+
+/** Round half up to the nearest whole number — Math.round's tie-break, made explicit. */
+function roundHalfUp(n) {
+  return Math.floor(n + 0.5);
+}
+
+/**
+ * The day's five body columns (#203), from its BodyMeasurements readings, or
+ * all blank when the day had none.
+ *
+ * Weight and fat ratio come from the day's FIRST scale reading that has a
+ * weight, by `measured_at_utc` (not sheet order): a morning, pre-breakfast
+ * weigh-in is the most comparable figure day to day, and a mean would move
+ * with an evening one. Fat ratio comes from that same reading, never mixed in
+ * from another.
+ *
+ * Blood pressure is the mean of every BP reading that day, systolic and
+ * diastolic independently, rounded half up to whole mmHg. `bp_count` counts
+ * BP readings (rows), not the values that happened to be present in them — a
+ * reading missing one side still counts, and still contributes to the mean it
+ * has.
+ */
+function summarizeBodyDay(dayBody) {
+  var blank = {
+    weight_kg: '', fat_ratio_pct: '', systolic_mmhg: '', diastolic_mmhg: '', bp_count: '',
+  };
+  if (!dayBody) return blank;
+
+  var weight_kg = '';
+  var fat_ratio_pct = '';
+  var withWeight = dayBody.scale.filter(function (m) { return m.weight_kg !== ''; });
+  if (withWeight.length) {
+    withWeight.sort(function (a, b) {
+      return Date.parse(a.measured_at_utc) - Date.parse(b.measured_at_utc);
+    });
+    weight_kg = withWeight[0].weight_kg;
+    fat_ratio_pct = withWeight[0].fat_ratio_pct;
+  }
+
+  var sysSum = 0, sysCount = 0, diaSum = 0, diaCount = 0;
+  for (var i = 0; i < dayBody.bp.length; i++) {
+    var r = dayBody.bp[i];
+    if (r.systolic_mmhg !== '') { sysSum += Number(r.systolic_mmhg); sysCount += 1; }
+    if (r.diastolic_mmhg !== '') { diaSum += Number(r.diastolic_mmhg); diaCount += 1; }
+  }
+
+  return {
+    weight_kg: weight_kg,
+    fat_ratio_pct: fat_ratio_pct,
+    systolic_mmhg: sysCount ? String(roundHalfUp(sysSum / sysCount)) : '',
+    diastolic_mmhg: diaCount ? String(roundHalfUp(diaSum / diaCount)) : '',
+    bp_count: dayBody.bp.length ? String(dayBody.bp.length) : '',
+  };
+}
+
+/**
  * The summary for one day, or `null` when the day has nothing to report.
  *
- * A day with no activities and no health data produces **no row** rather than
- * a row of zeros (#131 AC1). Zero activities and "we have no information" are
- * different claims, and only one of them is true of a day nobody trained.
+ * A day with no activities, no health data and no body measurement produces
+ * **no row** rather than a row of zeros (#131 AC1, extended by #203). Zero
+ * activities and "we have no information" are different claims, and only one
+ * of them is true of a day nobody trained, wore the watch or stepped on the
+ * scale.
  */
-function buildDaySummary(date, workouts, health, computedAt) {
+function buildDaySummary(date, workouts, health, computedAt, body) {
   var health_ = health || null;
-  if (!workouts.length && !health_) return null;
+  var body_ = body || null;
+  if (!workouts.length && !health_ && !body_) return null;
+  var bodySummary = summarizeBodyDay(body_);
 
   var outdoorCardio = workouts.filter(isOutdoorCardio);
   // Blank when no outdoor session measured it, never 0 (#190, as #181 did for
@@ -200,6 +278,12 @@ function buildDaySummary(date, workouts, health, computedAt) {
     // Appended after R, not beside D and E, so no column almanac reads moves.
     moving_withdata: moving.withData,
     elapsed_withdata: elapsed.withData,
+    // Appended after T (#203), for the same reason.
+    weight_kg: bodySummary.weight_kg,
+    fat_ratio_pct: bodySummary.fat_ratio_pct,
+    systolic_mmhg: bodySummary.systolic_mmhg,
+    diastolic_mmhg: bodySummary.diastolic_mmhg,
+    bp_count: bodySummary.bp_count,
   };
 }
 
@@ -286,6 +370,7 @@ function rebuildDailySummary(from, to, options) {
   }
 
   var health = getDailyHealth();
+  var body = getBodyMeasurementsByDate();
 
   var sheet = getSheet(DAILY_SUMMARY_SHEET);
   var existing = getDailySummaries();
@@ -302,8 +387,9 @@ function rebuildDailySummary(from, to, options) {
     var date = dates[k];
     var dayWorkouts = Object.prototype.hasOwnProperty.call(byDate, date) ? byDate[date] : [];
     var dayHealth = Object.prototype.hasOwnProperty.call(health, date) ? health[date] : null;
+    var dayBody = Object.prototype.hasOwnProperty.call(body, date) ? body[date] : null;
 
-    var summary = buildDaySummary(date, dayWorkouts, dayHealth, computedAt);
+    var summary = buildDaySummary(date, dayWorkouts, dayHealth, computedAt, dayBody);
     if (!summary) {
       skipped += 1;
       // A day that has a row but no longer earns one — its last workout was

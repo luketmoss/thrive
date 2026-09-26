@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
-import { loadApi, callDoGet, workoutRow, healthRow, type CellValue } from './apps-script-sandbox';
+import { loadApi, callDoGet, workoutRow, healthRow, bodyRow, type CellValue } from './apps-script-sandbox';
 
 const AT = '2026-09-20T12:00:00.000Z';
 
@@ -17,10 +17,14 @@ const COL = {
   max_effort: 10, effort_counts: 11, steps: 12, resting_hr: 13, hrv: 14,
   sleep_total_s: 15, training_load: 16, computed_at: 17,
   moving_withdata: 18, elapsed_withdata: 19,
+  weight_kg: 20, fat_ratio_pct: 21, systolic_mmhg: 22, diastolic_mmhg: 23, bp_count: 24,
 };
 
 function rebuild(
-  fixtures: { workouts?: CellValue[][]; dailySummary?: CellValue[][]; dailyHealth?: CellValue[][] },
+  fixtures: {
+    workouts?: CellValue[][]; dailySummary?: CellValue[][]; dailyHealth?: CellValue[][];
+    bodyMeasurements?: CellValue[][];
+  },
   from: string,
   to: string,
   computedAt: string | undefined = AT,
@@ -454,13 +458,13 @@ describe('the tab is readable, and history bounds are discoverable', () => {
     expect(res.data).toEqual({ from: '2026-03-04', to: '2026-09-15' });
   });
 
-  it('returns all 20 columns on a read', () => {
+  it('returns all 25 columns on a read', () => {
     const first = rebuild({
       workouts: [workoutRow({ id: 'w_1', date: '2026-09-15', type: 'weight' })],
     }, '2026-09-15', '2026-09-15');
     const res = callDoGet<any[]>(first.sandbox, { action: 'getDailySummary' });
-    expect(Object.keys(res.data[0])).toHaveLength(21); // 20 + sheetRow
-    expect(first.summaryRows[0]).toHaveLength(20);
+    expect(Object.keys(res.data[0])).toHaveLength(26); // 25 + sheetRow
+    expect(first.summaryRows[0]).toHaveLength(25);
   });
 });
 
@@ -591,12 +595,32 @@ describe('#181 AC3: S and T are appended, and the migration matches', () => {
     expect([...sandbox.DAILY_SUMMARY_FIELDS].slice(0, 18)).toEqual(headersIn('migrate-131-daily-summary-tab.mjs'));
     expect(sandbox.DAILY_SUMMARY_FIELDS[18]).toBe('moving_withdata');
     expect(sandbox.DAILY_SUMMARY_FIELDS[19]).toBe('elapsed_withdata');
-    expect(sandbox.DAILY_SUMMARY_COLUMN_COUNT).toBe(20);
   });
 
-  it('matches the headers the #181 migration writes', () => {
+  it('matches the headers the #181 migration writes, as a prefix of the current field list', () => {
     const { sandbox } = loadApi();
-    expect(headersIn('migrate-181-daily-summary-coverage.mjs')).toEqual([...sandbox.DAILY_SUMMARY_FIELDS]);
+    expect(headersIn('migrate-181-daily-summary-coverage.mjs')).toEqual([...sandbox.DAILY_SUMMARY_FIELDS].slice(0, 20));
+  });
+});
+
+describe('#203 AC1: U:Y are appended, and the migration matches', () => {
+  const headersIn = (name: string) => {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const script = readFileSync(path.resolve(here, '..', '..', 'scripts', name), 'utf8');
+    const list = script.match(/const HEADERS = \[([\s\S]*?)\];/);
+    expect(list, `HEADERS array in ${name}`).not.toBeNull();
+    return [...list![1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  };
+
+  it('keeps A:T exactly as #181 left them, so no column almanac reads moves', () => {
+    const { sandbox } = loadApi();
+    expect([...sandbox.DAILY_SUMMARY_FIELDS].slice(20)).toEqual(['weight_kg', 'fat_ratio_pct', 'systolic_mmhg', 'diastolic_mmhg', 'bp_count']);
+    expect(sandbox.DAILY_SUMMARY_COLUMN_COUNT).toBe(25);
+  });
+
+  it('matches the headers the #203 migration writes', () => {
+    const { sandbox } = loadApi();
+    expect(headersIn('migrate-203-daily-summary-body.mjs')).toEqual([...sandbox.DAILY_SUMMARY_FIELDS]);
   });
 });
 
@@ -685,6 +709,216 @@ describe('#190 AC2: a measured value, including a measured 0, is still summed', 
     const first = rebuild({ workouts: workouts() }, '2026-09-15', '2026-09-16');
     const after = JSON.parse(JSON.stringify(first.summaryRows));
     const second = rebuild({ workouts: workouts(), dailySummary: after }, '2026-09-15', '2026-09-16');
+    expect(second.summaryRows).toEqual(after);
+  });
+});
+
+describe('#203 AC2: weight and fat ratio come from the day\'s first weigh-in', () => {
+  it('takes weight and fat ratio from the earliest scale reading by measured_at_utc, not sheet order', () => {
+    const { summaryRows } = rebuild({
+      workouts: [],
+      bodyMeasurements: [
+        // Sheet order is scrambled: the 19:10 reading is written first.
+        bodyRow({
+          grpid: '2', date: '2026-09-15', time: '19:10', measured_at_utc: '2026-09-15T19:10:00-06:00',
+          kind: 'scale', weight_kg: '73.1',
+        }),
+        bodyRow({
+          grpid: '1', date: '2026-09-15', time: '06:40', measured_at_utc: '2026-09-15T06:40:00-06:00',
+          kind: 'scale', weight_kg: '72.3', fat_ratio_pct: '21.4',
+        }),
+      ],
+    }, '2026-09-15', '2026-09-15');
+    expect(summaryRows[0][COL.weight_kg]).toBe('72.3');
+    expect(summaryRows[0][COL.fat_ratio_pct]).toBe('21.4');
+  });
+
+  it('leaves fat_ratio_pct blank when the first weigh-in had none, even though a later one does', () => {
+    const { summaryRows } = rebuild({
+      workouts: [],
+      bodyMeasurements: [
+        bodyRow({
+          grpid: '1', date: '2026-09-15', time: '06:40', measured_at_utc: '2026-09-15T06:40:00-06:00',
+          kind: 'scale', weight_kg: '72.3',
+        }),
+        bodyRow({
+          grpid: '2', date: '2026-09-15', time: '19:10', measured_at_utc: '2026-09-15T19:10:00-06:00',
+          kind: 'scale', weight_kg: '73.1', fat_ratio_pct: '22.0',
+        }),
+      ],
+    }, '2026-09-15', '2026-09-15');
+    expect(summaryRows[0][COL.weight_kg]).toBe('72.3');
+    expect(summaryRows[0][COL.fat_ratio_pct]).toBe('');
+  });
+
+  it('skips a first reading with no weight in favor of the next one that has it', () => {
+    const { summaryRows } = rebuild({
+      workouts: [],
+      bodyMeasurements: [
+        // A reading with no weight at all (an unusual group) — not the "first weigh-in".
+        bodyRow({
+          grpid: '1', date: '2026-09-15', time: '06:00', measured_at_utc: '2026-09-15T06:00:00-06:00',
+          kind: 'scale', fat_ratio_pct: '20.0',
+        }),
+        bodyRow({
+          grpid: '2', date: '2026-09-15', time: '06:40', measured_at_utc: '2026-09-15T06:40:00-06:00',
+          kind: 'scale', weight_kg: '72.3', fat_ratio_pct: '21.4',
+        }),
+      ],
+    }, '2026-09-15', '2026-09-15');
+    expect(summaryRows[0][COL.weight_kg]).toBe('72.3');
+    expect(summaryRows[0][COL.fat_ratio_pct]).toBe('21.4');
+  });
+});
+
+describe('#203 AC3: blood pressure is the mean, with its count', () => {
+  it('means systolic and diastolic separately, rounded half up, with the count of readings', () => {
+    const { summaryRows } = rebuild({
+      workouts: [],
+      bodyMeasurements: [
+        bodyRow({
+          grpid: '1', date: '2026-09-15', time: '08:00', measured_at_utc: '2026-09-15T08:00:00-06:00',
+          kind: 'bp', systolic_mmhg: '121', diastolic_mmhg: '79',
+        }),
+        bodyRow({
+          grpid: '2', date: '2026-09-15', time: '08:05', measured_at_utc: '2026-09-15T08:05:00-06:00',
+          kind: 'bp', systolic_mmhg: '118', diastolic_mmhg: '76',
+        }),
+        bodyRow({
+          grpid: '3', date: '2026-09-15', time: '08:10', measured_at_utc: '2026-09-15T08:10:00-06:00',
+          kind: 'bp', systolic_mmhg: '116', diastolic_mmhg: '77',
+        }),
+      ],
+    }, '2026-09-15', '2026-09-15');
+    // mean systolic (121+118+116)/3 = 118.33 -> 118; mean diastolic (79+76+77)/3 = 77.33 -> 77
+    expect(summaryRows[0][COL.systolic_mmhg]).toBe('118');
+    expect(summaryRows[0][COL.diastolic_mmhg]).toBe('77');
+    expect(summaryRows[0][COL.bp_count]).toBe('3');
+  });
+
+  it('rounds a mean exactly at the half up, not to even', () => {
+    const { summaryRows } = rebuild({
+      workouts: [],
+      bodyMeasurements: [
+        bodyRow({
+          grpid: '1', date: '2026-09-15', time: '08:00', measured_at_utc: '2026-09-15T08:00:00-06:00',
+          kind: 'bp', systolic_mmhg: '120', diastolic_mmhg: '80',
+        }),
+        bodyRow({
+          grpid: '2', date: '2026-09-15', time: '08:05', measured_at_utc: '2026-09-15T08:05:00-06:00',
+          kind: 'bp', systolic_mmhg: '121', diastolic_mmhg: '81',
+        }),
+      ],
+    }, '2026-09-15', '2026-09-15');
+    // (120+121)/2 = 120.5 -> 121 (half up); (80+81)/2 = 80.5 -> 81
+    expect(summaryRows[0][COL.systolic_mmhg]).toBe('121');
+    expect(summaryRows[0][COL.diastolic_mmhg]).toBe('81');
+  });
+
+  it('a reading missing one value contributes only to the mean it has, but still counts in bp_count', () => {
+    const { summaryRows } = rebuild({
+      workouts: [],
+      bodyMeasurements: [
+        bodyRow({
+          grpid: '1', date: '2026-09-15', time: '08:00', measured_at_utc: '2026-09-15T08:00:00-06:00',
+          kind: 'bp', systolic_mmhg: '120', diastolic_mmhg: '80',
+        }),
+        // Diastolic missing on this one reading.
+        bodyRow({
+          grpid: '2', date: '2026-09-15', time: '08:05', measured_at_utc: '2026-09-15T08:05:00-06:00',
+          kind: 'bp', systolic_mmhg: '100',
+        }),
+      ],
+    }, '2026-09-15', '2026-09-15');
+    expect(summaryRows[0][COL.systolic_mmhg]).toBe('110'); // (120+100)/2
+    expect(summaryRows[0][COL.diastolic_mmhg]).toBe('80'); // only the one value
+    expect(summaryRows[0][COL.bp_count]).toBe('2');
+  });
+});
+
+describe('#203 AC4: blank, never 0, and body-only days get a row', () => {
+  it('leaves the weight columns blank on a day with no scale reading', () => {
+    const { summaryRows } = rebuild({
+      workouts: [],
+      bodyMeasurements: [
+        bodyRow({
+          grpid: '1', date: '2026-09-15', time: '08:00', measured_at_utc: '2026-09-15T08:00:00-06:00',
+          kind: 'bp', systolic_mmhg: '120', diastolic_mmhg: '80',
+        }),
+      ],
+    }, '2026-09-15', '2026-09-15');
+    expect(summaryRows[0][COL.weight_kg]).toBe('');
+    expect(summaryRows[0][COL.fat_ratio_pct]).toBe('');
+  });
+
+  it('leaves the BP columns and bp_count blank (never 0) on a day with no BP reading', () => {
+    const { summaryRows } = rebuild({
+      workouts: [],
+      bodyMeasurements: [
+        bodyRow({
+          grpid: '1', date: '2026-09-15', time: '06:40', measured_at_utc: '2026-09-15T06:40:00-06:00',
+          kind: 'scale', weight_kg: '72.3',
+        }),
+      ],
+    }, '2026-09-15', '2026-09-15');
+    expect(summaryRows[0][COL.systolic_mmhg]).toBe('');
+    expect(summaryRows[0][COL.diastolic_mmhg]).toBe('');
+    expect(summaryRows[0][COL.bp_count]).toBe('');
+    expect(summaryRows[0][COL.bp_count]).not.toBe(0);
+    expect(summaryRows[0][COL.bp_count]).not.toBe('0');
+  });
+
+  it('gives a body-only day a row, with the other columns blank and B as \'\' rather than 0', () => {
+    const { summaryRows } = rebuild({
+      workouts: [],
+      bodyMeasurements: [
+        bodyRow({
+          grpid: '1', date: '2026-09-15', time: '06:40', measured_at_utc: '2026-09-15T06:40:00-06:00',
+          kind: 'scale', weight_kg: '72.3', fat_ratio_pct: '21.4',
+        }),
+      ],
+    }, '2026-09-15', '2026-09-15');
+    expect(summaryRows).toHaveLength(1);
+    expect(summaryRows[0][COL.weight_kg]).toBe('72.3');
+    expect(summaryRows[0][COL.activity_count]).toBe('');
+    expect(summaryRows[0][COL.activity_count]).not.toBe(0);
+    expect(summaryRows[0][COL.steps]).toBe('');
+  });
+
+  it('gives no row to a day with nothing at all', () => {
+    const { summaryRows } = rebuild({ workouts: [] }, '2026-09-15', '2026-09-15');
+    expect(summaryRows).toHaveLength(0);
+  });
+
+  it('leaves U:Y blank everywhere when the BodyMeasurements tab does not exist, and fails nothing', () => {
+    const { res, summaryRows } = rebuild({
+      workouts: [workoutRow({ id: 'w_1', date: '2026-09-15', type: 'weight' })],
+    }, '2026-09-15', '2026-09-15');
+    expect(res.success).toBe(true);
+    expect(summaryRows[0][COL.weight_kg]).toBe('');
+    expect(summaryRows[0][COL.systolic_mmhg]).toBe('');
+    expect(summaryRows[0][COL.bp_count]).toBe('');
+  });
+});
+
+describe('#203 AC5: the rollup stays idempotent with the body columns', () => {
+  it('produces byte-identical rows on a second run', () => {
+    const bodyMeasurements = () => [
+      bodyRow({
+        grpid: '1', date: '2026-09-15', time: '06:40', measured_at_utc: '2026-09-15T06:40:00-06:00',
+        kind: 'scale', weight_kg: '72.3', fat_ratio_pct: '21.4',
+      }),
+      bodyRow({
+        grpid: '2', date: '2026-09-15', time: '08:00', measured_at_utc: '2026-09-15T08:00:00-06:00',
+        kind: 'bp', systolic_mmhg: '120', diastolic_mmhg: '80',
+      }),
+    ];
+    const workouts = () => [workoutRow({ id: 'w_1', date: '2026-09-15', type: 'weight' })];
+    const first = rebuild({ workouts: workouts(), bodyMeasurements: bodyMeasurements() }, '2026-09-15', '2026-09-15');
+    const after = JSON.parse(JSON.stringify(first.summaryRows));
+    const second = rebuild({
+      workouts: workouts(), bodyMeasurements: bodyMeasurements(), dailySummary: after,
+    }, '2026-09-15', '2026-09-15');
     expect(second.summaryRows).toEqual(after);
   });
 });

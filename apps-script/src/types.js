@@ -192,8 +192,9 @@ var SET_UPDATE_FIELDS = ['weight', 'reps', 'planned_reps', 'effort'];
 // coverage, so they belong together; readable ordering is free while the tab
 // does not exist yet, and a migration later.
 //
-// The duration coverage (S, T) came later (#181) and is appended instead:
-// almanac (luketmoss/keel) reads this tab by column, so no letter A:R may move.
+// The duration coverage (S, T) came later (#181), and the body columns (U-Y)
+// later still (#203); both are appended, not inserted, because almanac
+// (luketmoss/keel) reads this tab by column, so no letter A:T may move.
 var DAILY_SUMMARY_FIELDS = [
   'date',                  // A  PK, America/Denver local calendar date
   'activity_count',        // B  all activities, indoor and outdoor
@@ -215,9 +216,14 @@ var DAILY_SUMMARY_FIELDS = [
   'computed_at',           // R
   'moving_withdata',       // S  #181: how many of B contributed to D
   'elapsed_withdata',      // T  #181: how many of B contributed to E
+  'weight_kg',             // U  #203: from BodyMeasurements, the day's FIRST scale reading with a weight
+  'fat_ratio_pct',         // V  #203: from that same reading, never mixed from another one
+  'systolic_mmhg',         // W  #203: mean of the day's BP readings, rounded half up
+  'diastolic_mmhg',        // X  #203: mean of the day's BP readings, rounded half up
+  'bp_count',              // Y  #203: BP readings that day (rows, not values)
 ];
 
-var DAILY_SUMMARY_COLUMN_COUNT = 20;
+var DAILY_SUMMARY_COLUMN_COUNT = 25;
 
 // --- DailyHealth (A:R) — #165 ---------------------------------------
 //

@@ -13,12 +13,14 @@ import {
 const env = { WITHINGS_CLIENT_ID: CLIENT_ID, WITHINGS_CLIENT_SECRET: CLIENT_SECRET };
 
 /** A fake Thrive API holding BodyMeasurements in memory, keyed by grpid (#198). */
-function fakeBodyApi() {
+function fakeBodyApi({ rollupError } = {}) {
   const tab = new Map();
   const calls = [];
+  const rollupCalls = [];
   return {
     tab,
     calls,
+    rollupCalls,
     async upsertBodyMeasurements(rows, syncedAt) {
       calls.push({ rows, syncedAt });
       let appended = 0;
@@ -28,6 +30,11 @@ function fakeBodyApi() {
         tab.set(row.grpid, { ...row, synced_at: syncedAt });
       }
       return { appended, updated, batches: rows.length ? 1 : 0 };
+    },
+    async rebuildDailySummary(from, to, computedAt) {
+      rollupCalls.push({ from, to, computedAt });
+      if (rollupError) throw rollupError;
+      return { written: 1, updated: 0, removed: 0 };
     },
   };
 }
@@ -297,7 +304,10 @@ test('AC5: every archived group is normalized and upserted, with raw_ref its arc
   assert.equal(byGrpid['1'].weight_kg, '81.234');
   assert.equal(byGrpid['1'].fat_ratio_pct, '18.5');
   assert.equal(byGrpid['2'].kind, 'bp');
-  assert.deepEqual(res.sheet, { rows: 2, appended: 2, updated: 0, skipped: [], failed: [], notes: '', error: null });
+  assert.deepEqual(res.sheet, {
+    rows: 2, appended: 2, updated: 0, skipped: [], failed: [], notes: '', error: null,
+    rollup: { written: 1, updated: 0, removed: 0 }, rollupError: null,
+  });
   assert.match(h.out.join('\n'), /Sheet: 2 archived groups seen, 2 rows appended, 0 updated, 0 skipped as unattributed, 0 failed\./);
   assert.doesNotMatch([...h.out, ...h.err].join('\n'), /81\.234|81234/);
 });
@@ -391,9 +401,13 @@ test('AC5: rows go through the real client in batches under the payload limit', 
   const { createThriveApi, MAX_ENCODED_PAYLOAD } = await import('../src/thrive-api.mjs');
   const sent = [];
   const fetchImpl = async (url) => {
+    const action = new URL(url).searchParams.get('action');
     const payload = new URL(url).searchParams.get('payload');
     assert.ok(encodeURIComponent(payload).length <= MAX_ENCODED_PAYLOAD);
     const body = JSON.parse(payload);
+    if (action === 'rebuildDailySummary') {
+      return { status: 200, text: async () => JSON.stringify({ success: true, data: { written: 1, updated: 0, removed: 0 } }) };
+    }
     sent.push(...body.rows);
     return { status: 200, text: async () => JSON.stringify({ success: true, data: { appended: body.rows.length, updated: 0 } }) };
   };
@@ -404,4 +418,72 @@ test('AC5: rows go through the real client in batches under the payload limit', 
   assert.equal(res.exitCode, 0, h.err.join('\n'));
   assert.equal(sent.length, 40);
   assert.equal(res.sheet.appended, 40);
+});
+
+// --- #203: the rollup after the sheet write ----------------------------------
+
+test('#203 AC5: an appended row triggers one rebuild, over the window\'s start to runDate', async () => {
+  const h = harness([getmeasPage([measureGroup(1, D1, scaleMeasures)])]);
+  const res = await h.run();
+  assert.equal(res.exitCode, 0, h.err.join('\n'));
+  assert.equal(h.api.rollupCalls.length, 1);
+  const [call] = h.api.rollupCalls;
+  assert.equal(call.from, '2026-08-25'); // D - 30
+  assert.equal(call.to, '2026-09-24'); // D (runDate), not D + 1
+  assert.match(h.out.join('\n'), /DailySummary 2026-08-25 to 2026-09-24: 1 written, 0 updated, 0 removed/);
+});
+
+test('#203 AC5: an updated row also triggers the rebuild', async () => {
+  const drive = memoryDrive();
+  const api = fakeBodyApi();
+  const page = () => getmeasPage([measureGroup(1, D1, scaleMeasures)]);
+  await harness([page()], { drive, api }).run();
+  const res = await harness([page()], { drive, api }).run();
+  assert.equal(res.exitCode, 0);
+  assert.equal(res.sheet.updated, 1);
+  assert.equal(api.rollupCalls.length, 2);
+});
+
+test('#203 AC5: a run that changed nothing does not rebuild', async () => {
+  const h = harness([getmeasPage([])]);
+  const res = await h.run();
+  assert.equal(res.exitCode, 0);
+  assert.equal(res.sheet.appended, 0);
+  assert.equal(res.sheet.updated, 0);
+  assert.equal(h.api.rollupCalls.length, 0);
+});
+
+test('#203 AC5: a backfill run never rebuilds — the range can span years', async () => {
+  const drive = memoryDrive();
+  const store = memoryStore(storedWithings({ expiresInMs: 2 * HOUR }));
+  const api = fakeBodyApi();
+  const { fetchImpl } = scriptedFetch([getmeasPage([measureGroup(1, D1, scaleMeasures)])]);
+  const res = await withingsRun({
+    env, now: () => NOW, fetchImpl, retry, print: () => {}, printError: () => {},
+    window: { startdate: 0, enddate: 999999999 }, backfill: true,
+    deps: { createDrive: () => drive, createTokenStore: () => store, createApi: () => api },
+  });
+  assert.equal(res.exitCode, 0);
+  assert.equal(res.sheet.appended, 1);
+  assert.equal(api.rollupCalls.length, 0);
+});
+
+test('#203 AC5: a failed rebuild is reported and exits 1, without undoing the sheet write', async () => {
+  const api = fakeBodyApi({ rollupError: new Error('rebuildDailySummary: timeout') });
+  const h = harness([getmeasPage([measureGroup(1, D1, scaleMeasures)])], { api });
+  const res = await h.run();
+  assert.equal(res.exitCode, 1);
+  assert.equal(res.sheet.appended, 1);
+  assert.equal(res.sheet.rollupError.message, 'rebuildDailySummary: timeout');
+  assert.match(h.err.join('\n'), /DailySummary rebuild: Error: rebuildDailySummary: timeout/);
+});
+
+test('#203 AC5: a failed sheet write skips the rebuild entirely', async () => {
+  const h = harness([getmeasPage([measureGroup(1, D1, scaleMeasures)])], {
+    api: { async upsertBodyMeasurements() { throw new Error('boom'); } },
+  });
+  const res = await h.run();
+  assert.equal(res.exitCode, 1);
+  assert.equal(res.sheet.error.message, 'boom');
+  assert.equal(res.sheet.rollup, null);
 });

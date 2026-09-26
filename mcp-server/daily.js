@@ -6,7 +6,7 @@
 // not conclude "no sleep", and a missing label would hide that the field
 // exists at all.
 
-import { todayStr, secondsToMinutes, metersToMiles, metersToFeet } from './domain.js';
+import { todayStr, secondsToMinutes, metersToMiles, metersToFeet, kgToLb } from './domain.js';
 
 export const BLANK = '—';
 
@@ -156,6 +156,21 @@ function coveredTotal(total, withData, of, render, { verb, noun }) {
 
 const minutes = (s) => `${secondsToMinutes(s)} min`;
 
+/** "72.3" -> "72.3 kg (159.4 lb)"; blank -> "—". */
+const mass = (kg) => (isBlank(kg) ? BLANK : `${kg} kg (${kgToLb(kg)} lb)`);
+
+/**
+ * "118", "77", "3" -> "118/77 mean of 3"; blank `bp_count` -> "—" (#203). A
+ * side missing from every reading that day shows as "—" on that side alone,
+ * as body.js's per-reading BP does.
+ */
+function bpMean(s) {
+  if (isBlank(s.bp_count)) return BLANK;
+  const sys = isBlank(s.systolic_mmhg) ? BLANK : s.systolic_mmhg;
+  const dia = isBlank(s.diastolic_mmhg) ? BLANK : s.diastolic_mmhg;
+  return `${sys}/${dia} mean of ${s.bp_count}`;
+}
+
 /** One DailySummary object -> one line. */
 export function describeSummaryDay(s) {
   const parts = [`- ${s.date}:`];
@@ -181,6 +196,9 @@ export function describeSummaryDay(s) {
   parts.push(`· HRV ${withUnit(s.hrv, ' ms')}`);
   parts.push(`· sleep ${fmtHours(s.sleep_total_s)}`);
   parts.push(`· training load ${withUnit(s.training_load, '')}`);
+  parts.push(`· weight ${mass(s.weight_kg)}`);
+  parts.push(`· fat ${withUnit(s.fat_ratio_pct, ' %')}`);
+  parts.push(`· BP ${bpMean(s)}`);
   return parts.join(' ');
 }
 
@@ -196,6 +214,10 @@ export function describeSummaryRange(rows, { from, to }) {
   out.push(
     "Moving and elapsed say how many of the day's sessions recorded them: \"recorded on 1 of 2\" means " +
     'the total covers one session and the other is unknown, not zero.',
+  );
+  out.push(
+    'Weight and fat are the day\'s FIRST scale reading with a weight, not a mean; BP is the MEAN of the ' +
+    "day's readings, with the count behind it. Both are rolled up from BodyMeasurements (#203); \"—\" means no such reading that day.",
   );
   const stamps = sorted.map((r) => r.computed_at).filter((v) => !isBlank(v)).sort();
   if (stamps.length) out.push(`Oldest row computed at ${stamps[0]}.`);
