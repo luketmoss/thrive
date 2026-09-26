@@ -9,6 +9,7 @@
     "google-authorize": "node google-authorize.mjs",
     "authorize": "node authorize.mjs",
     "withings-authorize": "node withings-authorize.mjs",
+    "withings-run": "node withings-run.mjs",
     "start": "node run.mjs"
   },
   "engines": {

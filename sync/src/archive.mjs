@@ -10,6 +10,10 @@
 //
 // Nothing here parses a payload. It stores COROS's text exactly as served,
 // because that text is the only way to re-parse after COROS changes it.
+//
+// `createArchiveStore` is the vendor-neutral part (folders, create-or-update
+// by tag, hash compare). Withings' archive (#197, withings-archive.mjs) is
+// built on it with its own root and tags.
 
 import { createHash } from 'node:crypto';
 import { APP_PROPERTY_FOLDER_KIND, APP_PROPERTY_ROOT, DRIVE_ROOT_FOLDER } from './config.mjs';
@@ -48,24 +52,38 @@ const listEntryChanged = (current, record) =>
   record.list_entry !== undefined && entryIdentity(current?.list_entry) !== entryIdentity(record.list_entry);
 
 /**
+ * The vendor-neutral half of an archive: a root folder, dated subfolders under
+ * it, and JSON files created or updated in place by their tags (#152, #197).
+ * COROS and Withings each get one, with their own root and folder tags, so no
+ * lookup can match the other vendor's files.
+ *
  * @param {ReturnType<import('./drive.mjs').createDrive>} drive
- * @param {{ now?: () => number }} [opts]
+ * @param {{
+ *   rootName: string, rootProps: object, folderKind: string,
+ *   now?: () => number,
+ *   initial?: object,
+ *   carry?: (current: object|null) => object,
+ * }} opts
+ *   `initial` is added to a new file's record, and `carry(current)` to an
+ *   updated one, after the record, so a field another step owns survives.
  */
-export function createArchive(drive, { now = () => Date.now() } = {}) {
+export function createArchiveStore(drive, {
+  rootName, rootProps, folderKind, now = () => Date.now(), initial = {}, carry = () => ({}),
+}) {
   const folders = new Map();
 
   /** The folder at `segments` under the root, creating any that are missing. */
   async function folderFor(segments) {
     let parentId = folders.get('');
     if (!parentId) {
-      parentId = await drive.ensureFolder(DRIVE_ROOT_FOLDER, APP_PROPERTY_ROOT);
+      parentId = await drive.ensureFolder(rootName, rootProps);
       folders.set('', parentId);
     }
     for (let i = 0; i < segments.length; i++) {
       const path = segments.slice(0, i + 1).join('/');
       let id = folders.get(path);
       if (!id) {
-        id = await drive.ensureFolder(segments[i], { kind: APP_PROPERTY_FOLDER_KIND, path }, parentId);
+        id = await drive.ensureFolder(segments[i], { kind: folderKind, path }, parentId);
         folders.set(path, id);
       }
       parentId = id;
@@ -74,25 +92,24 @@ export function createArchive(drive, { now = () => Date.now() } = {}) {
   }
 
   /**
-   * Creates the file, or updates it in place when `payload_hash` changed or,
-   * for an activity, its list entry did (a rename). `normalized` belongs to
-   * #166: a new file starts at null, and an update carries the existing value
-   * over untouched.
+   * Creates the file, or updates it in place when `payload_hash` changed or
+   * `changed(current, record)` says something else did. Found by `props`,
+   * never by name; `findOne` refuses two matches.
    *
    * @returns {Promise<{ status: 'created' | 'updated' | 'unchanged', fileId: string }>}
    */
-  async function upsert({ props, name, segments, record }) {
+  async function upsert({ props, name, segments, record, changed = () => false }) {
     const existing = await drive.findOne(props);
     if (existing) {
       const current = await drive.readJson(existing.id);
-      if (current?.payload_hash === record.payload_hash && !listEntryChanged(current, record)) {
+      if (current?.payload_hash === record.payload_hash && !changed(current, record)) {
         return { status: 'unchanged', fileId: existing.id };
       }
       await drive.updateJson(existing.id, {
         ...current,
         ...record,
         fetched_at: new Date(now()).toISOString(),
-        normalized: current?.normalized ?? null,
+        ...carry(current),
       });
       return { status: 'updated', fileId: existing.id };
     }
@@ -101,10 +118,32 @@ export function createArchive(drive, { now = () => Date.now() } = {}) {
       name,
       parentId,
       props,
-      data: { ...record, fetched_at: new Date(now()).toISOString(), normalized: null },
+      data: { ...record, fetched_at: new Date(now()).toISOString(), ...initial },
     });
     return { status: 'created', fileId };
   }
+
+  return { folderFor, upsert };
+}
+
+/**
+ * @param {ReturnType<import('./drive.mjs').createDrive>} drive
+ * @param {{ now?: () => number }} [opts]
+ */
+export function createArchive(drive, { now = () => Date.now() } = {}) {
+  // `normalized` belongs to #166: a new file starts at null, and an update
+  // carries the existing value over untouched.
+  const { folderFor, upsert: upsertFile } = createArchiveStore(drive, {
+    rootName: DRIVE_ROOT_FOLDER,
+    rootProps: APP_PROPERTY_ROOT,
+    folderKind: APP_PROPERTY_FOLDER_KIND,
+    now,
+    initial: { normalized: null },
+    carry: (current) => ({ normalized: current?.normalized ?? null }),
+  });
+
+  /** As upsertFile, also rewriting an activity whose list entry changed (a rename). */
+  const upsert = (args) => upsertFile({ ...args, changed: listEntryChanged });
 
   return {
     /**

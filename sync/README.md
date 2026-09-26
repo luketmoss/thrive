@@ -401,8 +401,8 @@ rotating token lives in Drive, in its own root: `Thrive Withings/withings-token.
 tagged `{ kind: 'withings-token' }` under a folder tagged `{ kind: 'thrive-withings-root' }`.
 It holds `userid`, `refresh_token`, `access_token`, `access_expires_at` and
 `updated_at`. A separate root and separate tags mean no lookup can match a
-COROS file. Fetching measures (#197), the tab (#198) and the schedule (#200)
-come later.
+COROS file. Fetching measures is below ("The Withings archive", #197); the
+tab (#198) and the schedule (#200) come later.
 
 ### 1. Register the developer app
 
@@ -465,6 +465,70 @@ No Withings token, client secret or authorization code reaches a log, stdout or
 an error: each is registered with `redact()` when first seen, and `redact()`
 also masks them as JSON fields and as `code=`/`client_secret=`/`refresh_token=`/`access_token=`
 parameters.
+
+## The Withings archive (#197)
+
+```bash
+cd sync
+WITHINGS_CLIENT_ID=… WITHINGS_CLIENT_SECRET=… node withings-run.mjs
+```
+
+Needs the Google credential and a Withings token file (both above). Each run gets
+an access token (refreshing and persisting it first if needed), then calls
+`getmeas` for a rolling window, **local D − 30 days through the end of D + 1**,
+where D is today in `America/Denver`, sent as `startdate`/`enddate` epochs.
+Re-reading 30 days, rather than asking for changes since the last run with
+`lastupdate`, is what picks up edits made in the Withings app. The form is
+`action=getmeas`, `category=1` (real measurements, not goals) and
+`meastypes=1,5,6,8,9,10,11,76,77,88` (weight, fat-free mass, fat ratio, fat mass,
+diastolic, systolic, heart pulse, muscle mass, hydration, bone mass: all free-plan
+types; 11 is both the cuff's pulse and the scale's standing heart rate). It
+follows `more`/`offset` until `more` is 0. The window is a parameter
+(`withingsRun({ window: { startdate, enddate } })`) so the backfill (#199) can
+pass `startdate: 0`.
+
+Each group lands under `Thrive Withings` in the bot's Drive:
+
+| File | Tagged (`appProperties`) | Holds |
+|---|---|---|
+| `measures/<YYYY>/<MM>/<grpid>.json`, foldered by the group's `date` as a local date in `America/Denver` | `source=withings`, `grpid` | `source`, `grpid`, `payload`, `payload_hash`, `fetched_at` |
+
+- **`payload` is the group object as Withings returned it**, key order kept.
+  Withings answers in JSON, so the parsed object loses nothing a re-parse needs,
+  and one file per group keeps `raw_ref` pointing at one reading. A value is
+  `value × 10^unit`; nothing here converts it (#198 does). There is no
+  `normalized` field: Withings rows take no hand edits to merge with.
+- **`payload_hash` is `sha256(JSON.stringify(group))`.**
+- **Idempotent, and a file's ID never changes.** It is COROS's archive code
+  (`createArchiveStore` in `src/archive.mjs`) with Withings' own root and tags.
+  A file is found by its tags, never by name, so a moved or renamed file is
+  updated rather than duplicated. An unchanged hash writes nothing; a changed one
+  (the group was edited in Withings) rewrites the same file, so its Drive ID, the
+  future `BodyMeasurements!raw_ref`, is stable. A `grpid` matching two files is
+  refused, naming both; trash all but one.
+- **Errors are never archived.** A page answered with a non-zero `status`, an
+  HTTP 5xx or 429, or a network failure is retried with backoff, three attempts
+  in all, when it is transient (the `unavailable` row above). A page that still
+  fails ends the fetch: the groups of earlier pages are archived, nothing from
+  the error is, and the run exits non-zero naming the class
+  (`WithingsUnavailableError`, or `WithingsGrantDeadError` for a refused token).
+  A group whose Drive write fails is logged with its `grpid`, the others are
+  still written, and the run exits non-zero.
+- The run prints counts and `grpid`s, never a measurement.
+
+### Open question: does `getmeas` report deletions?
+
+**Not yet known.** It can only be answered against the live account, and is
+tracked in #212. Until then, assume the worst: a group deleted in the Withings
+app may simply stop appearing, in which case it **stays in the archive** (and,
+from #198, in `BodyMeasurements`). Nothing in the sync deletes archive files.
+
+To answer it: take a throwaway reading, run `node withings-run.mjs` and note its
+`grpid`; delete the reading in the Withings app; run again and see what `getmeas`
+returned for that `grpid`: omitted (its file untouched, every other group
+`unchanged`), flagged (the file is rewritten; diff `payload.attrib` and
+`payload.category`), or returned unchanged. Then replace this paragraph with the
+answer, and if deletions are simply omitted, open an issue to reconcile them.
 
 ## Tests
 

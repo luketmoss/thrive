@@ -3,7 +3,10 @@
 // or DST transition can shift a day. Only the first step, "what day is it in
 // Denver", looks at a clock.
 
-import { HRV_MAX_DAYS, SYNC_TIME_ZONE, WINDOW_DAYS_AHEAD, WINDOW_DAYS_BACK } from './config.mjs';
+import {
+  HRV_MAX_DAYS, SYNC_TIME_ZONE, WINDOW_DAYS_AHEAD, WINDOW_DAYS_BACK,
+  WITHINGS_WINDOW_DAYS_AHEAD, WITHINGS_WINDOW_DAYS_BACK,
+} from './config.mjs';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const formatters = new Map();
@@ -84,4 +87,40 @@ export function chunkRange(start, end, max = HRV_MAX_DAYS) {
     chunks.push([from, to < end ? to : end]);
   }
   return chunks;
+}
+
+/**
+ * The instant (epoch ms) at which local calendar `date` begins in `timeZone`.
+ * The zone's offset is measured at the guess and then at the corrected
+ * instant, so a date on either side of a DST change gets its own offset.
+ */
+export function localMidnight(date, timeZone = SYNC_TIME_ZONE) {
+  const utc = Date.parse(`${date}T00:00:00Z`);
+  const offsetAt = (instant) => {
+    const { iso } = localDateTime(instant, timeZone);
+    return Date.parse(iso.slice(0, 19) + 'Z') - Math.floor(instant / 1000) * 1000;
+  };
+  let t = utc - offsetAt(utc);
+  t = utc - offsetAt(t);
+  return t;
+}
+
+/**
+ * Withings' window (#197): local D − 30 days through the end of D + 1, as the
+ * epoch seconds `getmeas` takes for `startdate` and `enddate`. `start` and
+ * `end` are the same bounds as local dates, inclusive.
+ */
+export function withingsWindow(now = Date.now(), {
+  daysBack = WITHINGS_WINDOW_DAYS_BACK, daysAhead = WITHINGS_WINDOW_DAYS_AHEAD,
+} = {}) {
+  const runDate = localDate(now);
+  const start = addDays(runDate, -daysBack);
+  const end = addDays(runDate, daysAhead);
+  return {
+    runDate,
+    start,
+    end,
+    startdate: Math.floor(localMidnight(start) / 1000),
+    enddate: Math.floor(localMidnight(addDays(end, 1)) / 1000) - 1,
+  };
 }
