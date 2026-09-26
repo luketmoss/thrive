@@ -57,6 +57,15 @@ before(async () => {
           vo2max: '', recovery: '', training_load: '', bed_time: '', wake_time: '', raw_ref: '', synced_at: '' }];
         break;
       case 'getDailySummary': data = []; break;
+      case 'getBodyMeasurements':
+        data = p.kind === 'bp' ? [] : [{
+          grpid: '1001', date: p.from, time: '06:42', measured_at_utc: `${p.from}T06:42:00-06:00`,
+          kind: 'scale', device_model: 'Body+', weight_kg: '72.3', fat_ratio_pct: '', fat_mass_kg: '',
+          fat_free_mass_kg: '', muscle_mass_kg: '', hydration_kg: '', bone_mass_kg: '',
+          systolic_mmhg: '', diastolic_mmhg: '', pulse_bpm: '61', attrib: '0', source: 'withings',
+          raw_ref: '', synced_at: '',
+        }];
+        break;
       case 'getExercises': data = []; break;
       case 'getTemplates': data = []; break;
       case 'appendSets': data = { appended: 0 }; break;
@@ -154,6 +163,33 @@ test('thrive_daily_summary on an empty range says so and states the caveat', asy
   const { text } = await call('thrive_daily_summary', { date_from: '2026-09-20', date_to: '2026-09-20' });
   assert.match(text, /0 days with a row/);
   assert.match(text, /OUTDOOR ONLY/);
+});
+
+// --- #201 ------------------------------------------------------------
+
+test('thrive_body_measurements is registered, defaults to 30 days, and shows mass in kg and lb', async () => {
+  const { tools } = await client.listTools();
+  const t = tools.find((x) => x.name === 'thrive_body_measurements');
+  assert.ok(t);
+  assert.deepEqual(Object.keys(t.inputSchema.properties).sort(), ['date_from', 'date_to', 'kind']);
+  assert.match(t.description, /30 days ending today/);
+  assert.match(t.description, /shown in lb/);
+  assert.match(t.description, /several blood pressure readings/);
+  assert.match(t.description, /DailySummary/);
+
+  const before = calls.length;
+  const { text, isError } = await call('thrive_body_measurements', { date_to: '2026-09-24' });
+  assert.equal(isError, false);
+  const sent = calls[before];
+  assert.equal(sent.action, 'getBodyMeasurements');
+  assert.equal(sent.from, '2026-08-26');
+  assert.equal(sent.to, '2026-09-24');
+  assert.match(text, /72\.3 kg \(159\.4 lb\)/);
+});
+
+test('thrive_body_measurements filters by kind and says so when empty', async () => {
+  const { text } = await call('thrive_body_measurements', { date_to: '2026-09-24', kind: 'bp' });
+  assert.match(text, /No bp readings in this range\./);
 });
 
 test('thrive_list_workouts shows venue and provenance, and filters on source', async () => {

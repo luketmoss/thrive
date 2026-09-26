@@ -39,6 +39,9 @@
 //   ?action=upsertDailyHealth&key=...&payload={"rows":[{"date":"2026-09-23",
 //     "steps":"2617","raw_ref":"<drive id>"}],"synced_at":"2026-09-24T13:25:32.000Z"}
 //
+// BodyMeasurements rows are read by local date range and optional kind (#201):
+//   ?action=getBodyMeasurements&key=...&from=2026-09-01&to=2026-09-30&kind=scale
+//
 // BodyMeasurements rows are addressed by Withings grpid and rewritten whole (#198):
 //   ?action=upsertBodyMeasurements&key=...&payload={"rows":[{"grpid":"123456",
 //     "date":"2026-09-24","time":"06:41","measured_at_utc":"2026-09-24T06:41:12-06:00",
@@ -421,6 +424,16 @@ function dispatch(action, params) {
       break;
 
     // --- BodyMeasurements (#198) ---
+    // A read: from/to exactly as getDailyHealth, plus an optional kind. A
+    // missing tab is [], not an error. It is on the token read allow-list
+    // (#144, #201).
+    case 'getBodyMeasurements':
+      result = {
+        success: true,
+        data: getBodyMeasurementsRows({ from: params.from, to: params.to, kind: params.kind }),
+      };
+      break;
+
     // Written by the Withings sync alone. A write, so key-only: it must never
     // be added to the token read allow-list (#144).
     case 'upsertBodyMeasurements':

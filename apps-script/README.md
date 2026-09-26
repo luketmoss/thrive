@@ -119,11 +119,12 @@ or response.
 A token caller may run `getWorkouts`, `getWorkout`, `getPlannedWorkouts`,
 `getExercises`, `getExercise`, `getExerciseHistory`, `getTemplates`,
 `getTemplate`, `getSets`, `getWorkoutSets`, `getDailySummary`,
-`getHistoryDateRange`, `getDailyHealth` and `getSyncLog` — `TOKEN_READ_ACTIONS`
-in `src/auth.js`. It is an allow-list: **an action added later is refused to
-token callers until someone names it there**, and a test fails until every
-`case` in `main.js` is classified. `previewSetUpdates` is deliberately off it:
-it writes nothing, but it is the dry run of a write and takes a write payload.
+`getHistoryDateRange`, `getDailyHealth`, `getSyncLog` and `getBodyMeasurements`
+— `TOKEN_READ_ACTIONS` in `src/auth.js`. It is an allow-list: **an action
+added later is refused to token callers until someone names it there**, and a
+test fails until every `case` in `main.js` is classified. `previewSetUpdates`
+is deliberately off it: it writes nothing, but it is the dry run of a write
+and takes a write payload.
 
 | `code` | Meaning | almanac does |
 |---|---|---|
@@ -254,11 +255,20 @@ so it never joins #144's token read allow-list. Rows are domain objects keyed by
   non-numeric metric or a clock time not `HH:mm` rejects the whole call.
 - `synced_at` is one value per call, stamped on every row it touches.
 
-### BodyMeasurements (#198)
+### BodyMeasurements (#198, #201)
 
-| Action | Payload |
+| Action | Parameters / payload |
 |---|---|
+| `getBodyMeasurements` | `from`, `to` (optional, inclusive), `kind` (optional: `scale` or `bp`) — oldest first |
 | `upsertBodyMeasurements` | `{"rows":[{"grpid":"5901234567","date":"2026-09-24","time":"06:41","measured_at_utc":"2026-09-24T06:41:12-06:00","kind":"scale","weight_kg":"81.234",...,"source":"withings","raw_ref":"<drive id>"}],"synced_at":"..."}` |
+
+`getBodyMeasurements` returns every one of the 20 fields on every row, a blank
+cell as `''` and never `0`, and no `sheetRow`. `from`/`to` filter on the local
+`date` column, exactly as `getDailyHealth`; rows are sorted by `measured_at_utc`
+parsed as an instant, not sheet order, which a backfill scrambles. A `kind`
+other than `scale`/`bp` is refused, naming the valid values. With no
+`BodyMeasurements` tab it answers `[]`. It is a read, and is on
+`TOKEN_READ_ACTIONS`, so almanac's token can call it.
 
 One row per Withings measure group, A:T (`BODY_MEASUREMENT_FIELDS` in
 `src/types.js`), SI units. Called by the Withings sync alone, **key only**: it is

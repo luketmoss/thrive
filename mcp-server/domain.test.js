@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 
 import {
   normalizeDate, normalizeRangeToMax, todayStr,
-  slotKey, groupSetsByExercise, secondsToMinutes, metersToMiles, metersToFeet,
+  slotKey, groupSetsByExercise, secondsToMinutes, metersToMiles, metersToFeet, kgToLb,
   parseDurationMinutes, findUnknownFields, findStaleExerciseNames,
   formatWeight, describeLoad, isSetLogged, buildSchedulePlan,
   describeSetState,
@@ -122,6 +122,24 @@ test('cardio conversions return null for an unset value, not 0', () => {
 test('cardio conversions keep a deliberate zero distinct from unset', () => {
   assert.equal(metersToMiles('0'), 0);
   assert.equal(metersToFeet('0'), 0);
+});
+
+// --- #201: kg -> lb, the mass display boundary ------------------------
+
+test('kgToLb converts to one decimal', () => {
+  assert.equal(kgToLb('72.3'), '159.4');
+});
+
+test('kgToLb keeps a blank blank, never 0', () => {
+  assert.equal(kgToLb(''), '');
+});
+
+test('kgToLb keeps a real zero a zero', () => {
+  assert.equal(kgToLb('0'), '0.0');
+});
+
+test('kgToLb is exact on a round-trip-sensitive value', () => {
+  assert.equal(kgToLb('72.345'), '159.5');
 });
 
 // --- #117: agent-supplied durations and undeclared fields ------------

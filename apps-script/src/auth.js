@@ -40,6 +40,7 @@ var TOKEN_READ_ACTIONS = [
   'getHistoryDateRange',
   'getDailyHealth',
   'getSyncLog',
+  'getBodyMeasurements',
 ];
 
 var TOKENINFO_URL = 'https://oauth2.googleapis.com/tokeninfo';

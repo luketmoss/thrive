@@ -52,11 +52,13 @@ export function datesBetween(from, to) {
 export const DEFAULT_RANGE_DAYS = 7;
 
 /**
- * The tools' `date_from` / `date_to`, resolved. Default: the seven days ending
- * today. `normalize` is domain.js's normalizeDate, injected so tests need no
- * clock. A date that does not parse is an error, not silently the default.
+ * The tools' `date_from` / `date_to`, resolved. Default: the `defaultDays`
+ * days ending today (seven, unless a caller names a different default — the
+ * 30-day default for thrive_body_measurements, #201). `normalize` is
+ * domain.js's normalizeDate, injected so tests need no clock. A date that
+ * does not parse is an error, not silently the default.
  */
-export function resolveRange({ date_from, date_to }, normalize, today = todayStr()) {
+export function resolveRange({ date_from, date_to }, normalize, today = todayStr(), defaultDays = DEFAULT_RANGE_DAYS) {
   const read = (label, v) => {
     if (isBlank(v)) return '';
     const d = normalize(v);
@@ -64,7 +66,7 @@ export function resolveRange({ date_from, date_to }, normalize, today = todayStr
     return d;
   };
   const to = read('date_to', date_to) || today;
-  const from = read('date_from', date_from) || addDays(to, -(DEFAULT_RANGE_DAYS - 1));
+  const from = read('date_from', date_from) || addDays(to, -(defaultDays - 1));
   if (from > to) throw new Error(`date_from ${from} is after date_to ${to}`);
   return { from, to };
 }

@@ -100,6 +100,7 @@ The server exits at startup with a message naming whichever is missing.
 | `thrive_get_workout_payload` | A synced or enriched workout's archived COROS detail payload: COROS's own text, with what the sheet does not carry (max speed, training effect, and max HR or laps where COROS includes them). 20,000 characters per call; a longer one ends with the `offset` for the next page. Hand-logged workouts have none |
 | `thrive_daily_health` | `DailyHealth` for a date range (default: the 7 days ending today): resting HR, HRV, steps, calories, sleep and its stages, sleep score, bed and wake time, VO2max, recovery, training load |
 | `thrive_daily_summary` | `DailySummary` for a date range: the per-day rollup of activities and health. Derived, and its distance and ascent are **outdoor only** |
+| `thrive_body_measurements` | Withings weight, body composition and blood pressure readings for a date range (default: the 30 days ending today), grouped by local date. Mass shown in kg and lb; filter by `kind` (`scale` / `bp`) |
 | `thrive_list_exercises` | The exercise library, filterable by search text or tag |
 | `thrive_list_templates` | Templates with their exercises, sections, sets and reps |
 | `thrive_exercise_history` | Progression for one exercise over time — the tool for deciding whether to add weight or volume |
