@@ -60,7 +60,7 @@ signal — several `Easy` sessions on a lift mean it's time to add load.
 
 **Read and analyze** — `thrive_list_workouts`, `thrive_get_workout`,
 `thrive_list_exercises`, `thrive_list_templates`, `thrive_exercise_history`,
-`thrive_daily_health`, `thrive_daily_summary`.
+`thrive_daily_health`, `thrive_daily_summary`, `thrive_body_measurements`.
 
 `thrive_exercise_history` is the one for progression decisions: it returns every logged
 set of a lift over time, newest first, with effort.
@@ -72,6 +72,14 @@ days. Read these before you trust a number from them:
 - **Blank means unknown, never zero.** `—` in a line, or a measurement missing from a
   workout, means nobody recorded it. A day with no row is listed as such. Don't treat
   either as a rest day, zero sleep or zero steps.
+
+`thrive_body_measurements` is the one for weight, body composition and blood pressure
+questions: Withings readings, one line per reading, grouped by local date, defaulting to
+the last 30 days. Mass is stored in kg and shown in lb too, so don't convert it yourself.
+A day can carry several blood pressure readings — each is its own line, never averaged.
+Averages, trends and BP categories aren't computed for you; work them out from the
+readings. `DailySummary`'s body columns (#203), when present, are a per-day pick, not
+every reading — use this tool instead for anything reading-level.
 - **Sleep is filed under the day I woke up**, and its total **includes** time awake.
 - **VO2max and recovery are snapshots**, written only on the day each sync ran, so they
   are blank on most days by design.

@@ -37,6 +37,17 @@ test('a read sends action and key, and skips empty parameters', async () => {
   assert.equal(urls[1].searchParams.get('workout_id'), 'w_1');
 });
 
+test('fetchBodyMeasurements sends action, from, to and an optional kind (#201)', async () => {
+  const urls = stubFetch(() => ({ body: { success: true, data: [] } }));
+  await api.fetchBodyMeasurements('2026-09-01', '2026-09-30');
+  await api.fetchBodyMeasurements('2026-09-01', '2026-09-30', 'scale');
+  assert.equal(urls[0].searchParams.get('action'), 'getBodyMeasurements');
+  assert.equal(urls[0].searchParams.get('from'), '2026-09-01');
+  assert.equal(urls[0].searchParams.get('to'), '2026-09-30');
+  assert.equal(urls[0].searchParams.has('kind'), false);
+  assert.equal(urls[1].searchParams.get('kind'), 'scale');
+});
+
 // Writes go by GET with a payload, because Apps Script's POST redirect breaks
 // anonymous callers.
 test('a write sends its data as a JSON payload parameter', async () => {

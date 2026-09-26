@@ -19,7 +19,7 @@ import { z } from 'zod';
 import {
   API_URL, API_KEY, ApiError,
   fetchWorkouts, fetchWorkout, fetchSets, fetchExercises, fetchTemplates,
-  fetchDailyHealth, fetchDailySummary, fetchWorkoutPayload,
+  fetchDailyHealth, fetchDailySummary, fetchBodyMeasurements, fetchWorkoutPayload,
   createWorkout, updateWorkout, deleteWorkout,
   createExercise, updateExercise, deleteExercise,
   createTemplate, replaceTemplate,
@@ -38,6 +38,7 @@ import {
   describeWorkoutPayload,
 } from './domain.js';
 import { resolveRange, describeHealthRange, describeSummaryRange } from './daily.js';
+import { describeBodyRange } from './body.js';
 
 // #132 AC4: the API URL and key replace the service account entirely. The old
 // THRIVE_SPREADSHEET_ID / THRIVE_SERVICE_ACCOUNT_KEY* variables are not read.
@@ -338,6 +339,28 @@ tool(
     const range = resolveRange(args, normalizeDate);
     const rows = await fetchDailySummary(range.from, range.to);
     return text(describeSummaryRange(rows, range));
+  },
+);
+
+tool(
+  'thrive_body_measurements',
+  'Weight, body composition and blood pressure readings from Withings devices (a Body+ scale, a BPM ' +
+    'Connect cuff), one line per reading, grouped by local date. Use it for weight trend, body fat and ' +
+    'blood pressure questions. Default range: the 30 days ending today. Mass is stored in kg and every ' +
+    '"_kg" value is also shown in lb, so a weight question never needs its own conversion. A day may hold ' +
+    'several blood pressure readings — each is its own line, never averaged. "—" means Withings did not ' +
+    'report that value for that reading, and is unknown, never zero. Averages, trends and blood-pressure ' +
+    'categories are not computed here — an agent or almanac derives them from the readings. ' +
+    "DailySummary's body columns, when present (#203), are a per-day pick, not every reading: use this " +
+    'tool instead for anything reading-level.',
+  {
+    ...RANGE_SHAPE,
+    kind: z.enum(['scale', 'bp']).optional().describe('Only readings of this kind. Default: both'),
+  },
+  async ({ kind, ...args }) => {
+    const range = resolveRange(args, normalizeDate, undefined, 30);
+    const rows = await fetchBodyMeasurements(range.from, range.to, kind);
+    return text(describeBodyRange(rows, range, kind));
   },
 );
 

@@ -350,6 +350,7 @@ const READ_PARAMS: Record<string, Record<string, string>> = {
   getSets: { workout_id: 'w_001' }, getWorkoutSets: { workout_id: 'w_001' },
   getDailySummary: { from: '2026-09-01', to: '2026-09-30' }, getHistoryDateRange: {},
   getDailyHealth: { from: '2026-09-01', to: '2026-09-30' }, getSyncLog: { limit: '1' },
+  getBodyMeasurements: { from: '2026-09-01', to: '2026-09-30' },
 };
 
 describe('AC4: token callers run only the named reads', () => {

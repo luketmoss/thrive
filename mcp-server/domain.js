@@ -308,6 +308,18 @@ export function metersToFeet(meters) {
   return Math.round(n / 0.3048 / 10) * 10;
 }
 
+/**
+ * The MCP server's one kg -> lb conversion boundary (#201): every `_kg`
+ * BodyMeasurements field goes through here before it reaches an agent, so a
+ * weight question never needs its own arithmetic. `''` stays `''` (unknown,
+ * never zero), and a real `0` stays `0`. Shown to one decimal.
+ */
+export function kgToLb(kg) {
+  if (kg === '' || kg === null || kg === undefined) return '';
+  const n = Number(kg);
+  return Number.isFinite(n) ? (n * 2.20462262185).toFixed(1) : '';
+}
+
 /** Seconds (as stored) -> whole minutes, or null when unset. Never 0. */
 export function secondsToMinutes(elapsedSeconds) {
   const seconds = parseInt(elapsedSeconds, 10);

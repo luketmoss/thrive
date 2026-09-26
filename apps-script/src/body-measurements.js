@@ -57,6 +57,43 @@ function readBodyMeasurementRows() {
 }
 
 /**
+ * BodyMeasurements rows for an inclusive local-date range and optional kind,
+ * oldest first by `measured_at_utc` (#201).
+ *
+ * The action behind `getBodyMeasurements`. `from` and `to` are optional and
+ * validated exactly as getDailyHealthRows validates them, filtering on the
+ * local `date` column, not the UTC instant. `kind`, when given, must be
+ * `scale` or `bp`. Every one of the 20 fields is present on every object, a
+ * blank cell as '' and never 0, and no `sheetRow`.
+ *
+ * Sorted on `measured_at_utc` parsed as an instant, not on sheet order, which
+ * a backfill scrambles.
+ *
+ * A read, so it belongs on TOKEN_READ_ACTIONS (#144).
+ */
+function getBodyMeasurementsRows(filters) {
+  var from = validateDate('from', filters && filters.from);
+  var to = validateDate('to', filters && filters.to);
+  var kind = (filters && filters.kind) || '';
+  if (kind && BODY_MEASUREMENT_KINDS.indexOf(kind) === -1) {
+    throw new Error('kind must be one of ' + BODY_MEASUREMENT_KINDS.join(', ') + ', got "' + kind + '"');
+  }
+
+  var rows = readBodyMeasurementRows().filter(function (m) {
+    if (from && m.date < from) return false;
+    if (to && m.date > to) return false;
+    if (kind && m.kind !== kind) return false;
+    return true;
+  });
+  rows.sort(function (a, b) {
+    var ta = Date.parse(a.measured_at_utc);
+    var tb = Date.parse(b.measured_at_utc);
+    return ta - tb;
+  });
+  return rows;
+}
+
+/**
  * Validate one incoming row, returning every one of the 19 row fields (all
  * but synced_at). A field the row does not name is '', because an upsert
  * rewrites the row whole: a measure removed in a Withings edit becomes blank.
