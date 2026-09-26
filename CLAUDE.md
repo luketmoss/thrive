@@ -34,6 +34,7 @@ Personal workout tracker: Preact SPA → Google Sheets REST API.
 ## Preview & Demo Mode
 - The app requires Google OAuth to function. For preview testing (QA, UX agents), use **demo mode** by navigating to `http://localhost:5173/thrive/?demo=true` after starting the dev server.
 - Demo mode provides a fake user and skips Google auth. Changes are not persisted.
+- Cloud sessions have no Browser pane. `node .thrive/look.mjs [route]` drives the demo app with the container's Playwright and Chromium instead; `/qa` says how.
 
 ## Data Model
 Google Sheet "Groundwork" with these tabs:
@@ -128,6 +129,10 @@ These decisions were made with the user and must be respected by all agents:
 
 **Issue tracker: GitHub only.** All issue references mean GitHub issues; use the
 `gh` CLI exclusively. Project #4, `https://github.com/users/luketmoss/projects/4`.
+Cloud Claude Code sessions have no `gh`, and it would not help (their GitHub
+access is repo-scoped REST only). There, every `gh` step in a skill means the
+same operation through the GitHub MCP tools (`mcp__github__*`); the board still
+goes through `board.mjs`.
 
 **All board writes go through `node .thrive/board.mjs`** — never hand-write
 GraphQL against the project and never call `gh project field-list`. IDs live in

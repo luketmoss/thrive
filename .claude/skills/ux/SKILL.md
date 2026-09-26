@@ -22,7 +22,7 @@ Senior UX designer + accessibility specialist. Audits ACs and UI for usability, 
 ## Process
 
 1. **Read issue:** `gh issue view <N> --repo luketmoss/thrive`
-2. **Explore relevant components** (`frontend/src/components/`, `frontend/src/global.css`) to understand current patterns
+2. **Explore relevant components** (`frontend/src/components/`, `frontend/src/global.css`) to understand current patterns, and look at the screens involved in the running app: the Browser pane on desktop, `node .thrive/look.mjs <route> --width 375 --theme light|dark` where that is missing (cloud sessions — see `/qa` for flows)
 3. **Audit each AC against:**
    - **Mobile:** Touch targets ≥ 44px, usable at 375px, adequate spacing, no scroll traps
    - **Visual:** Follows existing patterns, uses CSS custom properties, works in both themes

@@ -48,6 +48,14 @@ Demo mode auto-authenticates — no login screen, no OAuth popups. Just navigate
 - Batch multiple DOM checks into a single `javascript_tool` IIFE instead of many calls
 - Skip 480px tablet breakpoint unless the feature specifically involves responsive layout changes
 
+### Cloud sessions (no Browser pane)
+
+The `preview_*`/Browser pane tools exist only in the desktop app. Where they are missing, test visually with `.thrive/look.mjs` — never fall back to code inspection alone:
+
+- `node .thrive/look.mjs /templates --width 375 --theme dark --out <scratchpad>/tpl.png` starts the dev server if needed, screenshots the demo app, and prints console errors. Open the PNG with `Read` to see it.
+- For AC flows, write a short script that does `import { open } from '<repo>/.thrive/look.mjs'` and drives `page` with Playwright: `getByRole(...).click()`, `fill`, `page.evaluate` for computed CSS, `page.screenshot`.
+- Send the key screenshots to the user; GitHub's API takes no image uploads, so the PR report describes the evidence in words.
+
 ## Process
 
 1. **Read issue + PR:** `gh issue view <N>` → `gh pr list --search "Closes #<N>"` → `gh pr diff <PR_N>` → extract ACs
