@@ -575,6 +575,35 @@ from the archive on every run, and nothing writes back to it.
   refusal, e.g. before `scripts/migrate-198-body-measurements-tab.mjs` has made
   the tab.
 
+### DailySummary rollup (#203)
+
+After the sheet write, when it appended or updated at least one
+`BodyMeasurements` row, the run calls `rebuildDailySummary` once, over
+`window.start` to `window.runDate` — D − 30 to D, the same bounds as the
+fetch window, leaving out the D + 1 lookahead day nothing has fully happened
+in yet. A run that changed nothing does not rebuild. A failed rebuild is
+reported and fails the run, without undoing the sheet write.
+
+**The backfill (#199) never rebuilds.** Its range can span years of history,
+and a single `rebuildDailySummary` call has the same Apps Script execution
+ceiling `scripts/backfill-131-daily-summary.mjs` exists to chunk around.
+Filling U:Y for backfilled history is a manual step for the owner, once,
+after the backfill lands and the API is deployed:
+
+```powershell
+THRIVE_API_URL=... THRIVE_API_KEY=... node scripts/backfill-131-daily-summary.mjs --restart
+```
+
+That script already rebuilds in resumable chunks over any range it is given
+(`--from`/`--to`, or the whole `Workouts` history by default) — it needs no
+change for #203, since `rebuildDailySummary` reads `BodyMeasurements` itself.
+Its default range is `getHistoryDateRange`'s span of `Workouts`, not
+`BodyMeasurements`: a body-only day *within* that span gets its row (a day
+with a workout on either side is already rebuilt), but a scale or BP reading
+from **before the first workout or after the last** needs an explicit
+`--from`/`--to` covering the Withings account's own history, or that day's
+row is never written.
+
 ### Open question: does `getmeas` report deletions?
 
 **Not yet known.** It can only be answered against the live account, and is

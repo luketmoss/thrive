@@ -66,14 +66,15 @@ Google Sheet "Groundwork" with these tabs:
   are local `America/Denver`. Groups with an `attrib` other than 0, 2, 4, 5, 7
   or 8 (1 is a guest or another user) are never written. No `frontend/` mirror:
   the SPA does not read this tab. Later columns are only ever appended.
-- **DailySummary** (A:T) — **derived, never authoritative** (#131). One row per
-  local calendar day, rebuildable at any time from `Workouts` + `DailyHealth`.
-  Nothing writes here by hand. If it disagrees with `Workouts`, `Workouts` is
-  right and this is stale.
+- **DailySummary** (A:Y) — **derived, never authoritative** (#131). One row per
+  local calendar day, rebuildable at any time from `Workouts` + `DailyHealth` +
+  `BodyMeasurements`. Nothing writes here by hand. If it disagrees with
+  `Workouts`, `Workouts` is right and this is stale.
   date, activity_count, activity_types, total_moving_s, total_elapsed_s,
   total_distance_m, total_ascent_m, cardio_activity_count, distance_withdata,
   ascent_withdata, max_effort, effort_counts, steps, resting_hr, hrv,
-  sleep_total_s, training_load, computed_at, moving_withdata, elapsed_withdata.
+  sleep_total_s, training_load, computed_at, moving_withdata, elapsed_withdata,
+  weight_kg, fat_ratio_pct, systolic_mmhg, diastolic_mmhg, bp_count.
   Every total carries its coverage: `total_moving_s`/`total_elapsed_s` are blank
   when no activity recorded them, and S/T count those that did out of
   `activity_count` (#181). S/T are appended, not beside D/E, because almanac
@@ -83,6 +84,16 @@ Google Sheet "Groundwork" with these tabs:
   session — correct, and surprising, so say so wherever it is displayed.
   They are likewise blank when no outdoor session measured them, with I/J
   counting those that did out of H (#190). A measured `0` stays `0`.
+  U:Y (#203) roll up `BodyMeasurements`, appended after T for the same
+  column-position reason. `weight_kg`/`fat_ratio_pct` come from the day's
+  **first** scale reading with a weight, by `measured_at_utc` — a morning
+  weigh-in is the comparable figure day to day, and fat ratio is read from
+  that same reading, never mixed in from another. `systolic_mmhg`/
+  `diastolic_mmhg` are the **mean** of the day's BP readings, rounded half up
+  to whole mmHg, with `bp_count` counting the readings themselves, not the
+  values present in them. Either half is blank, never `0`, on a day with no
+  such reading; a body-only day still gets a row, everything else blank as
+  usual. A missing `BodyMeasurements` tab leaves U:Y blank everywhere.
 - **SyncLog** (A:N) — one row per COROS sync run (#156): run_id, started_at,
   finished_at, window_start, window_end, n_seen, n_new, n_updated, n_enriched,
   n_fit_fetched, n_errors, status (`ok`/`partial`/`failed`), error_detail,

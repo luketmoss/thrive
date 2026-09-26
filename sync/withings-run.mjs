@@ -72,8 +72,10 @@ export const defaultDeps = {
  *   sheet: { rows: number, appended: number, updated: number,
  *     skipped: { grpid: string, attrib: string }[],
  *     failed: { grpid: string, type: number|undefined, reason: string }[],
- *     notes: string, error: Error|null } }>}
- *   `counts` and `failed` are the archive's; `sheet` is the BodyMeasurements write.
+ *     notes: string, error: Error|null,
+ *     rollup: object|null, rollupError: Error|null } }>}
+ *   `counts` and `failed` are the archive's; `sheet` is the BodyMeasurements write and, when it
+ *   changed anything, the DailySummary rebuild that follows it (#203).
  */
 export async function withingsRun({
   env = process.env,
@@ -91,7 +93,10 @@ export async function withingsRun({
   const failed = [];
   // The same groups as `failed`, with why: private, for the log row (#200).
   const archiveFailures = [];
-  const sheet = { rows: 0, appended: 0, updated: 0, skipped: [], failed: [], notes: '', error: null };
+  const sheet = {
+    rows: 0, appended: 0, updated: 0, skipped: [], failed: [], notes: '', error: null,
+    rollup: null, rollupError: null,
+  };
 
   let drive;
   let accessToken;
@@ -145,18 +150,28 @@ export async function withingsRun({
       `The ${groups.length} groups fetched before it were archived; nothing from the error was.`);
   }
 
-  await writeSheet({ d, env, now, archived, sheet, print, printError });
+  await writeSheet({ d, env, now, archived, sheet, print, printError, window: w, backfill });
 
-  const exitCode = error || counts.failed || sheet.failed.length || sheet.error ? 1 : 0;
+  const exitCode = error || counts.failed || sheet.failed.length || sheet.error || sheet.rollupError ? 1 : 0;
   return { exitCode, counts, failed, archiveFailures, error, sheet };
 }
 
 /**
- * Normalize the archived groups and upsert the rows (#198 AC5). Mutates
- * `sheet`. Runs after the archive, so a missing THRIVE_API_URL/KEY costs
- * this write alone.
+ * Normalize the archived groups and upsert the rows (#198 AC5), then, if
+ * anything changed, roll the rollup forward over the run's window (#203 AC5).
+ * Mutates `sheet`. Runs after the archive, so a missing THRIVE_API_URL/KEY
+ * costs this write alone.
+ *
+ * The rebuild runs D − 30 to D — the same bounds as a normal run's fetch
+ * window (`window.start` to `window.runDate`, leaving out the D + 1 lookahead
+ * day nothing has fully happened in yet) — and only when a row actually
+ * landed: a run that changed nothing does not rebuild. It never runs for a
+ * backfill: that window can span years, and a single `rebuildDailySummary`
+ * call has the same Apps Script execution ceiling `scripts/backfill-131-daily-summary.mjs`
+ * exists to chunk around. Filling history's U:Y is the documented owner step,
+ * one `scripts/backfill-131-daily-summary.mjs` run after the backfill lands.
  */
-async function writeSheet({ d, env, now, archived, sheet, print, printError }) {
+async function writeSheet({ d, env, now, archived, sheet, print, printError, window, backfill }) {
   const { rows, skipped, failed } = normalizeWithingsGroups(archived);
   sheet.rows = rows.length;
   sheet.skipped = skipped;
@@ -165,8 +180,9 @@ async function writeSheet({ d, env, now, archived, sheet, print, printError }) {
   for (const f of failed) printError(`Could not normalize Withings ${f.reason}`);
   if (sheet.notes) print(sheet.notes);
 
+  let api = null;
   try {
-    const api = d.createApi(env);
+    api = d.createApi(env);
     const totals = await api.upsertBodyMeasurements(rows, new Date(now()).toISOString());
     sheet.appended = totals.appended;
     sheet.updated = totals.updated;
@@ -176,6 +192,19 @@ async function writeSheet({ d, env, now, archived, sheet, print, printError }) {
   }
   print(`Sheet: ${archived.length} archived groups seen, ${sheet.appended} rows appended, ` +
     `${sheet.updated} updated, ${skipped.length} skipped as unattributed, ${failed.length} failed.`);
+
+  const changed = sheet.appended > 0 || sheet.updated > 0;
+  if (api && !sheet.error && changed && !backfill && window?.start && window?.runDate) {
+    try {
+      sheet.rollup = await api.rebuildDailySummary(window.start, window.runDate, new Date(now()).toISOString());
+      const r = sheet.rollup ?? {};
+      print(`DailySummary ${window.start} to ${window.runDate}: ${r.written ?? 0} written, ` +
+        `${r.updated ?? 0} updated, ${r.removed ?? 0} removed`);
+    } catch (err) {
+      sheet.rollupError = err;
+      printError(`DailySummary rebuild: ${describe(err)}`);
+    }
+  }
 }
 
 /** The deployed API ignores `log`, so a Withings row would land in SyncLog. */
@@ -294,6 +323,7 @@ export async function withingsSyncRun({
     failures.push(...result.archiveFailures);
     for (const f of sheet.failed) failures.push(`Could not normalize Withings ${f.reason}`);
     if (sheet.error) failures.push(`BodyMeasurements not written: ${describe(sheet.error)}`);
+    if (sheet.rollupError) failures.push(`DailySummary rebuild: ${describe(sheet.rollupError)}`);
     if (sheet.notes) notes.push(sheet.notes);
     const a = result.counts;
     out.info(

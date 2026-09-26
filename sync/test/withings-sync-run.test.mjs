@@ -36,8 +36,9 @@ function fakeApi({ appendFails } = {}) {
   const body = new Map();
   const logs = { SyncLog: [], WithingsSyncLog: [] };
   const appends = [];
+  const rollupCalls = [];
   return {
-    body, logs, appends,
+    body, logs, appends, rollupCalls,
     syncedAt: [],
     async upsertBodyMeasurements(rows, syncedAt) {
       this.syncedAt.push(syncedAt);
@@ -48,6 +49,11 @@ function fakeApi({ appendFails } = {}) {
         body.set(r.grpid, r);
       }
       return { appended, updated, batches: 1 };
+    },
+    // #203: rebuilt once, after the upsert, whenever a row changed.
+    async rebuildDailySummary(from, to, computedAt) {
+      rollupCalls.push({ from, to, computedAt });
+      return { written: 1, updated: 0, removed: 0 };
     },
     async getSyncLog(limit, opts) {
       const tab = opts?.log === 'withings' ? logs.WithingsSyncLog : logs.SyncLog;
@@ -229,6 +235,7 @@ test('AC2: through the real client, the row is sent to appendSyncLog with log=wi
     const payload = JSON.parse(u.searchParams.get('payload'));
     sent.push({ action, payload });
     const data = action === 'appendSyncLog' ? { status: 'appended', run_id: payload.row.run_id }
+      : action === 'rebuildDailySummary' ? { written: 1, updated: 0, removed: 0 }
       : { appended: payload.rows.length, updated: 0 };
     return { status: 200, text: async () => JSON.stringify({ success: true, data }) };
   };

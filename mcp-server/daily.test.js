@@ -33,6 +33,7 @@ const SUMMARY_FIELDS = [
   'total_distance_m', 'total_ascent_m', 'cardio_activity_count', 'distance_withdata',
   'ascent_withdata', 'max_effort', 'effort_counts', 'steps', 'resting_hr', 'hrv',
   'sleep_total_s', 'training_load', 'computed_at', 'moving_withdata', 'elapsed_withdata',
+  'weight_kg', 'fat_ratio_pct', 'systolic_mmhg', 'diastolic_mmhg', 'bp_count',
 ];
 const summary = (o) => ({ ...Object.fromEntries(SUMMARY_FIELDS.map((f) => [f, o[f] ?? ''])), sheetRow: 2 });
 
@@ -137,7 +138,7 @@ test('a summary day carries outdoor totals with their coverage', () => {
       'outdoor distance 12.4 mi (measured on 1 of 1 outdoor cardio session) · ' +
       'outdoor ascent 1,500 ft (measured on 1 of 1 outdoor cardio session) · ' +
       'max effort Hard (Hard 1, Medium 2) · steps 8,400 · resting HR 57 bpm · HRV 41 ms · ' +
-      'sleep 7:15 · training load 7',
+      'sleep 7:15 · training load 7 · weight — · fat — · BP —',
   );
 });
 
@@ -217,6 +218,34 @@ test('an indoor-only day and a health-only day say what they are', () => {
   );
   const healthOnly = describeSummaryDay(summary({ date: '2026-09-19', steps: '3000' }));
   assert.match(healthOnly, /^- 2026-09-19: no activities logged · steps 3,000 · resting HR —/);
+});
+
+// #203: weight, fat and BP rolled up from BodyMeasurements.
+test('weight, fat and BP show in kg/lb and mmHg, with the BP count', () => {
+  const line = describeSummaryDay(summary({
+    date: '2026-09-15', weight_kg: '72.3', fat_ratio_pct: '21.4',
+    systolic_mmhg: '118', diastolic_mmhg: '77', bp_count: '3',
+  }));
+  assert.match(line, /· weight 72\.3 kg \(159\.4 lb\)/);
+  assert.match(line, /· fat 21\.4 %/);
+  assert.match(line, /· BP 118\/77 mean of 3/);
+});
+
+test('a day with no body reading shows weight, fat and BP as —, and bp_count never 0', () => {
+  const line = describeSummaryDay(summary({ date: '2026-09-15' }));
+  assert.match(line, /· weight — · fat — · BP —$/);
+  assert.doesNotMatch(line, /BP 0/);
+});
+
+test('a BP reading missing one side shows that side alone as —, still with the mean of the other', () => {
+  const line = describeSummaryDay(summary({ systolic_mmhg: '110', diastolic_mmhg: '', bp_count: '2' }));
+  assert.match(line, /· BP 110\/— mean of 2/);
+});
+
+test('the summary range explains weight is the first weigh-in and BP is a mean', () => {
+  const text = describeSummaryRange([summary({ date: '2026-09-16' })], { from: '2026-09-16', to: '2026-09-16' });
+  assert.match(text, /Weight and fat are the day's FIRST scale reading with a weight, not a mean/);
+  assert.match(text, /BP is the MEAN of the day's readings, with the count behind it/);
 });
 
 test('the summary range states the outdoor-only and derived caveats, oldest first', () => {
