@@ -34,6 +34,11 @@ async function serving() {
 
 async function ensureServer() {
   if (await serving()) return;
+  // Something else holds the port: most likely another repo's dev server in
+  // the same session (Thrive, Hive and cairn all use 5173).
+  if (await fetch('http://localhost:5173/').then(() => true, () => false)) {
+    throw new Error(`Port 5173 is serving something other than ${base}. Stop it (pkill -f vite) and retry.`);
+  }
   if (!existsSync(join(frontend, 'node_modules'))) {
     execSync('npm ci --no-audit --no-fund', { cwd: frontend, stdio: 'inherit' });
   }
