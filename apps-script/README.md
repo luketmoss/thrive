@@ -30,14 +30,15 @@ added to a tab is added in both.
 | `src/sets.js` | `Sets`, slot resolution, atomic bulk update, history |
 | `src/daily-summary.js` | `DailySummary` rollup, rebuild over any range |
 | `src/daily-health.js` | `DailyHealth` upsert by date, for the COROS sync (#165) |
+| `src/body-measurements.js` | `BodyMeasurements` upsert by Withings `grpid`, for the Withings sync (#198) |
 | `src/sync-log.js` | `SyncLog` append and newest-first read, one row per sync run (#156) |
 | `src/auth.js` | Who is calling: the key, the Google-token check, its cache, the token read allow-list (#144) |
 | `src/main.js` | `doGet`/`doPost` dispatch, response envelope |
 
 `Labels` is deliberately absent: `domain.js` contains no Labels code and no
 `thrive_*` tool touches it. Tab actions travel with their tabs, so
-`DailySummary`'s are in #131's scope, `DailyHealth`'s write in #165's, and
-`SyncLog`'s in #156's.
+`DailySummary`'s are in #131's scope, `DailyHealth`'s write in #165's,
+`SyncLog`'s in #156's, and `BodyMeasurements`' write in #198's.
 
 ## The transport, and its limit
 
@@ -253,6 +254,34 @@ so it never joins #144's token read allow-list. Rows are domain objects keyed by
   non-numeric metric or a clock time not `HH:mm` rejects the whole call.
 - `synced_at` is one value per call, stamped on every row it touches.
 
+### BodyMeasurements (#198)
+
+| Action | Payload |
+|---|---|
+| `upsertBodyMeasurements` | `{"rows":[{"grpid":"5901234567","date":"2026-09-24","time":"06:41","measured_at_utc":"2026-09-24T06:41:12-06:00","kind":"scale","weight_kg":"81.234",...,"source":"withings","raw_ref":"<drive id>"}],"synced_at":"..."}` |
+
+One row per Withings measure group, A:T (`BODY_MEASUREMENT_FIELDS` in
+`src/types.js`), SI units. Called by the Withings sync alone, **key only**: it is
+a write, so it never joins the token read allow-list.
+
+- A `grpid` with no row is appended. A `grpid` with a row is **rewritten whole**:
+  Withings keeps the `grpid` of an edited group, so a measure removed in the edit
+  becomes blank, and a field the row does not name is written blank. Before each
+  update the row is re-read and its column A confirmed to still hold that `grpid`.
+- The whole batch is validated before anything is written. It refuses an unknown
+  field, a per-row `synced_at`, a missing or non-numeric `grpid`, a `date` not
+  `YYYY-MM-DD`, a `time` not `HH:mm`, a `measured_at_utc` not ISO 8601 with an
+  offset, a `kind` other than `scale`/`bp`, a `source` other than `withings`, a
+  non-numeric or negative measure (G:P), a non-numeric `attrib`, and a `grpid`
+  repeated in one batch.
+- Re-sending the same rows leaves the tab identical except `synced_at`. It returns
+  `{ appended, updated, synced_at }`.
+- The tab must exist first: `scripts/migrate-198-body-measurements-tab.mjs`
+  creates it. Until then the action fails naming the missing sheet.
+- `readBodyMeasurementRows()` reads every row with a `grpid` (`[]` with no tab),
+  every field present, blank as `''`. The read action (#201) and the
+  `DailySummary` rollup (#203) build on it.
+
 ### Synced workouts (#166)
 
 | Action | Payload |
@@ -374,7 +403,7 @@ archive in the bot's Drive (`sync/README.md`, "The raw archive").
 
 ### The script lock
 
-`upsertSyncedWorkout`, `enrichWorkout`, `upsertDailyHealth` and `appendSyncLog` run under
+`upsertSyncedWorkout`, `enrichWorkout`, `upsertDailyHealth`, `upsertBodyMeasurements` and `appendSyncLog` run under
 `LockService`'s script lock (`withScriptLock` in `src/utils.js`), so a local
 sync overlapping a scheduled one cannot interleave a read-then-write. A caller
 that waits over 30 s gets `Lock timeout`, and nothing is written. The SPA

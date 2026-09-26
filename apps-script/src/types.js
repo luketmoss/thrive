@@ -283,3 +283,41 @@ var SYNC_LOG_COLUMN_COUNT = 14;
 var SYNC_LOG_STATUSES = ['ok', 'partial', 'failed'];
 
 var SYNC_LOG_COUNT_FIELDS = ['n_seen', 'n_new', 'n_updated', 'n_enriched', 'n_fit_fetched', 'n_errors'];
+
+
+// --- BodyMeasurements (A:T) — #198 ----------------------------------
+//
+// One row per Withings measure group, keyed by `grpid`, written only by the
+// Withings sync through upsertBodyMeasurements. One tab for both devices: the
+// Body+ scale (`kind` = scale) and the BPM Connect cuff (`kind` = bp).
+//
+// SI units stored: masses in kg, never lb. The kg -> lb display boundary lives
+// with the consumers that display it (almanac, the MCP read in #201);
+// `Sets!Weight` stays in lbs. Every measure is nullable: blank means the group
+// carried no such measure, never 0. Later columns are only ever appended.
+var BODY_MEASUREMENT_FIELDS = [
+  'grpid',            // A  PK, Withings' group ID. An edited group keeps its grpid
+  'date',             // B  local YYYY-MM-DD, America/Denver, from the group's `date`
+  'time',             // C  local HH:mm, as Workouts!C
+  'measured_at_utc',  // D  ISO 8601 with the offset then in effect, as Workouts!started_at_utc
+  'kind',             // E  scale | bp
+  'device_model',     // F  the group's `model` text, e.g. Body+
+  'weight_kg',        // G  type 1
+  'fat_ratio_pct',    // H  type 6
+  'fat_mass_kg',      // I  type 8
+  'fat_free_mass_kg', // J  type 5
+  'muscle_mass_kg',   // K  type 76
+  'hydration_kg',     // L  type 77
+  'bone_mass_kg',     // M  type 88
+  'systolic_mmhg',    // N  type 10
+  'diastolic_mmhg',   // O  type 9
+  'pulse_bpm',        // P  type 11: the cuff's pulse, or the scale's standing heart rate
+  'attrib',           // Q  Withings' attribution code, kept so a consumer can filter
+  'source',           // R  always `withings`
+  'raw_ref',          // S  Drive file ID of the group's archive file (#197)
+  'synced_at',        // T  the run's single timestamp
+];
+
+var BODY_MEASUREMENT_COLUMN_COUNT = 20;
+
+var BODY_MEASUREMENT_KINDS = ['scale', 'bp'];

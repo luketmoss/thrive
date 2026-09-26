@@ -1,23 +1,30 @@
 #!/usr/bin/env node
 // One Withings run (#197): get an access token (#196), fetch every measure
 // group in the window, and land each one, unmodified, in the bot's Drive.
-// #198 extends it to write the sheet; #200 adds the log row and the schedule.
+// Then (#198) normalize every group whose archive write succeeded and upsert
+// the rows into BodyMeasurements through the Thrive API. #200 adds the log row
+// and the schedule.
 //
-//   WITHINGS_CLIENT_ID=… WITHINGS_CLIENT_SECRET=… node withings-run.mjs
+//   WITHINGS_CLIENT_ID=… WITHINGS_CLIENT_SECRET=… THRIVE_API_URL=… THRIVE_API_KEY=… \
+//     node withings-run.mjs
 //
 // Needs the Google credential from google-authorize.mjs and a Withings token
 // file from withings-authorize.mjs.
 //
 // Prints counts and grpids only, never a measurement. Exits non-zero if
 // anything failed: a page Withings would not serve (naming the error class),
-// or a group that could not be written to Drive (naming its grpid). Groups
-// fetched before a failure are still archived.
+// a group that could not be written to Drive or normalized (naming its grpid),
+// or the sheet write. Groups fetched before a failure are still archived, and
+// a missing THRIVE_API_URL/THRIVE_API_KEY costs the sheet write, never the
+// archive. A group skipped as unattributed is noted, and is not a failure.
 
 import { pathToFileURL } from 'node:url';
 import { withingsWindow } from './src/dates.mjs';
 import { createDrive } from './src/drive.mjs';
 import { googleTokenProvider, loadGoogleCredentials } from './src/google.mjs';
+import { normalizeWithingsGroups, skippedNotes } from './src/normalize-withings.mjs';
 import { redact } from './src/redact.mjs';
+import { createThriveApi, loadThriveApiConfig } from './src/thrive-api.mjs';
 import { createWithingsTokenStore } from './src/token-store.mjs';
 import { createWithingsArchive } from './src/withings-archive.mjs';
 import { fetchMeasureGroups } from './src/withings-measures.mjs';
@@ -31,6 +38,7 @@ export const defaultDeps = {
   getAccessToken: getWithingsAccessToken,
   fetchMeasureGroups,
   createArchive: createWithingsArchive,
+  createApi: (env) => createThriveApi(loadThriveApiConfig(env)),
 };
 
 /**
@@ -39,7 +47,12 @@ export const defaultDeps = {
  *   fetchImpl?: typeof fetch, retry?: object }} [opts]
  *   `window` overrides the rolling window; the backfill (#199) passes
  *   `startdate: 0`.
- * @returns {Promise<{ exitCode: number, counts: object, failed: string[], error: Error|null }>}
+ * @returns {Promise<{ exitCode: number, counts: object, failed: string[], error: Error|null,
+ *   sheet: { rows: number, appended: number, updated: number,
+ *     skipped: { grpid: string, attrib: string }[],
+ *     failed: { grpid: string, type: number|undefined, reason: string }[],
+ *     notes: string, error: Error|null } }>}
+ *   `counts` and `failed` are the archive's; `sheet` is the BodyMeasurements write.
  */
 export async function withingsRun({
   env = process.env,
@@ -54,6 +67,7 @@ export async function withingsRun({
   const d = { ...defaultDeps, ...deps };
   const counts = { seen: 0, created: 0, updated: 0, unchanged: 0, failed: 0 };
   const failed = [];
+  const sheet = { rows: 0, appended: 0, updated: 0, skipped: [], failed: [], notes: '', error: null };
 
   let drive;
   let accessToken;
@@ -69,7 +83,7 @@ export async function withingsRun({
     }));
   } catch (err) {
     printError(`Withings run failed before fetching: ${describe(err)}`);
-    return { exitCode: 1, counts, failed, error: err };
+    return { exitCode: 1, counts, failed, error: err, sheet };
   }
 
   const w = window ?? withingsWindow(now());
@@ -81,10 +95,13 @@ export async function withingsRun({
   print(`Withings: ${groups.length} measure groups in ${pages} page(s), ${range}.`);
 
   const archive = d.createArchive(drive, { now });
+  const archived = [];
   for (const group of groups) {
     try {
-      const { status } = await archive.upsertGroup(group);
+      const { status, fileId } = await archive.upsertGroup(group);
       counts[status] += 1;
+      // Only a group with an archive file has a raw_ref, so only it is sent.
+      if (fileId) archived.push({ group, raw_ref: fileId });
     } catch (err) {
       counts.failed += 1;
       failed.push(String(group?.grpid));
@@ -98,8 +115,38 @@ export async function withingsRun({
     printError(`Withings fetch ended early with ${describe(error)} ` +
       `The ${groups.length} groups fetched before it were archived; nothing from the error was.`);
   }
-  const exitCode = error || counts.failed ? 1 : 0;
-  return { exitCode, counts, failed, error };
+
+  await writeSheet({ d, env, now, archived, sheet, print, printError });
+
+  const exitCode = error || counts.failed || sheet.failed.length || sheet.error ? 1 : 0;
+  return { exitCode, counts, failed, error, sheet };
+}
+
+/**
+ * Normalize the archived groups and upsert the rows (#198 AC5). Mutates
+ * `sheet`. Runs after the archive, so a missing THRIVE_API_URL/KEY costs
+ * this write alone.
+ */
+async function writeSheet({ d, env, now, archived, sheet, print, printError }) {
+  const { rows, skipped, failed } = normalizeWithingsGroups(archived);
+  sheet.rows = rows.length;
+  sheet.skipped = skipped;
+  sheet.failed = failed;
+  sheet.notes = skippedNotes(skipped);
+  for (const f of failed) printError(`Could not normalize Withings ${f.reason}`);
+  if (sheet.notes) print(sheet.notes);
+
+  try {
+    const api = d.createApi(env);
+    const totals = await api.upsertBodyMeasurements(rows, new Date(now()).toISOString());
+    sheet.appended = totals.appended;
+    sheet.updated = totals.updated;
+  } catch (err) {
+    sheet.error = err;
+    printError(`BodyMeasurements not written: ${describe(err)}`);
+  }
+  print(`Sheet: ${archived.length} archived groups seen, ${sheet.appended} rows appended, ` +
+    `${sheet.updated} updated, ${skipped.length} skipped as unattributed, ${failed.length} failed.`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

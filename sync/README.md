@@ -496,7 +496,7 @@ Each group lands under `Thrive Withings` in the bot's Drive:
 - **`payload` is the group object as Withings returned it**, key order kept.
   Withings answers in JSON, so the parsed object loses nothing a re-parse needs,
   and one file per group keeps `raw_ref` pointing at one reading. A value is
-  `value × 10^unit`; nothing here converts it (#198 does). There is no
+  `value × 10^unit`; nothing in the archive converts it (the normalizer below does). There is no
   `normalized` field: Withings rows take no hand edits to merge with.
 - **`payload_hash` is `sha256(JSON.stringify(group))`.**
 - **Idempotent, and a file's ID never changes.** It is COROS's archive code
@@ -515,6 +515,59 @@ Each group lands under `Thrive Withings` in the bot's Drive:
   A group whose Drive write fails is logged with its `grpid`, the others are
   still written, and the run exits non-zero.
 - The run prints counts and `grpid`s, never a measurement.
+
+## BodyMeasurements (#198)
+
+After the archive, the same run writes the sheet:
+
+```bash
+cd sync
+WITHINGS_CLIENT_ID=… WITHINGS_CLIENT_SECRET=… THRIVE_API_URL=… THRIVE_API_KEY=… node withings-run.mjs
+```
+
+Every group whose archive write succeeded is normalized
+(`src/normalize-withings.mjs`, pure) into one `BodyMeasurements` row, and the
+rows are sent to the API's `upsertBodyMeasurements` in batches under the payload
+limit, with the run's one `synced_at`. A group whose archive write failed has no
+`raw_ref`, so it is not sent. The run prints the groups seen, rows appended and
+updated, groups skipped as unattributed, and groups failed. Rows are re-derived
+from the archive on every run, and nothing writes back to it.
+
+**The normalizer rules:**
+
+| Type | Column | Type | Column |
+|---|---|---|---|
+| 1 | `weight_kg` | 88 | `bone_mass_kg` |
+| 6 | `fat_ratio_pct` | 10 | `systolic_mmhg` |
+| 8 | `fat_mass_kg` | 9 | `diastolic_mmhg` |
+| 5 | `fat_free_mass_kg` | 11 | `pulse_bpm` (the cuff's pulse, or the scale's standing heart rate) |
+| 76 | `muscle_mass_kg` | 77 | `hydration_kg` |
+
+- **A value is `value × 10^unit`, as an exact decimal string**, made by shifting
+  the decimal point, never through floating point: `72345, -3` is `72.345`.
+  Trailing zeros are trimmed; nothing is rounded. SI units are stored.
+- `kind` is `bp` when the group has type 9 or 10, `scale` when it has any of 1,
+  5, 6, 8, 76, 77 or 88. A column the group has no measure for is `''`, never `0`.
+- `date`, `time` and `measured_at_utc` come from the group's `date` epoch in
+  `America/Denver`, with the offset then in effect, as `Workouts` does.
+  `device_model` is the group's `model` text; `raw_ref` its archive file's ID.
+- **Only attributed groups are written.** `attrib` follows Withings' published
+  meanings: 0 captured by a device and known to be this user's, 2 entered
+  manually, 4 entered manually at sign-up, 5 the BPM's computed best value, 7
+  confirmed by the user, 8 as 0. **1 is ambiguous** (a guest, or another user):
+  it is not written. Neither is any code not on that list. A skipped group is
+  counted, printed with its `grpid` and `attrib` as the run's notes, and is
+  **not** a failure. Record here any code seen live that is not on the list.
+- A measure type not in the table is ignored.
+- **A known type with an unexpected shape fails that group only**: a
+  non-integer (or negative) `value`, a non-integer `unit`, a type repeated in the
+  group, a group with both scale and BP types, or a group with no known type
+  besides 11. It is logged with its `grpid` and type (never its value), the
+  other groups are written, and the run exits non-zero.
+- **A missing `THRIVE_API_URL`/`THRIVE_API_KEY` costs the sheet write, never the
+  archive**: the run archives first, then fails naming both. So does an API
+  refusal, e.g. before `scripts/migrate-198-body-measurements-tab.mjs` has made
+  the tab.
 
 ### Open question: does `getmeas` report deletions?
 
