@@ -604,19 +604,59 @@ from **before the first workout or after the last** needs an explicit
 `--from`/`--to` covering the Withings account's own history, or that day's
 row is never written.
 
-### Open question: does `getmeas` report deletions?
+### Readings deleted in the Withings app (#215)
 
-**Not yet known.** It can only be answered against the live account, and is
-tracked in #212. Until then, assume the worst: a group deleted in the Withings
-app may simply stop appearing, in which case it **stays in the archive** (and,
-from #198, in `BodyMeasurements`). Nothing in the sync deletes archive files.
+**`getmeas` silently omits a deleted group** once the deletion has propagated
+(minutes after the delete; found live in #212). There is no flag and no
+tombstone, so absence from a **complete** fetch is the only signal. After the
+upsert, the run calls the API's `reconcileBodyMeasurements` once with the
+window's local dates (`from`/`to`), every `grpid` the fetch returned
+(`present_grpids`, unattributed and unnormalizable groups included, since
+they are not deleted), and the cap (`max_deletions`). The API deletes, under
+its lock, the rows dated in the window whose `grpid` is not in the list, and
+answers `{ deleted, refused }`. `src/withings-reconcile.mjs` holds the sync's
+half.
 
-To answer it: take a throwaway reading, run `node withings-run.mjs` and note its
-`grpid`; delete the reading in the Withings app; run again and see what `getmeas`
-returned for that `grpid`: omitted (its file untouched, every other group
-`unchanged`), flagged (the file is rewritten; diff `payload.attrib` and
-`payload.category`), or returned unchanged. Then replace this paragraph with the
-answer, and if deletions are simply omitted, open an issue to reconcile them.
+- **Only after a complete fetch.** A page Withings would not serve (#197 AC3),
+  or any group whose archive write failed, means the run never calls it; the
+  full log says `fetch incomplete: deletions not checked`. Neither does a run
+  whose upsert failed.
+- **Capped at 5 deletions a run.** Over the cap, the API deletes **nothing**
+  and the run is `partial`, `error_detail` reading `refused to delete N
+  BodyMeasurements rows (cap 5): check Withings, then re-run with
+  WITHINGS_MAX_DELETIONS=N`. So is a fetch that returned **no groups at all**
+  while the window holds rows, however few: a Withings fault answering
+  `status 0` with an empty list must not empty the tab. To let a real sweep
+  through, check the readings really are gone in the app, then dispatch
+  `withings-sync.yml` with `max_deletions` set to N (locally,
+  `WITHINGS_MAX_DELETIONS=N`). That raises the cap for that run only, and,
+  because the owner has now checked, also lets an empty answer delete. The
+  schedule always uses the default.
+- **The archive remembers.** A deleted row's archive file gains
+  `deleted_seen_at` (the run's timestamp); its `payload` and `payload_hash`
+  are untouched and the file is never deleted. If a later run returns that
+  `grpid` again, the group is upserted as usual and the mark is removed.
+- **Recorded.** `WithingsSyncLog.notes` gets `deleted in Withings: <n>
+  (<grpid>, …)`. The public Actions log prints the count only.
+- **The rollup follows.** A run that deleted rows rebuilds `DailySummary` over
+  D − 30 to D, as one that appended or updated does.
+- **The backfill applies the same rule over its whole range, under the same
+  cap**, but still never rebuilds (above): for a backfill, deletions appear in
+  `notes` alone, and history's U:Y wait for the owner's
+  `backfill-131-daily-summary.mjs` run. A range whose `present_grpids` would
+  not fit one request (only a backfill's, at a few hundred groups) is split
+  into consecutive date ranges, each still holding at least one `grpid`. The
+  cap is shared across them — each request is offered only what is left of
+  it, so a run never deletes more than the cap in total — but a later range's
+  refusal cannot undo an earlier range's deletions.
+- **Deletions outside the window are not seen** by the rolling run; the next
+  backfill cleans them up, under the cap.
+
+**Until `apps-script/` is redeployed** with this action, the deployed API
+answers `Unknown action: "reconcileBodyMeasurements"`. That fails the
+deletion step alone: the archive, the upsert, the rollup and the log row all
+happen as before, and the run is `partial` with `BodyMeasurements deletions not
+checked: …` in `error_detail`, until the owner deploys.
 
 ## Withings: schedule, log and watchdog (#200)
 

@@ -47,6 +47,9 @@
 //     "date":"2026-09-24","time":"06:41","measured_at_utc":"2026-09-24T06:41:12-06:00",
 //     "kind":"scale","weight_kg":"81.234",...,"source":"withings","raw_ref":"<drive id>"}],
 //     "synced_at":"2026-09-24T13:25:32.000Z"}
+//   ?action=reconcileBodyMeasurements&key=...&payload={"from":"2026-08-26",
+//     "to":"2026-09-26","present_grpids":["101","103"],"max_deletions":5}
+//     — deletes in-window rows whose grpid is absent (#215), capped
 //
 // Synced activities are addressed by vendor ID, and merged (#166):
 //   ?action=upsertSyncedWorkout&key=...&payload={"source":"coros",
@@ -448,6 +451,16 @@ function dispatch(action, params) {
       result = {
         success: true,
         data: withScriptLock(function () { return upsertBodyMeasurements(payload.rows, payload.synced_at); }),
+      };
+      break;
+
+    // Rows the Withings sync's complete fetch no longer returns: readings
+    // deleted in the app (#215). Compare and delete in one call, under the
+    // lock, capped. A write, so key-only: never on the token read allow-list.
+    case 'reconcileBodyMeasurements':
+      result = {
+        success: true,
+        data: withScriptLock(function () { return reconcileBodyMeasurements(payload); }),
       };
       break;
 

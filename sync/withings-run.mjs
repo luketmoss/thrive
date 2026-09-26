@@ -2,8 +2,10 @@
 // One Withings run (#197): get an access token (#196), fetch every measure
 // group in the window, and land each one, unmodified, in the bot's Drive.
 // Then (#198) normalize every group whose archive write succeeded and upsert
-// the rows into BodyMeasurements through the Thrive API. Last (#200), whatever
-// happened, append the run's one WithingsSyncLog row.
+// the rows into BodyMeasurements through the Thrive API, and (#215) delete the
+// window's rows whose grpid a complete fetch no longer returns: readings
+// deleted in the app. Last (#200), whatever happened, append the run's one
+// WithingsSyncLog row.
 //
 //   WITHINGS_CLIENT_ID=… WITHINGS_CLIENT_SECRET=… THRIVE_API_URL=… THRIVE_API_KEY=… \
 //     node withings-run.mjs
@@ -45,6 +47,7 @@ import { buildSyncLogRow, createRunOutput, logModeFor, runIdFor } from './src/ru
 import { createThriveApi, loadThriveApiConfig } from './src/thrive-api.mjs';
 import { createWithingsTokenStore } from './src/token-store.mjs';
 import { createWithingsArchive } from './src/withings-archive.mjs';
+import { deletedNote, reconcileDeletions } from './src/withings-reconcile.mjs';
 import { fetchMeasureGroups } from './src/withings-measures.mjs';
 import { getWithingsAccessToken } from './src/withings-tokens.mjs';
 
@@ -73,9 +76,12 @@ export const defaultDeps = {
  *     skipped: { grpid: string, attrib: string }[],
  *     failed: { grpid: string, type: number|undefined, reason: string }[],
  *     notes: string, error: Error|null,
- *     rollup: object|null, rollupError: Error|null } }>}
- *   `counts` and `failed` are the archive's; `sheet` is the BodyMeasurements write and, when it
- *   changed anything, the DailySummary rebuild that follows it (#203).
+ *     rollup: object|null, rollupError: Error|null,
+ *     reconcile: { checked: boolean, deleted: string[], refused: string|null, error: Error|null,
+ *       markFailures: string[] } } }>}
+ *   `counts` and `failed` are the archive's; `sheet` is the BodyMeasurements write, the
+ *   deletion check after it (#215), and, when either changed anything, the DailySummary
+ *   rebuild that follows (#203).
  */
 export async function withingsRun({
   env = process.env,
@@ -96,6 +102,9 @@ export async function withingsRun({
   const sheet = {
     rows: 0, appended: 0, updated: 0, skipped: [], failed: [], notes: '', error: null,
     rollup: null, rollupError: null,
+    // #215: readings deleted in Withings. `checked` is false when the run
+    // did not ask (an incomplete fetch, or the upsert failed).
+    reconcile: { checked: false, deleted: [], refused: null, error: null, markFailures: [] },
   };
 
   let drive;
@@ -150,9 +159,16 @@ export async function withingsRun({
       `The ${groups.length} groups fetched before it were archived; nothing from the error was.`);
   }
 
-  await writeSheet({ d, env, now, archived, sheet, print, printError, window: w, backfill });
+  // Absence is only a deletion if the fetch saw everything (#215 AC2): a
+  // page that failed, or a group not archived, means it did not.
+  const complete = !error && counts.failed === 0;
+  await writeSheet({
+    d, env, now, archived, sheet, print, printError, window: w, backfill, groups, complete, archive,
+  });
 
-  const exitCode = error || counts.failed || sheet.failed.length || sheet.error || sheet.rollupError ? 1 : 0;
+  const rc = sheet.reconcile;
+  const exitCode = error || counts.failed || sheet.failed.length || sheet.error || sheet.rollupError ||
+    rc.refused || rc.error || rc.markFailures.length ? 1 : 0;
   return { exitCode, counts, failed, archiveFailures, error, sheet };
 }
 
@@ -171,7 +187,9 @@ export async function withingsRun({
  * exists to chunk around. Filling history's U:Y is the documented owner step,
  * one `scripts/backfill-131-daily-summary.mjs` run after the backfill lands.
  */
-async function writeSheet({ d, env, now, archived, sheet, print, printError, window, backfill }) {
+async function writeSheet({
+  d, env, now, archived, sheet, print, printError, window, backfill, groups = [], complete = false, archive,
+}) {
   const { rows, skipped, failed } = normalizeWithingsGroups(archived);
   sheet.rows = rows.length;
   sheet.skipped = skipped;
@@ -193,7 +211,25 @@ async function writeSheet({ d, env, now, archived, sheet, print, printError, win
   print(`Sheet: ${archived.length} archived groups seen, ${sheet.appended} rows appended, ` +
     `${sheet.updated} updated, ${skipped.length} skipped as unattributed, ${failed.length} failed.`);
 
-  const changed = sheet.appended > 0 || sheet.updated > 0;
+  // #215: after the upsert, over the whole fetch window (the backfill's too),
+  // and only when the fetch was complete and the upsert landed.
+  const rc = sheet.reconcile;
+  if (!complete) {
+    print('Withings fetch incomplete: deletions not checked.');
+  } else if (!api || sheet.error) {
+    print('BodyMeasurements not written: deletions not checked.');
+  } else {
+    rc.checked = true;
+    Object.assign(rc, await reconcileDeletions({
+      api, archive, from: window.start, to: window.end, groups, env, at: new Date(now()).toISOString(),
+    }));
+    if (rc.deleted.length) print(deletedNote(rc.deleted));
+    if (rc.refused) printError(`BodyMeasurements deletions: ${rc.refused}`);
+    if (rc.error) printError(`BodyMeasurements deletions not checked: ${describe(rc.error)}`);
+    for (const f of rc.markFailures) printError(f);
+  }
+
+  const changed = sheet.appended > 0 || sheet.updated > 0 || rc.deleted.length > 0;
   if (api && !sheet.error && changed && !backfill && window?.start && window?.runDate) {
     try {
       sheet.rollup = await api.rebuildDailySummary(window.start, window.runDate, new Date(now()).toISOString());
@@ -323,13 +359,21 @@ export async function withingsSyncRun({
     failures.push(...result.archiveFailures);
     for (const f of sheet.failed) failures.push(`Could not normalize Withings ${f.reason}`);
     if (sheet.error) failures.push(`BodyMeasurements not written: ${describe(sheet.error)}`);
+    const rc = sheet.reconcile;
+    if (rc.refused) failures.push(rc.refused);
+    if (rc.error) failures.push(`BodyMeasurements deletions not checked: ${describe(rc.error)}`);
+    failures.push(...rc.markFailures);
     if (sheet.rollupError) failures.push(`DailySummary rebuild: ${describe(sheet.rollupError)}`);
     if (sheet.notes) notes.push(sheet.notes);
+    if (rc.deleted.length) notes.push(deletedNote(rc.deleted));
     const a = result.counts;
     out.info(
       `Withings: ${a.seen} measure groups fetched. Archive: ${a.created} created, ${a.updated} updated, ` +
       `${a.unchanged} unchanged, ${a.failed} failed. Sheet: ${sheet.appended} appended, ${sheet.updated} updated, ` +
-      `${sheet.skipped.length} skipped as unattributed, ${sheet.failed.length} failed.`,
+      `${sheet.skipped.length} skipped as unattributed, ${sheet.failed.length} failed. ` +
+      // A count only: the grpids are in the row's notes, not this public log.
+      `Deleted in Withings: ${rc.deleted.length}` +
+      `${rc.checked ? '' : ' (not checked)'}${rc.refused ? ' (refused by the cap)' : ''}.`,
     );
   }
 

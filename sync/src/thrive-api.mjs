@@ -238,6 +238,20 @@ export function createThriveApi({
       return write('enrichWorkout', payload);
     },
 
+    /**
+     * Delete the BodyMeasurements rows in `from`..`to` whose grpid is not in
+     * `present_grpids` (#215): readings deleted in Withings. The compare and
+     * the delete run in the API, under its lock, capped at `max_deletions`.
+     * Sent once, like every write; the run sizes `present_grpids` to fit.
+     *
+     * @param {{ from: string, to: string, present_grpids: string[],
+     *   max_deletions: number, allow_empty?: boolean }} payload
+     * @returns {Promise<{ deleted: string[], refused: boolean, would_delete?: number }>}
+     */
+    reconcileBodyMeasurements(payload) {
+      return write('reconcileBodyMeasurements', payload);
+    },
+
     /** Recompute DailySummary for `from`..`to`, inclusive, stamped `computedAt`. */
     rebuildDailySummary(from, to, computedAt) {
       return write('rebuildDailySummary', { from, to, computed_at: computedAt });

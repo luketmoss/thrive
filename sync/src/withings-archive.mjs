@@ -12,6 +12,11 @@
 // file per group keeps `raw_ref` pointing at exactly one reading. Unlike
 // COROS's files there is no `normalized` field: Withings rows take no hand
 // edits to merge with (#198).
+//
+// A group Withings stops returning because it was deleted in the app (#215)
+// keeps its file: the sheet row goes, and the file gains `deleted_seen_at`
+// (`markDeleted`), with `payload` and `payload_hash` untouched. A later run
+// that sees the group again rewrites the file and drops the mark.
 
 import { createArchiveStore, sha256 } from './archive.mjs';
 import {
@@ -34,7 +39,13 @@ export function createWithingsArchive(drive, { now = () => Date.now() } = {}) {
     rootProps: WITHINGS_APP_PROPERTY_ROOT,
     folderKind: WITHINGS_APP_PROPERTY_FOLDER_KIND,
     now,
+    // A group seen again is no longer deleted (#215). The file is written as
+    // JSON, which drops an undefined field, so this removes the mark.
+    carry: () => ({ deleted_seen_at: undefined }),
   });
+
+  /** A marked file must be rewritten even when its payload is the same (#215). */
+  const wasDeleted = (current) => current?.deleted_seen_at !== undefined;
 
   return {
     /**
@@ -81,8 +92,26 @@ export function createWithingsArchive(drive, { now = () => Date.now() } = {}) {
         name: `${grpid}.json`,
         segments: ['measures', yyyy, mm],
         record: { source: 'withings', grpid, payload: group, payload_hash: groupHash(group) },
+        changed: wasDeleted,
         ...(index ? { knownFileId: index.get(grpid) ?? null } : {}),
       });
+    },
+
+    /**
+     * Record that Withings no longer returns this group (#215): the file
+     * gains `deleted_seen_at`, and nothing else in it changes — not
+     * `payload`, not `payload_hash`, not `fetched_at`. The file is never
+     * deleted. Re-reads first, as COROS's `writeFit` does.
+     *
+     * @returns {Promise<string|null>} the file's ID, or null when the group
+     *   was never archived (nothing to mark).
+     */
+    async markDeleted(grpid, at) {
+      const file = await drive.findOne(measureGroupProps(grpid));
+      if (!file) return null;
+      const current = await drive.readJson(file.id);
+      await drive.updateJson(file.id, { ...current, deleted_seen_at: at });
+      return file.id;
     },
   };
 }
