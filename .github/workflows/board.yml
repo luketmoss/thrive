@@ -1,24 +1,25 @@
 name: board
 
-# Runs .thrive/board.mjs for sessions that cannot reach the project board
-# themselves. Cloud Claude Code sessions have no `gh` and their GitHub access
-# stops at repos/luketmoss/thrive/..., so a user-owned Projects v2 board is out
-# of reach; board.mjs dispatches this workflow instead and reads the result back.
+# Runs .thrive/board.mjs for sessions that cannot reach the project board themselves.
+# Cloud Claude Code sessions have no `gh` and their GitHub access stops at
+# repos/luketmoss/thrive/..., so a user-owned Projects v2 board is out of reach;
+# .thrive/board.mjs dispatches this workflow instead and reads the result back.
 #
 # repository_dispatch, not workflow_dispatch: the Claude GitHub App may not
 # start workflows (actions:write), but it can send a repository_dispatch event
 # (contents:write). Either way it runs the default branch's copy of this file.
 #
-# The output comes back as annotations titled "board 1", "board 2", ..., not the
-# job log: log downloads redirect to a blob host those sessions cannot reach,
-# while check-run annotations are repo-scoped. An annotation holds about 4 KB,
-# so longer output is split across several and board.mjs joins them.
+# The result comes back as annotations, not the job log: log downloads redirect
+# to a blob host those sessions cannot reach, while check-run annotations are
+# repo-scoped. stdout is "board-out 1", "board-out 2", ..., stderr is
+# "board-err N", and the exit code is "board-exit". An annotation holds about
+# 4 KB, so output is split into whole-line chunks the caller joins back up.
 #
 # BOARD_TOKEN is a classic PAT with `project`, `repo` and `read:org`. gh looks
 # the owner up as both a user and an org, and without read:org the org half is
 # refused. The workflow's own GITHUB_TOKEN cannot see a user-owned project.
 #
-# client_payload: { args: ["show","42"], request_id: "<set by board.mjs to find its run>" }
+# client_payload: { args: ["show","42"], request_id: "<set by the caller to find its run>" }
 run-name: board ${{ join(github.event.client_payload.args, ' ') }} [${{ github.event.client_payload.request_id }}]
 
 on:
@@ -36,50 +37,61 @@ jobs:
       - uses: actions/checkout@v5
         with:
           sparse-checkout: .thrive
-      # No setup-node: board.mjs has no dependencies, and the runner's Node and
-      # gh are enough.
+      # No setup step: the script has no dependencies, and the runner's
+      # Node and gh are enough.
       - name: board.mjs
         env:
           BOARD_ARGS: ${{ toJSON(github.event.client_payload.args) }}
           GH_TOKEN: ${{ secrets.BOARD_TOKEN }}
         run: |
           set +e
+          out=$(mktemp)
+          err=$(mktemp)
           # gh reports every failed owner lookup as "unknown owner type", so
           # check the token first and say what is actually wrong with it.
           has_scope() { echo "$scopes" | grep -qE "(: |, )($1)(,|\$)"; }
           if ! hdr=$(gh api -i user 2>&1); then
-            out="BOARD_TOKEN was rejected: $(echo "$hdr" | tail -n 1)"
+            echo "BOARD_TOKEN was rejected: $(echo "$hdr" | tail -n 1)" > "$err"
             code=1
           elif ! scopes=$(echo "$hdr" | tr -d '\r' | grep -i '^x-oauth-scopes:'); then
-            out="BOARD_TOKEN has no scopes header, so it is not a classic token."
+            echo "BOARD_TOKEN has no scopes header, so it is not a classic token." > "$err"
             code=1
           elif ! has_scope project || ! has_scope 'read:org|write:org|admin:org'; then
-            out="BOARD_TOKEN needs the project and read:org scopes. $scopes"
+            echo "BOARD_TOKEN needs the project and read:org scopes. $scopes" > "$err"
             code=1
           else
-            out=$(node .thrive/board.mjs 2>&1)
+            node .thrive/board.mjs > "$out" 2> "$err"
             code=$?
           fi
-          echo "$out"
-          if [ "$code" -eq 0 ]; then level=notice; else level=error; fi
-          n=0
+          cat "$out"
+          cat "$err" >&2
+
+          # Whole lines, at most 3800 characters per annotation and 9 per
+          # stream (GitHub keeps 10 of each level per step).
           emit() {
-            local m="$1"
-            m="${m//'%'/'%25'}"
-            m="${m//$'\r'/'%0D'}"
-            m="${m//$'\n'/'%0A'}"
-            n=$((n + 1))
-            echo "::${level} title=board ${n}::${m}"
-          }
-          # Whole lines, 3000 characters at most per annotation.
-          chunk=""
-          while IFS= read -r line; do
-            if [ -n "$chunk" ] && [ $(( ${#chunk} + ${#line} + 1 )) -gt 3000 ]; then
-              emit "$chunk"
-              chunk="$line"
-            else
+            local level=$1 title=$2 file=$3 n=0 chunk="" line
+            flush() {
+              [ -z "$chunk" ] && return
+              n=$((n + 1))
+              if [ "$n" -gt 9 ]; then
+                [ "$n" -eq 10 ] && echo "::warning title=board-truncated::$title cut off after 9 annotations; the run log has all of it."
+                chunk=""
+                return
+              fi
+              local m="$chunk"
+              m="${m//'%'/'%25'}"
+              m="${m//$'\r'/'%0D'}"
+              m="${m//$'\n'/'%0A'}"
+              echo "::$level title=$title $n::$m"
+              chunk=""
+            }
+            while IFS= read -r line || [ -n "$line" ]; do
+              if [ -n "$chunk" ] && [ $(( ${#chunk} + ${#line} + 1 )) -gt 3800 ]; then flush; fi
               chunk="${chunk}${chunk:+$'\n'}${line}"
-            fi
-          done <<< "$out"
-          emit "$chunk"
+            done < "$file"
+            flush
+          }
+          emit notice board-out "$out"
+          emit error board-err "$err"
+          echo "::notice title=board-exit::$code"
           exit "$code"

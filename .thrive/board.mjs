@@ -110,15 +110,22 @@ function runRemotely(args) {
     run = rest('GET', `actions/runs/${run.id}`);
     if (run.status !== 'completed') continue;
 
+    // board.yml returns stdout, stderr and the exit code as annotations.
     const { jobs } = rest('GET', `actions/runs/${run.id}/jobs`);
     const notes = jobs.length ? rest('GET', `check-runs/${jobs[0].id}/annotations?per_page=100`) : [];
-    const parts = notes
-      .filter((a) => /^board \d+$/.test(a.title))
-      .sort((a, b) => Number(a.title.slice(6)) - Number(b.title.slice(6)));
-    const output = parts.length ? parts.map((a) => a.message).join('\n') : `(no output; see ${run.html_url})`;
-    if (run.conclusion !== 'success') die(output);
-    console.log(output);
-    return;
+    const stream = (name) => notes
+      .filter((a) => a.title.startsWith(`${name} `))
+      .sort((a, b) => Number(a.title.slice(name.length + 1)) - Number(b.title.slice(name.length + 1)))
+      .map((a) => a.message)
+      .join('\n');
+    const exit = notes.find((a) => a.title === 'board-exit');
+    if (!exit) die(`The board workflow returned no result: ${run.html_url}`);
+    const out = stream('board-out');
+    const err = [stream('board-err'), notes.find((a) => a.title === 'board-truncated')?.message]
+      .filter(Boolean).join('\n');
+    if (out) console.log(out);
+    if (err) console.error(err);
+    process.exit(Number(exit.message));
   }
   die(`Timed out waiting for the board workflow${run ? `: ${run.html_url}` : ''}.`);
 }
@@ -127,10 +134,7 @@ function runRemotely(args) {
 const args = process.env.BOARD_ARGS ? JSON.parse(process.env.BOARD_ARGS) : process.argv.slice(2);
 if (!Array.isArray(args) || !args.every((a) => typeof a === 'string')) die('BOARD_ARGS must be a JSON array of strings.');
 
-if (!hasGh()) {
-  runRemotely(args);
-  process.exit(0);
-}
+if (!hasGh()) runRemotely(args);
 
 const [command, ...argv] = args;
 
