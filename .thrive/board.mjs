@@ -111,9 +111,11 @@ function runRemotely(args) {
     if (run.status !== 'completed') continue;
 
     const { jobs } = rest('GET', `actions/runs/${run.id}/jobs`);
-    const notes = jobs.length ? rest('GET', `check-runs/${jobs[0].id}/annotations`) : [];
-    const note = notes.find((a) => a.title === 'board');
-    const output = note?.message ?? `(no output; see ${run.html_url})`;
+    const notes = jobs.length ? rest('GET', `check-runs/${jobs[0].id}/annotations?per_page=100`) : [];
+    const parts = notes
+      .filter((a) => /^board \d+$/.test(a.title))
+      .sort((a, b) => Number(a.title.slice(6)) - Number(b.title.slice(6)));
+    const output = parts.length ? parts.map((a) => a.message).join('\n') : `(no output; see ${run.html_url})`;
     if (run.conclusion !== 'success') die(output);
     console.log(output);
     return;

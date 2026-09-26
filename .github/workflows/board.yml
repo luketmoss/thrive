@@ -9,12 +9,14 @@ name: board
 # start workflows (actions:write), but it can send a repository_dispatch event
 # (contents:write). Either way it runs the default branch's copy of this file.
 #
-# The output comes back as a single annotation titled "board", not the job log:
-# log downloads redirect to a blob host those sessions cannot reach, while
-# check-run annotations are repo-scoped.
+# The output comes back as annotations titled "board 1", "board 2", ..., not the
+# job log: log downloads redirect to a blob host those sessions cannot reach,
+# while check-run annotations are repo-scoped. An annotation holds about 4 KB,
+# so longer output is split across several and board.mjs joins them.
 #
-# BOARD_TOKEN is a classic PAT with `project` and `repo`. The workflow's own
-# GITHUB_TOKEN cannot see a user-owned project.
+# BOARD_TOKEN is a classic PAT with `project`, `repo` and `read:org`. gh looks
+# the owner up as both a user and an org, and without read:org the org half is
+# refused. The workflow's own GITHUB_TOKEN cannot see a user-owned project.
 #
 # client_payload: { args: ["show","42"], request_id: "<set by board.mjs to find its run>" }
 run-name: board ${{ join(github.event.client_payload.args, ' ') }} [${{ github.event.client_payload.request_id }}]
@@ -44,21 +46,40 @@ jobs:
           set +e
           # gh reports every failed owner lookup as "unknown owner type", so
           # check the token first and say what is actually wrong with it.
+          has_scope() { echo "$scopes" | grep -qE "(: |, )($1)(,|\$)"; }
           if ! hdr=$(gh api -i user 2>&1); then
             out="BOARD_TOKEN was rejected: $(echo "$hdr" | tail -n 1)"
             code=1
-          elif ! scopes=$(echo "$hdr" | tr -d '\r' | grep -i '^x-oauth-scopes:') ||
-               ! echo "$scopes" | grep -qE '(: |, )project(,|$)'; then
-            out="BOARD_TOKEN lacks the project scope. ${scopes:-No scopes header, so it is not a classic token.}"
+          elif ! scopes=$(echo "$hdr" | tr -d '\r' | grep -i '^x-oauth-scopes:'); then
+            out="BOARD_TOKEN has no scopes header, so it is not a classic token."
+            code=1
+          elif ! has_scope project || ! has_scope 'read:org|write:org|admin:org'; then
+            out="BOARD_TOKEN needs the project and read:org scopes. $scopes"
             code=1
           else
             out=$(node .thrive/board.mjs 2>&1)
             code=$?
           fi
           echo "$out"
-          out="${out//'%'/'%25'}"
-          out="${out//$'\r'/'%0D'}"
-          out="${out//$'\n'/'%0A'}"
           if [ "$code" -eq 0 ]; then level=notice; else level=error; fi
-          echo "::${level} title=board::${out}"
+          n=0
+          emit() {
+            local m="$1"
+            m="${m//'%'/'%25'}"
+            m="${m//$'\r'/'%0D'}"
+            m="${m//$'\n'/'%0A'}"
+            n=$((n + 1))
+            echo "::${level} title=board ${n}::${m}"
+          }
+          # Whole lines, 3000 characters at most per annotation.
+          chunk=""
+          while IFS= read -r line; do
+            if [ -n "$chunk" ] && [ $(( ${#chunk} + ${#line} + 1 )) -gt 3000 ]; then
+              emit "$chunk"
+              chunk="$line"
+            else
+              chunk="${chunk}${chunk:+$'\n'}${line}"
+            fi
+          done <<< "$out"
+          emit "$chunk"
           exit "$code"

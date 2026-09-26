@@ -137,8 +137,8 @@ renamed.
 Cloud Claude Code sessions have no `gh` and cannot reach the project, so there
 `board.mjs` hands the same command to `.github/workflows/board.yml` (a
 `repository_dispatch`) and prints its result, 20–40 s later. That needs the
-`BOARD_TOKEN` repo secret: a classic PAT with `project` and `repo`. Nothing
-changes where `gh` is installed.
+`BOARD_TOKEN` repo secret: a classic PAT with `project`, `repo` and `read:org`.
+Nothing changes where `gh` is installed.
 
 | Stage | Skill | Gate |
 |---|---|---|
