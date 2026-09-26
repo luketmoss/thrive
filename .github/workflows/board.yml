@@ -42,8 +42,19 @@ jobs:
           GH_TOKEN: ${{ secrets.BOARD_TOKEN }}
         run: |
           set +e
-          out=$(node .thrive/board.mjs 2>&1)
-          code=$?
+          # gh reports every failed owner lookup as "unknown owner type", so
+          # check the token first and say what is actually wrong with it.
+          if ! hdr=$(gh api -i user 2>&1); then
+            out="BOARD_TOKEN was rejected: $(echo "$hdr" | tail -n 1)"
+            code=1
+          elif ! scopes=$(echo "$hdr" | tr -d '\r' | grep -i '^x-oauth-scopes:') ||
+               ! echo "$scopes" | grep -qE '(: |, )project(,|$)'; then
+            out="BOARD_TOKEN lacks the project scope. ${scopes:-No scopes header, so it is not a classic token.}"
+            code=1
+          else
+            out=$(node .thrive/board.mjs 2>&1)
+            code=$?
+          fi
           echo "$out"
           out="${out//'%'/'%25'}"
           out="${out//$'\r'/'%0D'}"
