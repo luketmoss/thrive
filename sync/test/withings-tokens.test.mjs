@@ -79,6 +79,7 @@ test('a failed Drive write is a TokenPersistError naming Withings, and the new t
     assert.match(err.message, /Withings/);
     assert.match(err.message, /withings-authorize\.mjs/);
     assert.doesNotMatch(err.message, /COROS|wt-access-1|wt-refresh-1/);
+    assert.doesNotMatch(err.stack, /COROS/);
     return true;
   });
 });

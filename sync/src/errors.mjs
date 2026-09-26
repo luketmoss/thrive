@@ -48,12 +48,13 @@ export class DriveAuthError extends Error {
  * and the next run will need `authorize.mjs` unless this one is retried.
  */
 export class TokenPersistError extends Error {
-  constructor(detail) {
-    super(
+  /** `message` replaces COROS's wording, for another vendor's subclass. */
+  constructor(detail, message) {
+    super(message ?? (
       `A rotated COROS token could not be written to Drive (${detail}). The run ` +
       'stopped before using it. If the next run reports a dead grant, re-run ' +
-      '`node sync/authorize.mjs`.',
-    );
+      '`node sync/authorize.mjs`.'
+    ));
     this.name = 'TokenPersistError';
   }
 }
@@ -114,11 +115,12 @@ export class WithingsRequestError extends Error {
 /** A rotated Withings token could not be saved. As TokenPersistError, for Withings. */
 export class WithingsTokenPersistError extends TokenPersistError {
   constructor(detail) {
-    super(detail);
-    this.message =
+    super(
+      detail,
       `A rotated Withings token could not be written to Drive (${detail}). The run ` +
       'stopped before using it. If the next run reports a dead grant, re-run ' +
-      '`node sync/withings-authorize.mjs`.';
+      '`node sync/withings-authorize.mjs`.',
+    );
     this.name = 'WithingsTokenPersistError';
   }
 }
