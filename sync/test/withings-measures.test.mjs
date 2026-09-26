@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { WITHINGS_MEASURE_TYPES } from '../src/config.mjs';
-import { withingsWindow } from '../src/dates.mjs';
+import { withingsBackfillWindow, withingsWindow } from '../src/dates.mjs';
 import { fetchMeasureGroups } from '../src/withings-measures.mjs';
 import { NOW, scriptedFetch } from './helpers.mjs';
 import { getmeasPage, measureGroup, withingsStatus } from './withings-helpers.mjs';
@@ -108,6 +108,16 @@ test('the window uses Denver\'s date, not UTC\'s: 8 pm local is already tomorrow
   assert.equal(w.runDate, '2026-12-01');
   assert.equal(new Date(w.startdate * 1000).toISOString(), '2026-11-01T06:00:00.000Z'); // MDT midnight
   assert.equal(new Date(w.enddate * 1000).toISOString(), '2026-12-03T06:59:59.000Z'); // MST
+});
+
+test('#199: the backfill window is startdate 0 through D + 1, with a fixed 1970-01-01 start', () => {
+  const w = withingsBackfillWindow(NOW);
+  assert.equal(w.runDate, '2026-09-24');
+  assert.equal(w.start, '1970-01-01');
+  assert.equal(w.end, '2026-09-25');
+  assert.equal(w.startdate, 0);
+  // The same end bound as the rolling window over the same instant.
+  assert.equal(w.enddate, withingsWindow(NOW).enddate);
 });
 
 test('the window is a parameter: startdate 0 is passed straight through', async () => {

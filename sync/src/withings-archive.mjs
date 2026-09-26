@@ -38,13 +38,39 @@ export function createWithingsArchive(drive, { now = () => Date.now() } = {}) {
 
   return {
     /**
+     * One bulk read of every measure group already archived, keyed by
+     * `grpid` (#199): a backfill's thousands of groups make a `findOne` per
+     * group the dominant cost of the run, so it looks the whole archive up
+     * once with `drive.findAll` (paged past the 10-file cap) instead. A
+     * normal run's ~30-day window is a handful of groups, cheaper to look up
+     * one at a time than to scan the whole archive, so this is opt-in.
+     *
+     * Matched by `appProperties.grpid`, the same tag `upsertGroup` finds a
+     * file by, never by name — a file renamed in Drive is still found.
+     *
+     * @returns {Promise<Map<string, string>>} grpid to Drive file ID.
+     */
+    async preloadIndex() {
+      const files = await drive.findAll({ source: 'withings' });
+      const index = new Map();
+      for (const f of files) {
+        const grpid = f.appProperties?.grpid;
+        if (grpid !== undefined) index.set(String(grpid), f.id);
+      }
+      return index;
+    },
+
+    /**
      * One measure group, foldered by its `date` (epoch seconds) as a local
      * date in America/Denver. Created, rewritten in place when its hash
      * changed, or left alone.
      *
+     * @param {{ index?: Map<string, string> }} [opts] an index from
+     *   `preloadIndex()`: when given, its lookup replaces the per-group
+     *   `findOne` (#199).
      * @returns {Promise<{ status: 'created' | 'updated' | 'unchanged', fileId: string }>}
      */
-    upsertGroup(group) {
+    upsertGroup(group, { index } = {}) {
       if (group?.grpid === undefined || group?.grpid === null || !Number.isFinite(Number(group.date))) {
         throw new Error('a measure group without a grpid or date cannot be archived');
       }
@@ -55,6 +81,7 @@ export function createWithingsArchive(drive, { now = () => Date.now() } = {}) {
         name: `${grpid}.json`,
         segments: ['measures', yyyy, mm],
         record: { source: 'withings', grpid, payload: group, payload_hash: groupHash(group) },
+        ...(index ? { knownFileId: index.get(grpid) ?? null } : {}),
       });
     },
   };

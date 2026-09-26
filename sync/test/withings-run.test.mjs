@@ -160,6 +160,125 @@ test('the window can be overridden for the backfill (#199)', async () => {
   assert.equal(calls[0].form.enddate, '100');
 });
 
+// --- #199: the backfill ------------------------------------------------------
+
+test('AC3: a multi-page backfill retries a mid-way Withings rate limit and still archives every page', async () => {
+  const drive = memoryDrive();
+  const store = memoryStore(storedWithings({ expiresInMs: 2 * HOUR }));
+  const groups = Array.from({ length: 15 }, (_, i) => measureGroup(2000 + i, D1 - i * 86400));
+  const page1 = groups.slice(0, 5);
+  const page2 = groups.slice(5, 10);
+  const page3 = groups.slice(10);
+  const { fetchImpl, calls } = scriptedFetch([
+    getmeasPage(page1, { more: 1, offset: 5 }),
+    // Withings' rate-limit refusal, mid-fetch: retried with backoff, not failed.
+    withingsStatus(601, 'Too Many Requests'),
+    getmeasPage(page2, { more: 1, offset: 10 }),
+    getmeasPage(page3),
+  ]);
+  const res = await withingsRun({
+    env, now: () => NOW, fetchImpl, retry, print: () => {}, printError: () => {},
+    window: { startdate: 0, enddate: 999999999 }, backfill: true,
+    deps: { createDrive: () => drive, createTokenStore: () => store, createApi: () => fakeBodyApi() },
+  });
+  assert.equal(res.exitCode, 0);
+  assert.equal(res.counts.seen, 15);
+  assert.equal(jsonFiles(drive).length, 15);
+  // 4 requests: page 1, the rate-limited retry, page 2, page 3.
+  assert.equal(calls.length, 4);
+});
+
+test('AC1: backfill: true fetches startdate 0, preloads the archive index once, and lands every group', async () => {
+  const drive = memoryDrive();
+  const groups = Array.from({ length: 25 }, (_, i) => measureGroup(3000 + i, D1 - i * 86400));
+  const store = memoryStore(storedWithings({ expiresInMs: 2 * HOUR }));
+  const { fetchImpl, calls } = scriptedFetch([getmeasPage(groups)]);
+  const res = await withingsRun({
+    env, now: () => NOW, fetchImpl, retry, print: () => {}, printError: () => {},
+    window: { startdate: 0, enddate: 999999999 },
+    backfill: true,
+    deps: { createDrive: () => drive, createTokenStore: () => store, createApi: () => fakeBodyApi() },
+  });
+  assert.equal(res.exitCode, 0);
+  assert.equal(calls[0].form.startdate, '0');
+  assert.equal(jsonFiles(drive).length, 25);
+  // One bulk read of the (empty, first-pass) archive; findOne is left for
+  // folder lookups only (a handful, one per distinct year/month), never one
+  // per group.
+  assert.equal(drive.calls.findAll, 1);
+  assert.ok(drive.calls.findOne < 25, `expected far fewer than 25 findOne calls, got ${drive.calls.findOne}`);
+});
+
+test('AC2: a backfill re-dispatched after a partial run finishes what the first did not, writing no duplicate', async () => {
+  const drive = memoryDrive();
+  const store = memoryStore(storedWithings({ expiresInMs: 2 * HOUR }));
+  const groups = Array.from({ length: 6 }, (_, i) => measureGroup(4000 + i, D1 - i * 86400));
+
+  // First dispatch: a page fails after retrying, so only the first page lands.
+  const first = scriptedFetch([
+    getmeasPage(groups.slice(0, 3), { more: 1, offset: 3 }),
+    withingsStatus(2555), withingsStatus(2555), withingsStatus(2555),
+  ]);
+  const res1 = await withingsRun({
+    env, now: () => NOW, fetchImpl: first.fetchImpl, retry, print: () => {}, printError: () => {},
+    window: { startdate: 0, enddate: 999999999 }, backfill: true,
+    deps: { createDrive: () => drive, createTokenStore: () => store, createApi: () => fakeBodyApi() },
+  });
+  assert.equal(res1.exitCode, 1);
+  assert.equal(jsonFiles(drive).length, 3);
+
+  // Re-dispatch: sees the whole history again (Withings has no cursor to
+  // resume from), archives the first 3 as unchanged and the rest as new.
+  const second = scriptedFetch([getmeasPage(groups)]);
+  const res2 = await withingsRun({
+    env, now: () => NOW, fetchImpl: second.fetchImpl, retry, print: () => {}, printError: () => {},
+    window: { startdate: 0, enddate: 999999999 }, backfill: true,
+    deps: { createDrive: () => drive, createTokenStore: () => store, createApi: () => fakeBodyApi() },
+  });
+  assert.equal(res2.exitCode, 0);
+  assert.deepEqual(res2.counts, { seen: 6, created: 3, updated: 0, unchanged: 3, failed: 0 });
+  assert.equal(jsonFiles(drive).length, 6, 'no duplicate file for grpid 4000-4002');
+  assert.deepEqual(
+    [...new Set(jsonFiles(drive).map((f) => f.data.grpid))].sort(),
+    groups.map((g) => String(g.grpid)).sort(),
+  );
+});
+
+test('AC5: a realistic multi-thousand-group backfill preloads the index once, not once per group', async () => {
+  const drive = memoryDrive();
+  const store = memoryStore(storedWithings({ expiresInMs: 2 * HOUR }));
+  // "A few thousand groups at most" (per the issue): 3000, one a day back
+  // from D1, well past the owner's live ~5-groups-in-30-days rate.
+  const N = 3000;
+  const groups = Array.from({ length: N }, (_, i) => measureGroup(5000 + i, D1 - i * 86400));
+  const { fetchImpl } = scriptedFetch([getmeasPage(groups)]);
+  const res = await withingsRun({
+    env, now: () => NOW, fetchImpl, retry, print: () => {}, printError: () => {},
+    window: { startdate: 0, enddate: 999999999 }, backfill: true,
+    deps: { createDrive: () => drive, createTokenStore: () => store, createApi: () => fakeBodyApi() },
+  });
+  assert.equal(res.exitCode, 0);
+  assert.equal(jsonFiles(drive).length, N);
+  // One bulk read for the whole run, whatever N is.
+  assert.equal(drive.calls.findAll, 1);
+  // findOne is spent on distinct folders only (one per calendar month
+  // touched, ~8 years of daily groups here), never on individual groups:
+  // it stays tiny next to N.
+  assert.ok(drive.calls.findOne < N / 10, `findOne calls (${drive.calls.findOne}) should not scale with N`);
+
+  // A re-dispatch over the same history writes nothing new.
+  const writesBefore = drive.writes.length;
+  const again = scriptedFetch([getmeasPage(groups)]);
+  const res2 = await withingsRun({
+    env, now: () => NOW, fetchImpl: again.fetchImpl, retry, print: () => {}, printError: () => {},
+    window: { startdate: 0, enddate: 999999999 }, backfill: true,
+    deps: { createDrive: () => drive, createTokenStore: () => store, createApi: () => fakeBodyApi() },
+  });
+  assert.equal(res2.exitCode, 0);
+  assert.deepEqual(res2.counts, { seen: N, created: 0, updated: 0, unchanged: N, failed: 0 });
+  assert.equal(drive.writes.length, writesBefore, 'nothing written on an unchanged re-run');
+});
+
 // --- #198: the sheet write after the archive ---------------------------------
 
 const scaleMeasures = [{ value: 81234, type: 1, unit: -3 }, { value: 18500, type: 6, unit: -3 }];

@@ -124,3 +124,24 @@ export function withingsWindow(now = Date.now(), {
     enddate: Math.floor(localMidnight(addDays(end, 1)) / 1000) - 1,
   };
 }
+
+/**
+ * The backfill's window (#199): the account's whole history, `startdate: 0`,
+ * through the same D + 1 end as the rolling window. `start` is fixed at
+ * `'1970-01-01'` rather than derived, so the `WithingsSyncLog` row records
+ * this as a backfill on sight, never mistaken for a 30-day window that
+ * happens to start at the epoch.
+ */
+export function withingsBackfillWindow(now = Date.now(), {
+  daysAhead = WITHINGS_WINDOW_DAYS_AHEAD,
+} = {}) {
+  const runDate = localDate(now);
+  const end = addDays(runDate, daysAhead);
+  return {
+    runDate,
+    start: '1970-01-01',
+    end,
+    startdate: 0,
+    enddate: Math.floor(localMidnight(addDays(end, 1)) / 1000) - 1,
+  };
+}

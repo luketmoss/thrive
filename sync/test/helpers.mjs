@@ -72,15 +72,26 @@ export function storedTokens({ expiresInMs, refresh = 'refresh-token-0-xxxxxxxx'
 export function memoryDrive() {
   const files = new Map();
   const writes = [];
+  // Per-method call counts, so a perf test can assert a bulk lookup ran
+  // once rather than once per file (#199).
+  const calls = { findFiles: 0, findAll: 0, findOne: 0, readJson: 0 };
   let seq = 0;
   const matches = (file, props) => Object.entries(props).every(([k, v]) => file.props[k] === String(v));
   const drive = {
     files,
     writes,
+    calls,
     async findFiles(props, { mimeType } = {}) {
+      calls.findFiles += 1;
       return [...files.values()].filter((f) => matches(f, props) && (!mimeType || f.mimeType === mimeType));
     },
+    /** As drive.mjs's findAll: every match, tagged, with no 10-file cap. */
+    async findAll(props, { mimeType } = {}) {
+      calls.findAll += 1;
+      return (await drive.findFiles(props, { mimeType })).map((f) => ({ id: f.id, name: f.name, appProperties: f.props }));
+    },
     async findOne(props, opts) {
+      calls.findOne += 1;
       const found = await drive.findFiles(props, opts);
       if (found.length > 1) throw new Error(`${found.length} files match`);
       return found[0] ?? null;
@@ -107,6 +118,7 @@ export function memoryDrive() {
       return id;
     },
     async readJson(id) {
+      calls.readJson += 1;
       return JSON.parse(JSON.stringify(files.get(id).data));
     },
     async updateJson(id, data) {

@@ -94,3 +94,67 @@ test('a group with no grpid is refused rather than filed under "undefined"', asy
   assert.throws(() => createWithingsArchive(drive, { now }).upsertGroup({ date: LATE }), /grpid/);
   assert.equal(drive.writes.length, 0);
 });
+
+// --- #199: the bulk index, for a backfill's thousands of groups -------------
+
+test('preloadIndex reads every archived group once, keyed by grpid, and a new group needs no findOne', async () => {
+  const drive = memoryDrive();
+  const archive = createWithingsArchive(drive, { now });
+  await archive.upsertGroup(measureGroup(1, LATE));
+  await archive.upsertGroup(measureGroup(2, LATE));
+
+  const index = await archive.preloadIndex();
+  assert.equal(drive.calls.findAll, 1);
+  assert.deepEqual([...index.keys()].sort(), ['1', '2']);
+
+  const before = { findOne: drive.calls.findOne, readJson: drive.calls.readJson };
+  const res = await archive.upsertGroup(measureGroup(3, LATE), { index });
+  assert.equal(res.status, 'created');
+  // A group the index says is new skips findOne entirely.
+  assert.equal(drive.calls.findOne, before.findOne);
+});
+
+test('with an index, an existing unchanged group still writes nothing, and a changed one updates in place', async () => {
+  const drive = memoryDrive();
+  const archive = createWithingsArchive(drive, { now });
+  const first = await archive.upsertGroup(measureGroup(1, LATE));
+  const writesBefore = drive.writes.length;
+
+  const index = await archive.preloadIndex();
+  const findOneBefore = drive.calls.findOne;
+  const unchanged = await archive.upsertGroup(measureGroup(1, LATE), { index });
+  assert.deepEqual(unchanged, { status: 'unchanged', fileId: first.fileId });
+  assert.equal(drive.calls.findOne, findOneBefore, 'no findOne: the index already had the answer');
+  assert.equal(drive.writes.length, writesBefore);
+
+  const edited = await archive.upsertGroup(
+    measureGroup(1, LATE, [{ value: 1, type: 1, unit: 0 }]),
+    { index },
+  );
+  assert.deepEqual(edited, { status: 'updated', fileId: first.fileId });
+});
+
+test('preloadIndex matches by tag, not name: a file renamed in Drive is still found', async () => {
+  const drive = memoryDrive();
+  const archive = createWithingsArchive(drive, { now });
+  const first = await archive.upsertGroup(measureGroup(1, LATE));
+  Object.assign(drive.files.get(first.fileId), { name: 'renamed.json' });
+
+  const index = await archive.preloadIndex();
+  const res = await archive.upsertGroup(measureGroup(1, LATE, [{ value: 2, type: 1, unit: 0 }]), { index });
+  assert.deepEqual(res, { status: 'updated', fileId: first.fileId });
+  assert.equal([...drive.files.values()].filter((f) => f.mimeType !== 'folder').length, 1);
+});
+
+test('a fresh archive preloads an empty index, so a new group is created with no tag lookup for it', async () => {
+  const drive = memoryDrive();
+  const archive = createWithingsArchive(drive, { now });
+  const index = await archive.preloadIndex();
+  assert.equal(index.size, 0);
+  const res = await archive.upsertGroup(measureGroup(1, LATE), { index });
+  assert.equal(res.status, 'created');
+  // findOne is still spent on folder lookups (root, measures, year, month);
+  // none of it is the group's own grpid tag.
+  assert.equal(drive.calls.findOne, 4);
+  assert.equal(drive.writes.filter((w) => w.op !== 'folder').length, 1);
+});

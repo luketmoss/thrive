@@ -96,10 +96,17 @@ export function createArchiveStore(drive, {
    * `changed(current, record)` says something else did. Found by `props`,
    * never by name; `findOne` refuses two matches.
    *
+   * @param {object} args
+   * @param {string|null} [args.knownFileId] the file's ID (or null for "no
+   *   file") from a bulk lookup already done for many records at once (#199):
+   *   skips the per-record `findOne`. Omitted, `upsert` looks the file up
+   *   itself, as before.
    * @returns {Promise<{ status: 'created' | 'updated' | 'unchanged', fileId: string }>}
    */
-  async function upsert({ props, name, segments, record, changed = () => false }) {
-    const existing = await drive.findOne(props);
+  async function upsert({ props, name, segments, record, changed = () => false, knownFileId }) {
+    const existing = knownFileId !== undefined
+      ? (knownFileId ? { id: knownFileId } : null)
+      : await drive.findOne(props);
     if (existing) {
       const current = await drive.readJson(existing.id);
       if (current?.payload_hash === record.payload_hash && !changed(current, record)) {
