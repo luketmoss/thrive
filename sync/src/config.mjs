@@ -64,3 +64,43 @@ export const SPORT_RECORDS_LIMIT = 100;
 
 /** Folders under `Thrive COROS`, found again by this property plus their path. */
 export const APP_PROPERTY_FOLDER_KIND = 'thrive-coros-folder';
+
+// --- Withings (#196) --------------------------------------------------------
+
+/**
+ * Withings' authorization page and its one API host. The token endpoint and
+ * the data endpoints both answer HTTP 200 and report failure in the body's
+ * `status` (see `WITHINGS_STATUS` in withings-oauth.mjs).
+ */
+export const WITHINGS_ENDPOINTS = {
+  authorize: 'https://account.withings.com/oauth2_user/authorize2',
+  token: 'https://wbsapi.withings.net/v2/oauth2',
+  measure: 'https://wbsapi.withings.net/measure',
+};
+
+/** Comma-separated, as Withings wants them. */
+export const WITHINGS_SCOPES = 'user.metrics,user.info';
+
+/**
+ * The static page that shows the code for pasting back into the terminal.
+ * Withings refuses localhost and IP redirects, so there is no loopback option,
+ * and the URL must match the developer app's registered callback exactly.
+ */
+export const WITHINGS_REDIRECT_URI = 'https://luketmoss.github.io/thrive/withings-callback.html';
+
+/**
+ * Refresh when the access token has less than this left. Withings access
+ * tokens live 3 hours, so with runs 6 hours apart nearly every run rotates:
+ * persist-before-use is what keeps that safe, not rarity.
+ */
+export const WITHINGS_REFRESH_WITHIN_MS = 15 * 60 * 1000;
+
+/**
+ * Withings keeps its own Drive root. `drive.file` sees only the sync's own
+ * files, and a separate root with its own tags means no lookup can ever match
+ * a COROS file.
+ */
+export const WITHINGS_DRIVE_ROOT_FOLDER = 'Thrive Withings';
+export const WITHINGS_APP_PROPERTY_ROOT = { kind: 'thrive-withings-root' };
+export const WITHINGS_APP_PROPERTY_TOKEN = { kind: 'withings-token' };
+export const WITHINGS_TOKEN_FILE_NAME = 'withings-token.json';
