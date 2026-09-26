@@ -18,6 +18,7 @@ const FIXTURES = readdirSync(DIR).filter((n) => n.endsWith('.json'))
 const legacy = (name) => JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
 const GYM = legacy('activity-gym-cardio-471093826615208843.json');
 const STRENGTH = legacy('activity-strength-471093115402967310.json');
+const HYBRID = legacy('activity-hybrid-fitness-471166302945817205.json');
 const byPrefix = (p) => FIXTURES.find((f) => f.list_entry.name.startsWith(p));
 const GRAVEL = byPrefix('Gravel');
 
@@ -304,6 +305,45 @@ test('#155 AC2: no match or an ambiguous one is a note, not a failure, and nothi
     assert.deepEqual(drive.writes, [], 'nothing recorded, so a later run can still match');
     assert.equal(fileOf(drive, STRENGTH.activity_id).data.normalized, null);
   }
+});
+
+// --- Hybrid Fitness takes the strength path (#194) ----------------------------
+
+test('#194 AC1/AC2: a Hybrid Fitness session enriches like strength, with moving time withheld', async () => {
+  const { archive, ids } = await archiveWith([HYBRID]);
+  const written = { workout_id: 'w_lift0002', filled: ['avg_hr', 'calories'] };
+  const api = fakeApi({ enrich: () => ({ status: 'enriched', id: 'w_lift0002', linked: true, filled: written.filled, written }) });
+  const fit = { ensure: async () => assert.fail('no FIT for Hybrid Fitness') };
+  const out = await syncActivities({ archive, api, activityIds: [HYBRID.activity_id], syncedAt: SYNCED, fit, log: () => {} });
+
+  const [call] = enrichCalls(api);
+  assert.deepEqual(call.activity, {
+    date: '2026-09-25', time: '06:50',
+    elapsed_seconds: '1872', moving_seconds: '', avg_hr: '109', calories: '231',
+  }, 'Workout Time 31:12 includes the rests, so it is never offered as moving time');
+  assert.equal(call.source_activity_id, HYBRID.activity_id);
+  assert.equal(call.raw_ref, ids[HYBRID.activity_id]);
+  assert.equal(call.synced_at, SYNCED);
+  assert.equal(api.calls.filter((c) => c.action === 'upsertSyncedWorkout').length, 0, 'no row of its own');
+  assert.deepEqual({ enriched: out.enriched, skipped: out.skipped, failures: out.failures }, { enriched: 1, skipped: 0, failures: [] });
+});
+
+test('#194 AC2: a strength session still offers Workout Time as moving time', async () => {
+  const { archive } = await archiveWith([STRENGTH, HYBRID]);
+  const api = fakeApi();
+  await syncActivities({ archive, api, activityIds: [STRENGTH.activity_id, HYBRID.activity_id], syncedAt: SYNCED, log: () => {} });
+  const moving = Object.fromEntries(enrichCalls(api).map((c) => [c.source_activity_id, c.activity.moving_seconds]));
+  assert.deepEqual(moving, { [STRENGTH.activity_id]: '124', [HYBRID.activity_id]: '' });
+});
+
+test('#194 AC3: an unmatched Hybrid Fitness session is a note, not a failure', async () => {
+  const { drive, archive } = await archiveWith([HYBRID]);
+  const api = fakeApi();
+  const out = await syncActivities({ archive, api, activityIds: [HYBRID.activity_id], syncedAt: SYNCED, log: () => {} });
+  assert.deepEqual(out.failures, []);
+  assert.equal(out.unmatched, 1);
+  assert.deepEqual(out.notes, [`strength ${HYBRID.activity_id} on 2026-09-25 at 06:50: no match; no workout enriched`]);
+  assert.equal(fileOf(drive, HYBRID.activity_id).data.normalized, null);
 });
 
 test('#155: a strength payload with an unrecognized line fails that activity, like any other', async () => {

@@ -171,6 +171,7 @@ idempotent, and a parser fix then re-applies without a replay.
 | 204 mountain bike, 205 mountain e-bike | `bike` | `mountain` |
 | 900 walk | `walk` | `outdoor` if the list entry has `Start Coordinates`, else `indoor` |
 | 402 strength | no row of its own: enriches the hand-logged `weight` row (below) | |
+| 1200 hybrid fitness | as 402, without moving time (below) | |
 | anything else | archived, no row, logged with its ID and code; not a failure | |
 
 **Numbers from the detail prose** (`src/normalize-activity.mjs`), strictly, as
@@ -235,6 +236,12 @@ write happen in one execution. Sync plan §7 is the design.
   nothing new writes nothing. A row whose link cells are cleared by hand is
   matched afresh.
 - **No FIT** is requested for strength.
+- **Hybrid Fitness (1200) takes the same path** (#194), for when it is used
+  as a set/rest timer. Its `Workout Time` equals `Total Time` and includes
+  the rests, so `moving_seconds` is sent blank and never filled from it.
+  Every sub-mode (Race, Training, Test) is treated alike: the detail does not
+  say which, and a race with nothing hand-logged is simply unmatched. Its
+  logs and notes say `strength`.
 - `SYNC_LOG=summary` prints only `Strength: N enriched, M unmatched`. The IDs
   are in `SyncLog.notes`.
 
@@ -247,7 +254,7 @@ is tapped).
 
 Every activity that gets a `Workouts` row gets its FIT file, indoor ones
 included: an indoor ride's FIT still carries its second-by-second heart rate.
-Strength (402) is §7's and gets none, and an unmapped code (400 gym cardio
+Strength (402) and Hybrid Fitness (1200) are §7's and get none, and an unmapped code (400 gym cardio
 included) has no row to record one on. `src/fit.mjs`:
 
 - **The tool is `downloadActivityFitFiles`**, with `{ labelId, sportType }` from

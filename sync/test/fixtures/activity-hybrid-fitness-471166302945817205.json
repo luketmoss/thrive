@@ -1,0 +1,22 @@
+{
+  "source": "coros",
+  "activity_id": "471166302945817205",
+  "tool": "getActivityDetail",
+  "args": {
+    "labelId": "471166302945817205",
+    "sportType": 1200
+  },
+  "list_entry": {
+    "activityId": "471166302945817205",
+    "sportType": 1200,
+    "name": "Hybrid Fitness",
+    "date": "2026-09-25",
+    "startTimestamp": 1790340600,
+    "endTimestamp": 1790342472,
+    "text": "1. Hybrid Fitness — 2026-09-25\n   Location: Hybrid Fitness Training\n   Time Window: startTimestamp=1790340600 | endTimestamp=1790342472\n   Duration: 31:12 | Sets: 11\n | Avg HR: 109 bpm | Calories: 231 kcal\n   LabelId: 471166302945817205 | SportType: 1200"
+  },
+  "payload": "\"💪 Hybrid Fitness Activity Details\\n========================================\\n\\nWorkout Time: 31:12\\nTotal Time: 31:12\\nAverage Heart Rate: 109 bpm\\nCalories: 231 kcal\\nTraining Load: 24\\nAerobic TE: 1.8\\nAnaerobic TE: 0.0\\nTraining Focus: Base\"",
+  "payload_hash": "a97e45674db1b7638c6aa613d6ae1964c801f33fb6cfa6c3dbe7817978582f33",
+  "fetched_at": "2026-09-25T19:39:21.000Z",
+  "normalized": null
+}

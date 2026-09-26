@@ -16,7 +16,8 @@
 // `weight` row, and gets no FIT. No match, or an ambiguous one, is a note for
 // SyncLog, not a failure. The archive's `normalized` for it is
 // `{ enrichment: { workout_id, filled } }`, the fields it has filled there,
-// which are never written again.
+// which are never written again. Hybrid Fitness (1200) takes the same path
+// (#194), without moving time: its `Workout Time` includes the rests.
 
 import { ActivityFormatError, ACTIVITY_FIELDS, normalizeActivity } from './normalize-activity.mjs';
 import { redact } from './redact.mjs';
@@ -27,12 +28,16 @@ export const SOURCE = 'coros';
 /** Parsed like any activity: `Workout Time`, `Total Time`, HR, calories. `Sets:` is unused. */
 const STRENGTH_MAPPING = { type: 'weight', sub_type: '' };
 
-/** What a strength session offers the hand-logged row: its local start, and the fields it may fill. */
-export const strengthActivity = (incoming) => ({
+/**
+ * What a strength session offers the hand-logged row: its local start, and the
+ * fields it may fill. A blank is never written, so withholding moving time
+ * leaves the row's cell as it is (#194).
+ */
+export const strengthActivity = (incoming, { workoutTimeIncludesRests = false } = {}) => ({
   date: incoming.date,
   time: incoming.time,
   elapsed_seconds: incoming.elapsed_seconds,
-  moving_seconds: incoming.moving_seconds,
+  moving_seconds: workoutTimeIncludesRests ? '' : incoming.moving_seconds,
   avg_hr: incoming.avg_hr,
   calories: incoming.calories,
 });
@@ -105,17 +110,17 @@ export async function syncActivities({ archive, api, activityIds, syncedAt, fit 
         fail(`activity ${id}: not written, unrecognized format in getActivityDetail: ${err.message}`);
         continue;
       }
-      ready.push({ id, file, incoming, strength });
+      ready.push({ id, file, incoming, strength, sport });
     } catch (err) {
       fail(`activity ${id}: ${redact(err.message || String(err))}`);
     }
   }
   ready.sort((a, b) => a.file.data.list_entry.startTimestamp - b.file.data.list_entry.startTimestamp);
 
-  for (const { id, file, incoming, strength } of ready) {
+  for (const { id, file, incoming, strength, sport } of ready) {
     try {
       if (strength) {
-        await enrich({ id, file, incoming });
+        await enrich({ id, file, incoming, sport });
         continue;
       }
 
@@ -159,8 +164,8 @@ export async function syncActivities({ archive, api, activityIds, syncedAt, fit 
   return out;
 
   /** One strength session: enrich its hand-logged row, or note why not. */
-  async function enrich({ id, file, incoming }) {
-    const activity = strengthActivity(incoming);
+  async function enrich({ id, file, incoming, sport }) {
+    const activity = strengthActivity(incoming, sport);
     const lastWritten = file.data.normalized?.enrichment ?? null;
     const result = await api.enrichWorkout({
       source_activity_id: id,
