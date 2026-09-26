@@ -9,7 +9,7 @@ import { createRunOutput } from '../src/run-log.mjs';
 import { createThriveApi } from '../src/thrive-api.mjs';
 import { NOW, memoryDrive, memoryStore, scriptedFetch } from './helpers.mjs';
 import {
-  CLIENT_ID, CLIENT_SECRET, HOUR, getmeasPage, measureGroup, storedWithings, withingsStatus,
+  CLIENT_ID, CLIENT_SECRET, HOUR, fakeReconcile, getmeasPage, measureGroup, storedWithings, withingsStatus,
 } from './withings-helpers.mjs';
 
 const ACTIONS_ENV = {
@@ -37,8 +37,10 @@ function fakeApi({ appendFails } = {}) {
   const logs = { SyncLog: [], WithingsSyncLog: [] };
   const appends = [];
   const rollupCalls = [];
+  const reconcileCalls = [];
   return {
-    body, logs, appends, rollupCalls,
+    body, logs, appends, rollupCalls, reconcileCalls,
+    reconcileBodyMeasurements: fakeReconcile(body, reconcileCalls),
     syncedAt: [],
     async upsertBodyMeasurements(rows, syncedAt) {
       this.syncedAt.push(syncedAt);
@@ -236,6 +238,7 @@ test('AC2: through the real client, the row is sent to appendSyncLog with log=wi
     sent.push({ action, payload });
     const data = action === 'appendSyncLog' ? { status: 'appended', run_id: payload.row.run_id }
       : action === 'rebuildDailySummary' ? { written: 1, updated: 0, removed: 0 }
+      : action === 'reconcileBodyMeasurements' ? { deleted: [], refused: false }
       : { appended: payload.rows.length, updated: 0 };
     return { status: 200, text: async () => JSON.stringify({ success: true, data }) };
   };

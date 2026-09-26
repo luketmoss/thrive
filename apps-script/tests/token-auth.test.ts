@@ -338,7 +338,7 @@ const KEY_ONLY_ACTIONS = [
   'createTemplate', 'replaceTemplate',
   'appendSets', 'previewSetUpdates', 'updateSets',
   'rebuildDailySummary', 'upsertDailyHealth', 'upsertSyncedWorkout', 'enrichWorkout',
-  'appendSyncLog', 'upsertBodyMeasurements',
+  'appendSyncLog', 'upsertBodyMeasurements', 'reconcileBodyMeasurements',
   // A read, but key-only (#179): no token caller needs raw vendor text.
   'getWorkoutPayload',
 ];
@@ -390,6 +390,7 @@ describe('AC4: token callers run only the named reads', () => {
         kind: 'scale', weight_kg: '80', source: 'withings' }],
       synced_at: '2026-09-15T00:00:00Z',
     },
+    reconcileBodyMeasurements: { from: '2026-09-01', to: '2026-09-30', present_grpids: [], max_deletions: 5 },
     getWorkoutPayload: {},
   };
 

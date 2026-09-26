@@ -268,12 +268,13 @@ so it never joins #144's token read allow-list. Rows are domain objects keyed by
   non-numeric metric or a clock time not `HH:mm` rejects the whole call.
 - `synced_at` is one value per call, stamped on every row it touches.
 
-### BodyMeasurements (#198, #201)
+### BodyMeasurements (#198, #201, #215)
 
 | Action | Parameters / payload |
 |---|---|
 | `getBodyMeasurements` | `from`, `to` (optional, inclusive), `kind` (optional: `scale` or `bp`) — oldest first |
 | `upsertBodyMeasurements` | `{"rows":[{"grpid":"5901234567","date":"2026-09-24","time":"06:41","measured_at_utc":"2026-09-24T06:41:12-06:00","kind":"scale","weight_kg":"81.234",...,"source":"withings","raw_ref":"<drive id>"}],"synced_at":"..."}` |
+| `reconcileBodyMeasurements` | `{"from":"2026-08-25","to":"2026-09-25","present_grpids":["101","103"],"max_deletions":5}` — optional `"allow_empty":true` |
 
 `getBodyMeasurements` returns every one of the 20 fields on every row, a blank
 cell as `''` and never `0`, and no `sheetRow`. `from`/`to` filter on the local
@@ -304,6 +305,31 @@ a write, so it never joins the token read allow-list.
 - `readBodyMeasurementRows()` reads every row with a `grpid` (`[]` with no tab),
   every field present, blank as `''`. The read action (#201) and the
   `DailySummary` rollup (#203) build on it.
+
+`reconcileBodyMeasurements` (#215) removes the rows for readings deleted in the
+Withings app, which `getmeas` simply stops returning. The sync calls it only
+after a complete fetch, with every `grpid` it returned; the compare and the
+delete are this one call, under the script lock. **Key only**, like every write.
+
+- Only rows whose local `date` is in `from`..`to` (inclusive, both required)
+  are considered; every other row is untouched, however many there are.
+- **The cap.** It deletes nothing and answers `{ deleted: [], refused: true,
+  would_delete: N }` when more than `max_deletions` rows (a positive integer,
+  default 5) would go, or when `present_grpids` is empty while the window holds
+  a row — a Withings fault answering `status 0` with an empty list must never
+  empty the tab. `allow_empty: true` lifts the second rule, never the first;
+  the sync sends it only when the owner set the cap by hand.
+- **The row-drift guard.** Every target row is re-read and its column A
+  confirmed to still hold that `grpid` before anything is deleted, and again
+  just before its own delete; a row that moved stops the call, naming how many
+  rows had already gone. Rows are deleted bottom-up (`sheet.deleteRow`), so a
+  delete never shifts a row still to be deleted.
+- Otherwise it answers `{ deleted: ['102', …], refused: false }`. With no
+  `BodyMeasurements` tab it deletes nothing. It refuses a missing or malformed
+  `from`/`to`, `from` after `to`, a `present_grpids` that is not an array of
+  numeric strings, and a `max_deletions` that is not a positive integer.
+- An API deployed before #215 answers `Unknown action`. The sync treats that
+  as a failure of its deletion step alone; deploy to enable it.
 
 ### Synced workouts (#166)
 

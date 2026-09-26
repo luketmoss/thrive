@@ -55,7 +55,9 @@ Google Sheet "Groundwork" with these tabs:
   `recovery` are current-state snapshots. There is no step goal: COROS sends none.
 - **BodyMeasurements** (A:T) — one row per Withings measure group (#198),
   keyed by `grpid`, written only by the Withings sync (`sync/withings-run.mjs`)
-  through `upsertBodyMeasurements`, which rewrites a row whole.
+  through `upsertBodyMeasurements`, which rewrites a row whole. A reading
+  deleted in the Withings app is removed by `reconcileBodyMeasurements` (#215),
+  capped at 5 rows a run; its archive file is kept and marked.
   grpid, date, time, measured_at_utc, kind, device_model, weight_kg,
   fat_ratio_pct, fat_mass_kg, fat_free_mass_kg, muscle_mass_kg, hydration_kg,
   bone_mass_kg, systolic_mmhg, diastolic_mmhg, pulse_bpm, attrib, source,

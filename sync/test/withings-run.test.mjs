@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { withingsRun } from '../withings-run.mjs';
 import { NOW, memoryDrive, memoryStore, scriptedFetch } from './helpers.mjs';
 import {
-  CLIENT_ID, CLIENT_SECRET, HOUR, getmeasPage, measureGroup, storedWithings, withingsStatus,
+  CLIENT_ID, CLIENT_SECRET, HOUR, fakeReconcile, getmeasPage, measureGroup, storedWithings, withingsStatus,
 } from './withings-helpers.mjs';
 
 const env = { WITHINGS_CLIENT_ID: CLIENT_ID, WITHINGS_CLIENT_SECRET: CLIENT_SECRET };
@@ -17,10 +17,13 @@ function fakeBodyApi({ rollupError } = {}) {
   const tab = new Map();
   const calls = [];
   const rollupCalls = [];
+  const reconcileCalls = [];
   return {
     tab,
     calls,
     rollupCalls,
+    reconcileCalls,
+    reconcileBodyMeasurements: fakeReconcile(tab, reconcileCalls),
     async upsertBodyMeasurements(rows, syncedAt) {
       calls.push({ rows, syncedAt });
       let appended = 0;
@@ -307,6 +310,7 @@ test('AC5: every archived group is normalized and upserted, with raw_ref its arc
   assert.deepEqual(res.sheet, {
     rows: 2, appended: 2, updated: 0, skipped: [], failed: [], notes: '', error: null,
     rollup: { written: 1, updated: 0, removed: 0 }, rollupError: null,
+    reconcile: { checked: true, deleted: [], refused: null, error: null, markFailures: [] },
   });
   assert.match(h.out.join('\n'), /Sheet: 2 archived groups seen, 2 rows appended, 0 updated, 0 skipped as unattributed, 0 failed\./);
   assert.doesNotMatch([...h.out, ...h.err].join('\n'), /81\.234|81234/);
@@ -407,6 +411,9 @@ test('AC5: rows go through the real client in batches under the payload limit', 
     const body = JSON.parse(payload);
     if (action === 'rebuildDailySummary') {
       return { status: 200, text: async () => JSON.stringify({ success: true, data: { written: 1, updated: 0, removed: 0 } }) };
+    }
+    if (action === 'reconcileBodyMeasurements') {
+      return { status: 200, text: async () => JSON.stringify({ success: true, data: { deleted: [], refused: false } }) };
     }
     sent.push(...body.rows);
     return { status: 200, text: async () => JSON.stringify({ success: true, data: { appended: body.rows.length, updated: 0 } }) };

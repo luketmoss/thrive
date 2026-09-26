@@ -230,3 +230,111 @@ function upsertBodyMeasurements(rows, syncedAt) {
 
   return { appended: appended, updated: updated, synced_at: syncedAt };
 }
+
+/** At most this many rows deleted per call unless the caller says otherwise (#215 AC3). */
+var BODY_MEASUREMENTS_DEFAULT_MAX_DELETIONS = 5;
+
+/**
+ * Remove the BodyMeasurements rows in `from`..`to` whose grpid Withings no
+ * longer returns: the reading was deleted in the app (#215).
+ *
+ * `getmeas` silently omits a deleted group, so absence from a **complete**
+ * fetch is the only signal. The sync calls this only after such a fetch; the
+ * compare and the delete happen here, in one call under the script lock, so
+ * no other writer can move a row between them.
+ *
+ * - Only rows whose local `date` lies in `from`..`to` inclusive are
+ *   considered. Every other row is never touched, however many there are.
+ * - The cap refuses a suspicious sweep, deleting nothing: more than
+ *   `max_deletions` rows, or an empty `present_grpids` against a window that
+ *   holds rows (a Withings fault answering `status 0` with an empty list must
+ *   not empty the tab). `allow_empty: true` lifts the second rule; the sync
+ *   sends it only for a run whose owner set the cap by hand after checking
+ *   Withings, since a window whose every reading was really deleted is
+ *   otherwise refused for ever.
+ * - Before any delete, every target row is re-read and its column A confirmed
+ *   to still hold that grpid (the row-drift guard); each is checked again
+ *   just before its own delete. Rows go bottom-up, so a delete never shifts a
+ *   row still to be deleted.
+ *
+ * Key-only: a write, so it never joins the token read allow-list.
+ *
+ * @param {{ from: string, to: string, present_grpids: string[],
+ *   max_deletions?: number, allow_empty?: boolean }} payload
+ * @returns {{ deleted: string[], refused: boolean, would_delete?: number }}
+ */
+function reconcileBodyMeasurements(payload) {
+  var p = payload || {};
+  var from = validateDate('from', p.from);
+  var to = validateDate('to', p.to);
+  if (!from || !to) throw new Error('from and to are required (local YYYY-MM-DD)');
+  if (from > to) throw new Error('from (' + from + ') is after to (' + to + ')');
+
+  if (!Array.isArray(p.present_grpids)) {
+    throw new Error('present_grpids must be an array of grpids (numeric strings)');
+  }
+  var present = {};
+  for (var i = 0; i < p.present_grpids.length; i++) {
+    var g = p.present_grpids[i];
+    if (typeof g !== 'string' || !/^\d+$/.test(g)) {
+      throw new Error('present_grpids[' + i + '] must be a numeric string, got ' + JSON.stringify(g));
+    }
+    present[g] = true;
+  }
+
+  var max = BODY_MEASUREMENTS_DEFAULT_MAX_DELETIONS;
+  if (p.max_deletions !== undefined && p.max_deletions !== null) {
+    if (typeof p.max_deletions !== 'number' || p.max_deletions % 1 !== 0 || p.max_deletions < 1) {
+      throw new Error('max_deletions must be a positive integer, got ' + JSON.stringify(p.max_deletions));
+    }
+    max = p.max_deletions;
+  }
+  if (p.allow_empty !== undefined && typeof p.allow_empty !== 'boolean') {
+    throw new Error('allow_empty must be true or false, got ' + JSON.stringify(p.allow_empty));
+  }
+
+  var sheet = getSpreadsheet().getSheetByName(BODY_MEASUREMENTS_SHEET);
+  if (!sheet) return { deleted: [], refused: false };
+
+  var rows = getAllRows(sheet);
+  var inWindow = 0;
+  var targets = [];
+  for (var r = 0; r < rows.length; r++) {
+    var grpid = cell(rows[r][0]);
+    var date = cell(rows[r][BODY_MEASUREMENT_FIELDS.indexOf('date')]);
+    if (!grpid || !date || date < from || date > to) continue;
+    inWindow += 1;
+    if (!Object.prototype.hasOwnProperty.call(present, grpid)) {
+      targets.push({ rowNum: r + 2, grpid: grpid });
+    }
+  }
+
+  var emptySweep = p.present_grpids.length === 0 && inWindow > 0 && p.allow_empty !== true;
+  if (targets.length > max || emptySweep) {
+    return { deleted: [], refused: true, would_delete: targets.length };
+  }
+  if (!targets.length) return { deleted: [], refused: false };
+
+  var holds = function (t) {
+    return cell(sheet.getRange(t.rowNum, 1, 1, 1).getDisplayValues()[0][0]) === t.grpid;
+  };
+  // Every target confirmed first, so a moved sheet costs no row at all.
+  for (var c = 0; c < targets.length; c++) {
+    if (!holds(targets[c])) throw driftError(targets[c], 0);
+  }
+  var deleted = [];
+  for (var d = targets.length - 1; d >= 0; d--) {
+    if (!holds(targets[d])) throw driftError(targets[d], deleted.length);
+    sheet.deleteRow(targets[d].rowNum);
+    deleted.unshift(targets[d].grpid);
+  }
+  return { deleted: deleted, refused: false };
+
+  function driftError(t, n) {
+    return new Error(
+      'BodyMeasurements row ' + t.rowNum + ' was expected to hold grpid ' + t.grpid + ' but no longer ' +
+      'does. The sheet changed during the reconcile; ' + n + ' row(s) had been deleted and nothing ' +
+      'further was. Re-run the sync.'
+    );
+  }
+}

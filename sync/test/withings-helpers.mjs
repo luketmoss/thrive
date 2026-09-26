@@ -73,3 +73,25 @@ export const getmeasPage = (groups, { more = 0, offset } = {}) => ({
     },
   },
 });
+
+// --- deletions (#215) -----------------------------------------------------------
+
+/**
+ * `reconcileBodyMeasurements` over an in-memory tab (a Map of grpid to row),
+ * with the Apps Script action's rules: the window by local `date`, the cap,
+ * and the empty-answer refusal. The action itself is tested in
+ * apps-script/tests/body-measurements-reconcile.test.ts; this is its double.
+ */
+export function fakeReconcile(tab, calls = []) {
+  return async function reconcileBodyMeasurements(payload) {
+    calls.push(payload);
+    const { from, to, present_grpids: present, max_deletions: max = 5, allow_empty: allowEmpty } = payload;
+    const inWindow = [...tab.values()].filter((r) => r.date >= from && r.date <= to);
+    const targets = inWindow.filter((r) => !present.includes(String(r.grpid))).map((r) => String(r.grpid));
+    if (targets.length > max || (!present.length && inWindow.length && !allowEmpty)) {
+      return { deleted: [], refused: true, would_delete: targets.length };
+    }
+    for (const g of targets) tab.delete(g);
+    return { deleted: targets, refused: false };
+  };
+}
