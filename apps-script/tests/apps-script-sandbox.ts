@@ -350,6 +350,8 @@ export interface LoadedApi {
   healthRows?: CellValue[][];
   /** SyncLog's backing array, or undefined when the tab does not exist (#156). */
   syncLogRows?: CellValue[][];
+  /** BodyMeasurements' backing array, or undefined when the tab does not exist (#198). */
+  bodyRows?: CellValue[][];
   /** How many times the script lock was taken, and whether it is held now. */
   lock: { acquired: number; held: boolean };
   /** The script cache's live backing map (#144). */
@@ -371,6 +373,8 @@ export interface Fixtures {
   dailyHealth?: CellValue[][];
   /** As dailyHealth: omit to model the tab not existing yet (#156). */
   syncLog?: CellValue[][];
+  /** As dailyHealth: omit to model the tab not existing yet (#198). */
+  bodyMeasurements?: CellValue[][];
 }
 
 /**
@@ -426,7 +430,7 @@ export function loadApi(
 
   const sandbox = loadSources(
     ['types.js', 'utils.js', 'workouts.js', 'exercises.js', 'templates.js', 'sets.js',
-      'daily-summary.js', 'daily-health.js', 'sync-log.js', 'payload.js', 'auth.js', 'main.js'],
+      'daily-summary.js', 'daily-health.js', 'body-measurements.js', 'sync-log.js', 'payload.js', 'auth.js', 'main.js'],
     {
       LockService: makeLockService(lock),
       ContentService: makeContentService(),
@@ -456,6 +460,9 @@ export function loadApi(
   if (fixtures.syncLog) {
     sheets.SyncLog = makeSheet(fixtures.syncLog, sandbox.SYNC_LOG_COLUMN_COUNT);
   }
+  if (fixtures.bodyMeasurements) {
+    sheets.BodyMeasurements = makeSheet(fixtures.bodyMeasurements, sandbox.BODY_MEASUREMENT_COLUMN_COUNT);
+  }
 
   sandbox.getSheet = (name: string) => {
     const sheet = sheets[name];
@@ -470,7 +477,8 @@ export function loadApi(
 
   return {
     sandbox, rows: workoutRows, exerciseRows, templateRows, setRows, summaryRows,
-    healthRows: fixtures.dailyHealth, syncLogRows: fixtures.syncLog, lock, cache, fetches,
+    healthRows: fixtures.dailyHealth, syncLogRows: fixtures.syncLog,
+    bodyRows: fixtures.bodyMeasurements, lock, cache, fetches,
     driveCalls,
   };
 }
@@ -582,4 +590,17 @@ export const DAILY_HEALTH_ORDER = [
 /** A DailyHealth row (A:R), with only the named fields set. */
 export function healthRow(overrides: Record<string, CellValue> = {}): CellValue[] {
   return DAILY_HEALTH_ORDER.map((k) => overrides[k] ?? '');
+}
+
+/** BodyMeasurements' A:T order (#198). Mirrors BODY_MEASUREMENT_FIELDS in types.js. */
+export const BODY_MEASUREMENT_ORDER = [
+  'grpid', 'date', 'time', 'measured_at_utc', 'kind', 'device_model',
+  'weight_kg', 'fat_ratio_pct', 'fat_mass_kg', 'fat_free_mass_kg', 'muscle_mass_kg',
+  'hydration_kg', 'bone_mass_kg', 'systolic_mmhg', 'diastolic_mmhg', 'pulse_bpm',
+  'attrib', 'source', 'raw_ref', 'synced_at',
+];
+
+/** A BodyMeasurements row (A:T), with only the named fields set. */
+export function bodyRow(overrides: Record<string, CellValue> = {}): CellValue[] {
+  return BODY_MEASUREMENT_ORDER.map((k) => overrides[k] ?? '');
 }

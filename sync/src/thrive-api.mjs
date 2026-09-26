@@ -1,4 +1,5 @@
-// The Thrive Apps Script API client for the sync (#165, shared with #166).
+// The Thrive Apps Script API client for the sync (#165, shared with #166 and
+// the Withings run, #198).
 //
 // The sync holds no row mapping: it sends domain objects keyed by field name,
 // and apps-script/src/types.js owns the sheet's shape. This follows
@@ -154,6 +155,34 @@ export function createThriveApi({
    */
   const write = (action, payload) => call(action, {}, payload);
 
+  /**
+   * `{ rows, synced_at }` upserts, chunked so each call fits the payload
+   * limit, every batch carrying the run's one timestamp. If a later batch
+   * fails, the error says how many rows already landed.
+   */
+  async function upsertRows(action, rows, syncedAt) {
+    const totals = { appended: 0, updated: 0, batches: 0 };
+    if (!rows.length) return totals;
+    const chunks = chunkByPayload(rows, (run) => ({ rows: run, synced_at: syncedAt }));
+    let written = 0;
+    for (const [i, chunk] of chunks.entries()) {
+      try {
+        const data = await write(action, { rows: chunk, synced_at: syncedAt });
+        totals.appended += data?.appended ?? 0;
+        totals.updated += data?.updated ?? 0;
+      } catch (err) {
+        throw new ThriveApiError(
+          action,
+          `${err.message} (${written} of ${rows.length} rows were already written; ` +
+          `batch ${i + 1} of ${chunks.length} failed)`,
+        );
+      }
+      written += chunk.length;
+      totals.batches += 1;
+    }
+    return totals;
+  }
+
   return {
     get,
     write,
@@ -164,27 +193,18 @@ export function createThriveApi({
      *
      * @returns {Promise<{ appended: number, updated: number, batches: number }>}
      */
-    async upsertDailyHealth(rows, syncedAt) {
-      const totals = { appended: 0, updated: 0, batches: 0 };
-      if (!rows.length) return totals;
-      const chunks = chunkByPayload(rows, (run) => ({ rows: run, synced_at: syncedAt }));
-      let written = 0;
-      for (const [i, chunk] of chunks.entries()) {
-        try {
-          const data = await write('upsertDailyHealth', { rows: chunk, synced_at: syncedAt });
-          totals.appended += data?.appended ?? 0;
-          totals.updated += data?.updated ?? 0;
-        } catch (err) {
-          throw new ThriveApiError(
-            'upsertDailyHealth',
-            `${err.message} (${written} of ${rows.length} rows were already written; ` +
-            `batch ${i + 1} of ${chunks.length} failed)`,
-          );
-        }
-        written += chunk.length;
-        totals.batches += 1;
-      }
-      return totals;
+    upsertDailyHealth(rows, syncedAt) {
+      return upsertRows('upsertDailyHealth', rows, syncedAt);
+    },
+
+    /**
+     * BodyMeasurements rows by Withings grpid (#198 AC4), each rewritten
+     * whole, batched under the payload limit exactly as upsertDailyHealth.
+     *
+     * @returns {Promise<{ appended: number, updated: number, batches: number }>}
+     */
+    upsertBodyMeasurements(rows, syncedAt) {
+      return upsertRows('upsertBodyMeasurements', rows, syncedAt);
     },
 
     /**

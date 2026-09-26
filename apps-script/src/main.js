@@ -39,6 +39,12 @@
 //   ?action=upsertDailyHealth&key=...&payload={"rows":[{"date":"2026-09-23",
 //     "steps":"2617","raw_ref":"<drive id>"}],"synced_at":"2026-09-24T13:25:32.000Z"}
 //
+// BodyMeasurements rows are addressed by Withings grpid and rewritten whole (#198):
+//   ?action=upsertBodyMeasurements&key=...&payload={"rows":[{"grpid":"123456",
+//     "date":"2026-09-24","time":"06:41","measured_at_utc":"2026-09-24T06:41:12-06:00",
+//     "kind":"scale","weight_kg":"81.234",...,"source":"withings","raw_ref":"<drive id>"}],
+//     "synced_at":"2026-09-24T13:25:32.000Z"}
+//
 // Synced activities are addressed by vendor ID, and merged (#166):
 //   ?action=upsertSyncedWorkout&key=...&payload={"source":"coros",
 //     "source_activity_id":"471166302945817201","incoming":{"date":"2026-09-24",
@@ -409,6 +415,24 @@ function dispatch(action, params) {
       result = {
         success: true,
         data: withScriptLock(function () { return upsertDailyHealth(payload.rows, payload.synced_at); }),
+      };
+      break;
+
+    // --- BodyMeasurements (#198) ---
+    // Written by the Withings sync alone. A write, so key-only: it must never
+    // be added to the token read allow-list (#144).
+    case 'upsertBodyMeasurements':
+      if (!Array.isArray(payload.rows)) {
+        result = fail('payload.rows field required (an array of rows keyed by field name)');
+        break;
+      }
+      if (!payload.synced_at) {
+        result = fail('payload.synced_at field required');
+        break;
+      }
+      result = {
+        success: true,
+        data: withScriptLock(function () { return upsertBodyMeasurements(payload.rows, payload.synced_at); }),
       };
       break;
 

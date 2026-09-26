@@ -1,0 +1,203 @@
+{
+  "updatetime": 1790256300,
+  "timezone": "America/Denver",
+  "more": 0,
+  "offset": 0,
+  "measuregrps": [
+    {
+      "grpid": 5901234567,
+      "attrib": 0,
+      "date": 1790253672,
+      "created": 1790253686,
+      "modified": 1790253686,
+      "category": 1,
+      "deviceid": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+      "hash_deviceid": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+      "measures": [
+        {
+          "value": 81234,
+          "type": 1,
+          "unit": -3,
+          "algo": 3,
+          "fm": 131
+        },
+        {
+          "value": 15030,
+          "type": 8,
+          "unit": -3,
+          "algo": 3,
+          "fm": 131
+        },
+        {
+          "value": 66204,
+          "type": 5,
+          "unit": -3,
+          "algo": 3,
+          "fm": 131
+        },
+        {
+          "value": 18502,
+          "type": 6,
+          "unit": -3
+        },
+        {
+          "value": 6290,
+          "type": 76,
+          "unit": -2,
+          "algo": 3,
+          "fm": 131
+        },
+        {
+          "value": 4510,
+          "type": 77,
+          "unit": -2,
+          "algo": 3,
+          "fm": 131
+        },
+        {
+          "value": 330,
+          "type": 88,
+          "unit": -2,
+          "algo": 3,
+          "fm": 131
+        },
+        {
+          "value": 61,
+          "type": 11,
+          "unit": 0,
+          "algo": 0,
+          "fm": 131
+        },
+        {
+          "value": 8,
+          "type": 170,
+          "unit": 0,
+          "algo": 0,
+          "fm": 131
+        }
+      ],
+      "modelid": 5,
+      "model": "Body+",
+      "comment": null,
+      "timezone": "America/Denver"
+    },
+    {
+      "grpid": 5901234001,
+      "attrib": 0,
+      "date": 1790211720,
+      "created": 1790211723,
+      "modified": 1790211723,
+      "category": 1,
+      "deviceid": "f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3b2a1f6e5",
+      "hash_deviceid": "f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3b2a1f6e5",
+      "measures": [
+        {
+          "value": 78,
+          "type": 9,
+          "unit": 0,
+          "algo": 0,
+          "fm": 3
+        },
+        {
+          "value": 121,
+          "type": 10,
+          "unit": 0,
+          "algo": 0,
+          "fm": 3
+        },
+        {
+          "value": 64,
+          "type": 11,
+          "unit": 0,
+          "algo": 0,
+          "fm": 3
+        }
+      ],
+      "modelid": 45,
+      "model": "BPM Connect",
+      "comment": null,
+      "timezone": "America/Denver"
+    },
+    {
+      "grpid": 5901233000,
+      "attrib": 1,
+      "date": 1790101805,
+      "created": 1790101819,
+      "modified": 1790101819,
+      "category": 1,
+      "deviceid": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+      "hash_deviceid": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+      "measures": [
+        {
+          "value": 58420,
+          "type": 1,
+          "unit": -3,
+          "algo": 3,
+          "fm": 131
+        },
+        {
+          "value": 72,
+          "type": 11,
+          "unit": 0,
+          "algo": 0,
+          "fm": 131
+        }
+      ],
+      "modelid": 5,
+      "model": "Body+",
+      "comment": null,
+      "timezone": "America/Denver"
+    },
+    {
+      "grpid": 5901232000,
+      "attrib": 0,
+      "date": 1789994400,
+      "created": 1789994414,
+      "modified": 1789994414,
+      "category": 1,
+      "deviceid": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+      "hash_deviceid": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+      "measures": [
+        {
+          "value": 81.2,
+          "type": 1,
+          "unit": -3,
+          "algo": 3,
+          "fm": 131
+        },
+        {
+          "value": 15000,
+          "type": 8,
+          "unit": -3,
+          "algo": 3,
+          "fm": 131
+        }
+      ],
+      "modelid": 5,
+      "model": "Body+",
+      "comment": null,
+      "timezone": "America/Denver"
+    },
+    {
+      "grpid": 5801234567,
+      "attrib": 2,
+      "date": 1768485900,
+      "created": 1768485914,
+      "modified": 1768485914,
+      "category": 1,
+      "deviceid": null,
+      "hash_deviceid": null,
+      "measures": [
+        {
+          "value": 830,
+          "type": 1,
+          "unit": -1
+        }
+      ],
+      "modelid": null,
+      "model": null,
+      "comment": null,
+      "timezone": "America/Denver"
+    }
+  ]
+}

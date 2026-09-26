@@ -53,6 +53,19 @@ Google Sheet "Groundwork" with these tabs:
   Every value is nullable: blank means COROS did not say, never `0`. Sleep is
   filed under its wake-up day; `sleep_total_s` includes awake time; `vo2max` and
   `recovery` are current-state snapshots. There is no step goal: COROS sends none.
+- **BodyMeasurements** (A:T) — one row per Withings measure group (#198),
+  keyed by `grpid`, written only by the Withings sync (`sync/withings-run.mjs`)
+  through `upsertBodyMeasurements`, which rewrites a row whole.
+  grpid, date, time, measured_at_utc, kind, device_model, weight_kg,
+  fat_ratio_pct, fat_mass_kg, fat_free_mass_kg, muscle_mass_kg, hydration_kg,
+  bone_mass_kg, systolic_mmhg, diastolic_mmhg, pulse_bpm, attrib, source,
+  raw_ref, synced_at. One tab for both devices: `kind` is `scale` or `bp`.
+  **SI units stored** (kg, never lb): the kg → lb display belongs to the
+  consumers that display it, and `Sets!Weight` stays in lbs. Every measure is
+  nullable: blank means the group had no such measure, never `0`. `date`/`time`
+  are local `America/Denver`. Groups with an `attrib` other than 0, 2, 4, 5, 7
+  or 8 (1 is a guest or another user) are never written. No `frontend/` mirror:
+  the SPA does not read this tab. Later columns are only ever appended.
 - **DailySummary** (A:T) — **derived, never authoritative** (#131). One row per
   local calendar day, rebuildable at any time from `Workouts` + `DailyHealth`.
   Nothing writes here by hand. If it disagrees with `Workouts`, `Workouts` is
