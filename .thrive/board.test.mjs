@@ -150,7 +150,7 @@ test('add rewrites the gh error for an issue that does not exist (AC3)', () => {
 test('add is allowed through the remote-dispatch path (AC4)', () => {
   const binDir = mkdtempSync(join(tmpdir(), 'board-test-curl-'));
   const stateFile = join(binDir, 'state.json');
-  const fakeCurl = `#!/usr/bin/env node
+  const fakeCurl = `#!${process.execPath}
 const fs = require('fs');
 const args = process.argv.slice(2);
 const url = args.find((a) => a.startsWith('https://'));
@@ -193,10 +193,11 @@ if (method === 'POST' && url.endsWith('/dispatches')) {
     encoding: 'utf8',
     env: {
       ...process.env,
-      // No fake `gh` on PATH at all: hasGh() must fail, forcing runRemotely.
-      // (dirname(process.execPath) so the fake curl's `#!/usr/bin/env node`
-      // shebang still resolves, without picking up a real `gh` from PATH.)
-      PATH: `${binDir}:${dirname(process.execPath)}:/usr/bin:/bin`,
+      // PATH holds only our fake `curl` — no real `gh` (CI runners ship one),
+      // so hasGh() reliably fails and runRemotely takes over. The fake
+      // curl's shebang is an absolute path to this same node, so PATH needs
+      // nothing else to resolve it.
+      PATH: binDir,
       GH_TOKEN: 'fake-token',
     },
   });
