@@ -34,14 +34,24 @@ export const SPORT_CODES = {
 export const STRENGTH_CODE = 402;
 
 /**
+ * Hybrid Fitness, used as a set/rest timer for a lifting session, enriches the
+ * hand-logged row like strength (#194). Its `Workout Time` equals `Total Time`
+ * and includes the rests, so it is never offered as moving time. Every
+ * sub-mode (Race, Training, Test) takes this path: the detail does not say
+ * which, and a race with no hand-logged row is simply unmatched.
+ */
+export const HYBRID_FITNESS_CODE = 1200;
+
+/**
  * What the sync does with an activity of this code.
  *
  * @returns {{ kind: 'mapped', type: string, sub_type: string }
- *   | { kind: 'strength' } | { kind: 'unmapped' }}
+ *   | { kind: 'strength', workoutTimeIncludesRests?: true } | { kind: 'unmapped' }}
  */
 export function classifySport(code) {
   const n = Number(code);
   if (n === STRENGTH_CODE) return { kind: 'strength' };
+  if (n === HYBRID_FITNESS_CODE) return { kind: 'strength', workoutTimeIncludesRests: true };
   const m = Object.prototype.hasOwnProperty.call(SPORT_CODES, n) ? SPORT_CODES[n] : null;
   return m ? { kind: 'mapped', ...m } : { kind: 'unmapped' };
 }

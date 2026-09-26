@@ -55,9 +55,14 @@ test('AC1: the mapping table, terrain from the code, plain 200 blank', () => {
 
 test('AC1: strength is its own case, not unmapped; everything else unlisted is unmapped', () => {
   assert.deepEqual(classifySport(402), { kind: 'strength' });
-  for (const code of [400, 401, 700, 701, 1200, 9800, 9900, 9999, 10000, 0, undefined, 'x']) {
+  for (const code of [400, 401, 700, 701, 9800, 9900, 9999, 10000, 0, undefined, 'x']) {
     assert.deepEqual(classifySport(code), { kind: 'unmapped' }, String(code));
   }
+});
+
+test('#194 AC1/AC2: Hybrid Fitness is strength, flagged so its Workout Time is not moving time', () => {
+  assert.deepEqual(classifySport(1200), { kind: 'strength', workoutTimeIncludesRests: true });
+  assert.deepEqual(classifySport('1200'), { kind: 'strength', workoutTimeIncludesRests: true });
 });
 
 test('AC1: a walk is outdoor with a GPS track, indoor without, blank when nothing says', () => {
