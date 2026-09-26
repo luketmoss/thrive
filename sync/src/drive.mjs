@@ -68,6 +68,30 @@ export function createDrive({ getToken, fetchImpl = fetch }) {
   }
 
   /**
+   * Every file matching `props`, paging past `findFiles`' 10-per-request cap
+   * (#199): a bulk lookup — the backfill's archive index, thousands of
+   * groups deep — cannot use `findOne`'s one-query-per-file shape. Each file
+   * carries its `appProperties`, so the caller matches by tag, never by name,
+   * exactly as `findOne` does for one file.
+   */
+  async function findAll(props, { mimeType, pageSize = 1000 } = {}) {
+    const all = [];
+    let pageToken;
+    do {
+      const url = new URL(API);
+      url.searchParams.set('q', appPropertiesQuery(props, mimeType));
+      url.searchParams.set('fields', 'nextPageToken, files(id,name,appProperties,modifiedTime)');
+      url.searchParams.set('spaces', 'drive');
+      url.searchParams.set('pageSize', String(pageSize));
+      if (pageToken) url.searchParams.set('pageToken', pageToken);
+      const parsed = JSON.parse(await request('GET', url));
+      all.push(...(parsed.files ?? []));
+      pageToken = parsed.nextPageToken;
+    } while (pageToken);
+    return all;
+  }
+
+  /**
    * The one file with these properties, or null. Two is refused rather than
    * guessed between: for the token file especially, picking the wrong one
    * means presenting a spent refresh token.
@@ -140,5 +164,5 @@ export function createDrive({ getToken, fetchImpl = fetch }) {
     });
   }
 
-  return { findFiles, findOne, ensureFolder, createJson, createBinary, readJson, updateJson };
+  return { findFiles, findAll, findOne, ensureFolder, createJson, createBinary, readJson, updateJson };
 }

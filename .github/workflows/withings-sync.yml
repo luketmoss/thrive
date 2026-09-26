@@ -13,6 +13,14 @@ on:
   schedule:
     - cron: '41 1,7,13,19 * * *'
   workflow_dispatch:
+    inputs:
+      # #199: the account's whole history, once, through this same job — never
+      # a separate schedule, so it shares the concurrency group below and can
+      # never present a refresh token the scheduled cadence just spent.
+      backfill:
+        description: 'Backfill all Withings history (startdate 0) instead of the rolling window'
+        type: boolean
+        default: false
 
 # Never two runs at once. The 3-hour access token means nearly every run
 # rotates the refresh token (#196), so a second run refreshing concurrently
@@ -31,7 +39,11 @@ permissions:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 45 minutes for a backfill (#199): a few thousand groups, each an
+    # archive write plus its share of a batched sheet call, comfortably clears
+    # the scheduled run's 15 but is raised here rather than for every run.
+    # sync/README.md "Backfilling Withings history" has the measured basis.
+    timeout-minutes: ${{ github.event.inputs.backfill == 'true' && 45 || 15 }}
     defaults:
       run:
         working-directory: sync
@@ -50,6 +62,9 @@ jobs:
           # run_id and error class names only. No grpid, measurement, device
           # model or Withings text; the detail goes to the WithingsSyncLog row.
           SYNC_LOG: summary
+          # Set only by a `backfill: true` dispatch; a schedule leaves the
+          # input (and so this) empty, which withings-run.mjs treats as false.
+          BACKFILL: ${{ github.event.inputs.backfill }}
           GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
           GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
           GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}

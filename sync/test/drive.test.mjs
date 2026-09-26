@@ -90,6 +90,20 @@ test('every request carries the bot account\'s bearer token', async () => {
   assert.equal(calls[0].init.headers.Authorization, 'Bearer google-access-token-xxxx');
 });
 
+test('#199: findAll pages past the 10-file cap, following nextPageToken to the end', async () => {
+  const { fetchImpl, calls } = scriptedFetch([
+    { body: { nextPageToken: 'page-2', files: [{ id: 'f1', name: '1.json' }, { id: 'f2', name: '2.json' }] } },
+    { body: { files: [{ id: 'f3', name: '3.json' }] } },
+  ]);
+  const drive = createDrive({ getToken, fetchImpl });
+  const files = await drive.findAll({ source: 'withings' });
+  assert.deepEqual(files.map((f) => f.id), ['f1', 'f2', 'f3']);
+  assert.equal(calls.length, 2);
+  assert.equal(new URL(calls[0].url).searchParams.get('pageToken'), null);
+  assert.equal(new URL(calls[1].url).searchParams.get('pageToken'), 'page-2');
+  assert.match(new URL(calls[0].url).searchParams.get('fields'), /appProperties/);
+});
+
 test('#154: a FIT is uploaded as binary, byte for byte, tagged and foldered', async () => {
   const { fetchImpl, calls } = scriptedFetch([{ body: { id: 'fit-file-1' } }]);
   const bytes = Buffer.from([0x0e, 0x20, 0x00, 0xff, 0x2e, 0x46, 0x49, 0x54, 0x0d, 0x0a]);

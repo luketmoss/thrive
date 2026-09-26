@@ -649,6 +649,73 @@ fails when the newest `WithingsSyncLog` row, of any status, is more than
 
 As with COROS, it cannot see GitHub's scheduler stopping for the whole repo.
 
+## Backfilling Withings history (#199)
+
+**One dispatch, once, to land the account's whole history** — every measure
+group from its first reading to today — into `BodyMeasurements`, through the
+same archive → normalize → upsert path the scheduled sync uses:
+
+```
+gh workflow run withings-sync.yml --repo luketmoss/thrive -f backfill=true
+```
+
+(PowerShell quoting is the same; there is no separate local backfill command —
+see Out of Scope in #199.)
+
+**Why `startdate: 0` is "everything."** `getmeas` takes no "give me it all"
+flag, but Withings accepts `startdate=0` and pages the whole account with
+`more`/`offset` from there, so no CSV export is needed. `backfill: true` on the
+`workflow_dispatch` input sets `BACKFILL=true` for `withings-run.mjs`, which
+runs `withingsBackfillWindow` (`src/dates.mjs`) in place of the rolling
+30-day window: `startdate: 0`, the same `D + 1` end, and `window_start` fixed
+at `1970-01-01` in the `WithingsSyncLog` row, so the row is a backfill on
+sight rather than a suspiciously wide 30-day window.
+
+**Why it is a workflow input, not a local script.** Withings' refresh token
+rotates on nearly every run (#196). A local backfill running at the same time
+as the schedule would present a spent token and could kill the grant. The
+`backfill` dispatch runs through `withings-sync.yml` itself, in the same
+`withings-sync` concurrency group as the schedule, so the two can never
+overlap.
+
+**Cheap on a large first pass.** A per-group `drive.findOne` for thousands of
+groups — most of them new — would be the dominant cost of a first backfill.
+`backfill: true` instead has `withingsRun` read the archive's whole index
+once (`archive.preloadIndex()`, `drive.findAll`, paged past Drive's 10-file-
+per-query cap) and looks each group up against that in memory, still matching
+by its Withings tag (`grpid`), never by filename. A normal run's ~30-day
+window (a handful of groups) skips this and keeps its one `findOne` per
+group, which is cheaper than scanning the whole archive every 6 hours.
+`BodyMeasurements` writes were already batched under the payload limit
+(#198); nothing new was needed there.
+
+**Rate limits.** `getmeas` pages are retried with growing backoff
+(`src/retry.mjs`) on Withings' "Too many requests" and every other
+`unavailable` status, exactly as the scheduled sync retries — a backfill
+makes one paged burst of `getmeas` calls and nothing else against Withings.
+
+**Safe to re-run, and resumable (AC2).** Archiving and upserting are both
+idempotent on `grpid`: a group already archived with an unchanged hash writes
+nothing to Drive (`createArchiveStore`'s hash compare), and
+`upsertBodyMeasurements` upserts by `grpid`, never appending a duplicate row.
+If a backfill times out or Withings errors past its retry budget, re-dispatch
+it — Withings has no cursor to resume a page sequence from, so the re-run
+re-fetches the whole history again, but everything already landed archives as
+`unchanged` and upserts as an update, not a second row. Each dispatch still
+writes its own `WithingsSyncLog` row (`run_id` `workflow_dispatch-…`), so a
+stopped run and its successful re-run are both on record.
+
+**Timeout.** The job's timeout is 45 minutes for a `backfill: true` dispatch
+(15 otherwise, unchanged): the tests exercise this against a fake Withings and
+a fake Drive up to several thousand synthetic groups (`test/withings-run.test.mjs`,
+"a realistic multi-thousand-group backfill"), which is comfortably inside 45
+minutes with the bulk archive lookup; the owner's real account has a few
+hundred to a few thousand groups going back years, well inside what was
+measured. There has been no live dispatch against the real Withings account
+to confirm the number against production latency — if one ever runs long
+enough to hit the timeout, AC2 makes a re-dispatch the fix, not a bigger
+number here.
+
 ## Tests
 
 ```bash

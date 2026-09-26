@@ -308,3 +308,73 @@ test('AC4: full mode, as a local run uses, still prints the detail', async () =>
   const r = await run([getmeasPage([measureGroup(1, D1, scale), measureGroup(2, D1, scale, { attrib: 1 })])]);
   assert.match(r.text, /grpid 2 \(attrib 1\)/);
 });
+
+// --- #199: the backfill dispatch ---------------------------------------------
+
+const DISPATCH_ENV = {
+  WITHINGS_CLIENT_ID: CLIENT_ID,
+  WITHINGS_CLIENT_SECRET: CLIENT_SECRET,
+  GITHUB_ACTIONS: 'true',
+  GITHUB_EVENT_NAME: 'workflow_dispatch',
+  GITHUB_RUN_ID: '38000000001',
+  GITHUB_RUN_ATTEMPT: '1',
+  BACKFILL: 'true',
+};
+
+test('AC1: BACKFILL=true writes one row with run_id workflow_dispatch-… and window_start 1970-01-01', async () => {
+  const r = await run([getmeasPage([measureGroup(1, D1, scale), measureGroup(2, D2, bp)])], { env: DISPATCH_ENV });
+  assert.equal(r.exitCode, 0, r.text);
+  assert.equal(r.row.run_id, 'workflow_dispatch-38000000001-1');
+  assert.equal(r.row.window_start, '1970-01-01');
+  assert.equal(r.api.logs.WithingsSyncLog.length, 1);
+  assert.deepEqual(r.api.logs.WithingsSyncLog[0], r.row);
+});
+
+test('AC1: the backfill fetches from startdate 0, not the rolling window', async () => {
+  const { fetchImpl, calls } = scriptedFetch([getmeasPage([measureGroup(1, D1, scale)])]);
+  const stdout = [];
+  const output = createRunOutput('full', { out: (l) => stdout.push(l), err: () => {}, logName: 'WithingsSyncLog' });
+  await withingsSyncRun({
+    env: DISPATCH_ENV, now: () => NOW, fetchImpl, retry, output,
+    deps: { createDrive: () => memoryDrive(), createTokenStore: () => memoryStore(storedWithings({ expiresInMs: 2 * HOUR })), createApi: () => fakeApi() },
+  });
+  assert.equal(calls[0].form.startdate, '0');
+});
+
+test('AC1: an explicit backfill: true option overrides env, and false stays the rolling window even with BACKFILL set', async () => {
+  const { fetchImpl: fetchTrue, calls: callsTrue } = scriptedFetch([getmeasPage([])]);
+  await withingsSyncRun({
+    env: { WITHINGS_CLIENT_ID: CLIENT_ID, WITHINGS_CLIENT_SECRET: CLIENT_SECRET }, now: () => NOW, fetchImpl: fetchTrue, retry, backfill: true,
+    deps: { createDrive: () => memoryDrive(), createTokenStore: () => memoryStore(storedWithings({ expiresInMs: 2 * HOUR })), createApi: () => fakeApi() },
+  });
+  assert.equal(callsTrue[0].form.startdate, '0');
+
+  const { fetchImpl: fetchFalse, calls: callsFalse } = scriptedFetch([getmeasPage([])]);
+  await withingsSyncRun({
+    env: { ...DISPATCH_ENV, BACKFILL: 'true' }, now: () => NOW, fetchImpl: fetchFalse, retry, backfill: false,
+    deps: { createDrive: () => memoryDrive(), createTokenStore: () => memoryStore(storedWithings({ expiresInMs: 2 * HOUR })), createApi: () => fakeApi() },
+  });
+  assert.notEqual(callsFalse[0].form.startdate, '0');
+});
+
+test('AC2: a backfill that stopped partway is still safe to re-dispatch: no duplicate rows, no duplicate WithingsSyncLog', async () => {
+  const drive = memoryDrive();
+  const api = fakeApi();
+  const groups = Array.from({ length: 6 }, (_, i) => measureGroup(6000 + i, D1 - i * 86400, scale));
+
+  const partial = await run([
+    getmeasPage(groups.slice(0, 3), { more: 1, offset: 3 }),
+    withingsStatus(2555), withingsStatus(2555), withingsStatus(2555),
+  ], { env: { ...DISPATCH_ENV }, api, drive });
+  assert.equal(partial.exitCode, 1);
+  assert.equal(partial.row.status, 'failed');
+
+  const resumed = await run([getmeasPage(groups)], {
+    env: { ...DISPATCH_ENV, GITHUB_RUN_ID: '38000000002' }, api, drive,
+  });
+  assert.equal(resumed.exitCode, 0);
+  assert.equal(resumed.row.n_new, 3, 'only the 3 groups not archived the first time are new to BodyMeasurements');
+  assert.equal(resumed.row.n_updated, 3);
+  assert.equal(api.logs.WithingsSyncLog.length, 2);
+  assert.equal(api.body.size, 6, 'no duplicate BodyMeasurements row per grpid');
+});

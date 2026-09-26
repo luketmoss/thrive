@@ -15,6 +15,14 @@
 // `withingsRun` is the fetch, archive and sheet write; `withingsSyncRun` wraps
 // it in the run-and-log shape of src/sync-run.mjs, reusing src/run-log.mjs.
 //
+// `BACKFILL=true` (or `--backfill` locally) runs the account's whole history
+// instead of the rolling window (#199): `startdate: 0`, `window_start`
+// `1970-01-01` in the row, and the archive looked up in bulk once rather than
+// group by group, since most of a first backfill's groups are new.
+// withings-sync.yml's `backfill` workflow_dispatch input sets it; safe to
+// re-dispatch if a run stops partway, since archiving and upserting are both
+// idempotent on `grpid`.
+//
 // Never prints a measurement. `SYNC_LOG=summary` (set by the workflow) also
 // keeps grpids, device models and Withings text out of the public Actions log:
 // it prints counts, dates, status, run_id and error class names, and the
@@ -28,7 +36,7 @@
 // unattributed is noted, and is not a failure.
 
 import { pathToFileURL } from 'node:url';
-import { withingsWindow } from './src/dates.mjs';
+import { withingsBackfillWindow, withingsWindow } from './src/dates.mjs';
 import { createDrive } from './src/drive.mjs';
 import { googleTokenProvider, loadGoogleCredentials } from './src/google.mjs';
 import { normalizeWithingsGroups, skippedNotes } from './src/normalize-withings.mjs';
@@ -54,9 +62,11 @@ export const defaultDeps = {
 /**
  * @param {{ env?: object, now?: () => number, deps?: object, print?: Function,
  *   printError?: Function, window?: { startdate: number, enddate: number },
- *   fetchImpl?: typeof fetch, retry?: object }} [opts]
+ *   fetchImpl?: typeof fetch, retry?: object, backfill?: boolean }} [opts]
  *   `window` overrides the rolling window; the backfill (#199) passes
- *   `startdate: 0`.
+ *   `startdate: 0`. `backfill: true` also preloads the archive's whole index
+ *   once (`preloadIndex`) rather than looking each group up on its own,
+ *   which is what makes archiving thousands of groups affordable.
  * @returns {Promise<{ exitCode: number, counts: object, failed: string[], archiveFailures: string[],
  *   error: Error|null,
  *   sheet: { rows: number, appended: number, updated: number,
@@ -74,6 +84,7 @@ export async function withingsRun({
   window,
   fetchImpl = fetch,
   retry,
+  backfill = false,
 } = {}) {
   const d = { ...defaultDeps, ...deps };
   const counts = { seen: 0, created: 0, updated: 0, unchanged: 0, failed: 0 };
@@ -108,10 +119,14 @@ export async function withingsRun({
   print(`Withings: ${groups.length} measure groups in ${pages} page(s), ${range}.`);
 
   const archive = d.createArchive(drive, { now });
+  // A backfill's thousands of groups make a per-group findOne the dominant
+  // cost; a normal run's handful of groups is cheaper looked up one at a
+  // time than by scanning the whole archive first (#199).
+  const index = backfill ? await archive.preloadIndex() : undefined;
   const archived = [];
   for (const group of groups) {
     try {
-      const { status, fileId } = await archive.upsertGroup(group);
+      const { status, fileId } = await archive.upsertGroup(group, index ? { index } : undefined);
       counts[status] += 1;
       // Only a group with an archive file has a raw_ref, so only it is sent.
       if (fileId) archived.push({ group, raw_ref: fileId });
@@ -217,18 +232,22 @@ export function withingsSummaryLine(row) {
  * The exit code agrees with the row: 0 only for `ok` with the row written.
  *
  * @param {{ env?: object, now?: () => number, deps?: object, fetchImpl?: typeof fetch,
- *   retry?: object, output?: ReturnType<typeof createRunOutput> }} [opts]
+ *   retry?: object, output?: ReturnType<typeof createRunOutput>, backfill?: boolean }} [opts]
+ *   `backfill` (default `env.BACKFILL === 'true'`) runs the whole-history
+ *   window (#199): `window_start` is `1970-01-01` in the row, and the archive
+ *   is looked up in bulk rather than group by group.
  * @returns {Promise<{ exitCode: number, row: object, logged: boolean, result: object | null }>}
  */
 export async function withingsSyncRun({
-  env = process.env, now = () => Date.now(), deps = {}, fetchImpl = fetch, retry, output,
+  env = process.env, now = () => Date.now(), deps = {}, fetchImpl = fetch, retry, output, backfill,
 } = {}) {
   const d = { ...defaultDeps, ...deps };
   // The run's single timestamp: started_at and every row's synced_at.
   const startedMs = now();
   const startedAt = new Date(startedMs).toISOString();
   const runId = runIdFor(env, startedAt);
-  const window = withingsWindow(startedMs);
+  const isBackfill = backfill ?? env.BACKFILL === 'true';
+  const window = isBackfill ? withingsBackfillWindow(startedMs) : withingsWindow(startedMs);
   const out = output ?? createRunOutput(logModeFor(env), {
     logName: 'WithingsSyncLog', command: 'node withings-run.mjs',
   });
@@ -254,6 +273,7 @@ export async function withingsSyncRun({
       print: out.detail,
       printError: out.detailError,
       window,
+      backfill: isBackfill,
       fetchImpl,
       ...(retry ? { retry } : {}),
     });
@@ -309,7 +329,11 @@ export async function withingsSyncRun({
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  withingsSyncRun()
+  // BACKFILL=true (the workflow's route) or --backfill (a local one) both
+  // mean the whole-history run (#199); withingsSyncRun still falls back to
+  // env.BACKFILL on its own when neither is passed here.
+  const backfill = process.argv.includes('--backfill') || undefined;
+  withingsSyncRun(backfill ? { backfill } : {})
     .then(({ exitCode }) => { process.exitCode = exitCode; })
     .catch((err) => {
       // withingsSyncRun records its own failures; reaching here is a bug in it.
