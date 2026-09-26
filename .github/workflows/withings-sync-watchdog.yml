@@ -1,0 +1,47 @@
+name: withings-sync-watchdog
+
+# The dead-man's switch for withings-sync (#200). A job that doesn't run
+# cannot report itself, so this is a separate workflow on its own schedule. It
+# fails, and Actions' failure email fires, when the newest WithingsSyncLog row
+# (of any status) is more than 14 hours old, or the tab is empty or
+# unreadable (sync/src/deadman.mjs says why 14).
+#
+# It reads WithingsSyncLog only, and coros-sync-watchdog.yml reads SyncLog
+# only, so neither sync's runs can hide the other stopping.
+#
+# Like COROS's, it cannot catch GitHub's scheduler stopping for the whole repo
+# (the 60-day inactivity auto-disable on a public repo stops this too).
+on:
+  # Every 3 hours at :53, clear of the sync's :41 and COROS's :17 and :47.
+  # Once tripped, it fails on every run until a sync lands.
+  schedule:
+    - cron: '53 */3 * * *'
+  workflow_dispatch:
+
+# Deliberately not the withings-sync group: this only reads, and joining that
+# group could cancel a pending sync run.
+concurrency:
+  group: withings-sync-watchdog
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: sync
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+      # No npm ci: deadman.mjs imports only src/thrive-api.mjs and src/redact.mjs.
+      - name: dead-man check
+        run: node deadman.mjs --log withings
+        env:
+          THRIVE_API_URL: ${{ secrets.THRIVE_API_URL }}
+          THRIVE_API_KEY: ${{ secrets.THRIVE_API_KEY }}

@@ -1,0 +1,61 @@
+name: withings-sync
+
+# The Withings → Thrive sync (epic #204). #196 authorizes, #197 archives each
+# measure group's raw payload in the bot's Drive, #198 normalizes them into
+# BodyMeasurements through the Thrive API, and #200 schedules it and writes one
+# WithingsSyncLog row a run. withings-sync-watchdog.yml is the dead-man's
+# switch for this schedule. Nothing here touches SyncLog or coros-sync.
+on:
+  # Every 6 hours: 01:41, 07:41, 13:41 and 19:41 UTC. Withings asks for at
+  # most one poll per 10 minutes, and weight and BP change slowly; runs 6 h
+  # apart put a morning weigh-in in the sheet by 07:41 or 13:41 local. The odd
+  # minute is clear of COROS's :17, both watchdogs and the top-of-hour crowd.
+  schedule:
+    - cron: '41 1,7,13,19 * * *'
+  workflow_dispatch:
+
+# Never two runs at once. The 3-hour access token means nearly every run
+# rotates the refresh token (#196), so a second run refreshing concurrently
+# would present a spent one. Queue, never cancel: a cancelled run could die
+# between refresh and persist and lose the grant.
+#
+# Deliberately not the coros-sync group: the two share no token, and one
+# should never wait on, or cancel a pending run of, the other.
+concurrency:
+  group: withings-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: sync
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: sync/package-lock.json
+      - run: npm ci
+      - name: sync
+        run: node withings-run.mjs
+        env:
+          # The repo is public, and so is this log: counts, dates, status,
+          # run_id and error class names only. No grpid, measurement, device
+          # model or Withings text; the detail goes to the WithingsSyncLog row.
+          SYNC_LOG: summary
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
+          WITHINGS_CLIENT_ID: ${{ secrets.WITHINGS_CLIENT_ID }}
+          WITHINGS_CLIENT_SECRET: ${{ secrets.WITHINGS_CLIENT_SECRET }}
+          # Without these the archive still lands and the run fails loudly,
+          # with no row written.
+          THRIVE_API_URL: ${{ secrets.THRIVE_API_URL }}
+          THRIVE_API_KEY: ${{ secrets.THRIVE_API_KEY }}

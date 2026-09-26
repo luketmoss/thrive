@@ -72,12 +72,21 @@ export function buildSyncLogRow({
  * What a run prints. `detail` is the step-by-step log the modules below
  * run.mjs already write (names, IDs, quoted lines): printed in full mode,
  * dropped in summary mode. `info` is safe in both: fixed text and counts.
+ * `detailError` is `detail` for error text: stderr in full mode, dropped in
+ * summary mode.
+ *
+ * `logName` and `command` name the tab the row goes to and the command to
+ * re-run locally; the Withings sync (#200) passes `WithingsSyncLog` and
+ * `node withings-run.mjs`. The defaults are COROS's.
  */
-export function createRunOutput(mode, { out = console.log, err = console.error } = {}) {
+export function createRunOutput(mode, {
+  out = console.log, err = console.error, logName = 'SyncLog', command = 'node run.mjs',
+} = {}) {
   const full = mode !== 'summary';
   return {
     mode,
     detail: full ? out : () => {},
+    detailError: full ? err : () => {},
     info: out,
     /** The failures, in full mode only. Summary mode names where to find them. */
     failures(runId, failures) {
@@ -86,7 +95,7 @@ export function createRunOutput(mode, { out = console.log, err = console.error }
         err(`${failures.length} failure(s):`);
         for (const f of failures) err(`  ${f}`);
       } else {
-        err(`${failures.length} failure(s). They are in SyncLog row ${runId}, not in this public log.`);
+        err(`${failures.length} failure(s). They are in ${logName} row ${runId}, not in this public log.`);
       }
     },
     /** The error that aborted the run: in summary mode, its class alone. */
@@ -95,14 +104,14 @@ export function createRunOutput(mode, { out = console.log, err = console.error }
         err(`${e.name ?? 'Error'}: ${redact(e.message || String(e))}`);
       } else {
         const where = e.action ? ` (${e.action})` : '';
-        err(`Aborted by ${e.name ?? 'Error'}${where}. See "When a run fails" in sync/README.md; the message is in SyncLog row ${runId}.`);
+        err(`Aborted by ${e.name ?? 'Error'}${where}. See "When a run fails" in sync/README.md; the message is in ${logName} row ${runId}.`);
       }
     },
-    /** The SyncLog append itself failed: nothing in the sheet holds this run. */
+    /** The log append itself failed: nothing in the sheet holds this run. */
     logWriteFailed(runId, e) {
       const where = e.action ? ` (${e.action})` : '';
-      if (full) err(`SyncLog row ${runId} was not written: ${redact(e.message || String(e))}`);
-      else err(`SyncLog row ${runId} was not written: ${e.name ?? 'Error'}${where}. Run \`node run.mjs\` locally for the full log.`);
+      if (full) err(`${logName} row ${runId} was not written: ${redact(e.message || String(e))}`);
+      else err(`${logName} row ${runId} was not written: ${e.name ?? 'Error'}${where}. Run \`${command}\` locally for the full log.`);
     },
   };
 }

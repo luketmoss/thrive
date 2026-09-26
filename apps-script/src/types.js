@@ -261,6 +261,9 @@ var DAILY_HEALTH_COLUMN_COUNT = 18;
 // switch: sync/deadman.mjs fails when the newest row is too old (sync plan §10).
 // Mirrored, read-only, by frontend/src/api/sync-log-api.ts for the Settings
 // "Last synced" line (#157); change both together. Its test fails if they drift.
+// WithingsSyncLog (#200) uses this same layout for the Withings sync's runs:
+// n_seen is measure groups fetched, n_new/n_updated BodyMeasurements rows,
+// n_enriched and n_fit_fetched always 0, notes the unattributed groups skipped.
 var SYNC_LOG_FIELDS = [
   'run_id',        // A  <event>-<GITHUB_RUN_ID>-<attempt> in Actions, local-<started_at> otherwise
   'started_at',    // B  ISO instant, the run's single synced_at

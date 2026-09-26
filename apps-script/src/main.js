@@ -60,6 +60,8 @@
 //   ?action=appendSyncLog&key=...&payload={"row":{"run_id":"schedule-123-1",
 //     "started_at":"...","finished_at":"...","status":"ok",...}}
 //   ?action=getSyncLog&key=...&limit=1   — newest first by started_at
+// The Withings sync's runs go to WithingsSyncLog, same layout (#200): add
+// "log":"withings" to appendSyncLog's payload, or &log=withings to getSyncLog.
 
 /**
  * Every response uses this shape — success, rejection and thrown error alike
@@ -481,13 +483,14 @@ function dispatch(action, params) {
       }
       result = {
         success: true,
-        data: withScriptLock(function () { return appendSyncLog(payload.row); }),
+        data: withScriptLock(function () { return appendSyncLog(payload.row, payload.log); }),
       };
       break;
 
     // Newest first by started_at. The dead-man's switch reads limit=1.
+    // `log=withings` reads WithingsSyncLog (#200); absent, SyncLog.
     case 'getSyncLog':
-      result = { success: true, data: getSyncLog({ limit: params.limit }) };
+      result = { success: true, data: getSyncLog({ limit: params.limit, log: params.log }) };
       break;
 
     default:
