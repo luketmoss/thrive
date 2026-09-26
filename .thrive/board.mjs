@@ -8,6 +8,10 @@
 //
 // Status option IDs are cached in board.json so routine moves cost one API call
 // instead of three. `sync` rewrites that cache after a column is added or renamed.
+//
+// Without `gh` (a cloud Claude Code session), the same command runs remotely in
+// .github/workflows/board.yml and its output is printed here. Those sessions can
+// reach only repo-scoped REST endpoints, so the board itself is out of reach.
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -56,7 +60,77 @@ function optionId(status) {
   );
 }
 
-const [command, ...argv] = process.argv.slice(2);
+function hasGh() {
+  try {
+    execFileSync('gh', ['--version'], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function sleep(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+// curl rather than fetch: it honours the session's HTTPS proxy.
+function rest(method, path, body) {
+  const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
+  const args = [
+    '-sS', '-X', method, '-w', '\n%{http_code}',
+    '-H', `Authorization: bearer ${token}`,
+    '-H', 'Accept: application/vnd.github+json',
+    `https://api.github.com/repos/${config.repo}/${path}`,
+  ];
+  if (body) args.push('-H', 'Content-Type: application/json', '--data', JSON.stringify(body));
+  const raw = execFileSync('curl', args, { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
+  const cut = raw.lastIndexOf('\n');
+  const status = Number(raw.slice(cut + 1));
+  const text = raw.slice(0, cut);
+  if (status >= 300) die(`GitHub ${method} ${path} -> ${status}\n${text}`);
+  return text ? JSON.parse(text) : null;
+}
+
+function runRemotely(args) {
+  if (args[0] === 'sync') die('sync rewrites board.json locally; run it where gh is installed.');
+  if (!['show', 'set', 'list'].includes(args[0])) die('Usage: board.mjs <show|set|list|sync> ...');
+  const workflow = 'actions/workflows/board.yml';
+  const requestId = Math.random().toString(36).slice(2, 10);
+  rest('POST', 'dispatches', { event_type: 'board', client_payload: { args, request_id: requestId } });
+
+  const deadline = Date.now() + 5 * 60 * 1000;
+  let run;
+  while (Date.now() < deadline) {
+    sleep(4000);
+    if (!run) {
+      const { workflow_runs: runs } = rest('GET', `${workflow}/runs?event=repository_dispatch&per_page=20`);
+      run = runs.find((r) => r.display_title.endsWith(`[${requestId}]`));
+      if (!run) continue;
+    }
+    run = rest('GET', `actions/runs/${run.id}`);
+    if (run.status !== 'completed') continue;
+
+    const { jobs } = rest('GET', `actions/runs/${run.id}/jobs`);
+    const notes = jobs.length ? rest('GET', `check-runs/${jobs[0].id}/annotations`) : [];
+    const note = notes.find((a) => a.title === 'board');
+    const output = note?.message ?? `(no output; see ${run.html_url})`;
+    if (run.conclusion !== 'success') die(output);
+    console.log(output);
+    return;
+  }
+  die(`Timed out waiting for the board workflow${run ? `: ${run.html_url}` : ''}.`);
+}
+
+// board.yml passes its arguments as a JSON array, so none pass through a shell.
+const args = process.env.BOARD_ARGS ? JSON.parse(process.env.BOARD_ARGS) : process.argv.slice(2);
+if (!Array.isArray(args) || !args.every((a) => typeof a === 'string')) die('BOARD_ARGS must be a JSON array of strings.');
+
+if (!hasGh()) {
+  runRemotely(args);
+  process.exit(0);
+}
+
+const [command, ...argv] = args;
 
 switch (command) {
   case 'show': {

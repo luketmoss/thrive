@@ -1,0 +1,53 @@
+name: board
+
+# Runs .thrive/board.mjs for sessions that cannot reach the project board
+# themselves. Cloud Claude Code sessions have no `gh` and their GitHub access
+# stops at repos/luketmoss/thrive/..., so a user-owned Projects v2 board is out
+# of reach; board.mjs dispatches this workflow instead and reads the result back.
+#
+# repository_dispatch, not workflow_dispatch: the Claude GitHub App may not
+# start workflows (actions:write), but it can send a repository_dispatch event
+# (contents:write). Either way it runs the default branch's copy of this file.
+#
+# The output comes back as a single annotation titled "board", not the job log:
+# log downloads redirect to a blob host those sessions cannot reach, while
+# check-run annotations are repo-scoped.
+#
+# BOARD_TOKEN is a classic PAT with `project` and `repo`. The workflow's own
+# GITHUB_TOKEN cannot see a user-owned project.
+#
+# client_payload: { args: ["show","42"], request_id: "<set by board.mjs to find its run>" }
+run-name: board ${{ join(github.event.client_payload.args, ' ') }} [${{ github.event.client_payload.request_id }}]
+
+on:
+  repository_dispatch:
+    types: [board]
+
+permissions:
+  contents: read
+
+jobs:
+  board:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: .thrive
+      # No setup-node: board.mjs has no dependencies, and the runner's Node and
+      # gh are enough.
+      - name: board.mjs
+        env:
+          BOARD_ARGS: ${{ toJSON(github.event.client_payload.args) }}
+          GH_TOKEN: ${{ secrets.BOARD_TOKEN }}
+        run: |
+          set +e
+          out=$(node .thrive/board.mjs 2>&1)
+          code=$?
+          echo "$out"
+          out="${out//'%'/'%25'}"
+          out="${out//$'\r'/'%0D'}"
+          out="${out//$'\n'/'%0A'}"
+          if [ "$code" -eq 0 ]; then level=notice; else level=error; fi
+          echo "::${level} title=board::${out}"
+          exit "$code"
