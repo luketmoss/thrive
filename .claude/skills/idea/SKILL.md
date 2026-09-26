@@ -19,8 +19,7 @@ All board writes go through the helper — never hand-write GraphQL against the
 project, and never call `gh project field-list`. IDs live in `.thrive/board.json`.
 
 ```bash
-gh project item-add 4 --owner luketmoss --url <issue-url>
-node .thrive/board.mjs set <issue> --status "To Do"
+node .thrive/board.mjs add <issue> --status "To Do"
 ```
 
 ## Process
@@ -47,7 +46,7 @@ EOF
 )"
 ```
 
-6. **Add to board:** `gh project item-add 4 --owner luketmoss --url <issue-url>` → move to To Do
+6. **Add to board:** `node .thrive/board.mjs add <issue> --status "To Do"`
 
 ## Handoff
 
