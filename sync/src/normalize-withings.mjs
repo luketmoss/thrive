@@ -87,7 +87,9 @@ export function normalizeWithingsGroup(group, rawRef) {
   const grpid = group?.grpid;
   if (!isGrpid(grpid)) throw new WithingsGroupError(grpid, undefined, 'grpid is not a whole number');
   if (!WRITTEN_ATTRIBS.includes(group.attrib)) return null;
-  if (!Number.isSafeInteger(group.date) || group.date < 0) {
+  // 8.64e12 s is the last instant a JS Date can hold; past it the local-time
+  // formatting would throw a RangeError instead of failing this group.
+  if (!Number.isSafeInteger(group.date) || group.date < 0 || group.date > 8.64e12) {
     throw new WithingsGroupError(grpid, undefined, 'date is not an epoch in whole seconds');
   }
   if (!Array.isArray(group.measures)) throw new WithingsGroupError(grpid, undefined, 'measures is not an array');

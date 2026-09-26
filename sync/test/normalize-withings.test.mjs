@@ -144,6 +144,8 @@ test('AC3: an unexpected shape fails that group, naming its grpid and type', () 
     ['no measures', group(undefined), /measures is not an array/],
     ['a date that is not an epoch', group([{ value: 1, type: 1, unit: 0 }], { date: '2026-09-24' }),
       /date is not an epoch/],
+    ['a date past what a Date can hold', group([{ value: 1, type: 1, unit: 0 }], { date: 9e12 }),
+      /date is not an epoch/],
     ['a grpid that is not a number', group([{ value: 1, type: 1, unit: 0 }], { grpid: 'abc' }),
       /grpid is not a whole number/],
   ];
