@@ -28,5 +28,17 @@
       "Bash(git clean:*)",
       "Bash(rm -rf:*)"
     ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.thrive/session-start.mjs\""
+          }
+        ]
+      }
+    ]
   }
 }
