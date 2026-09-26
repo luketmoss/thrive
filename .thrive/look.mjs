@@ -15,7 +15,8 @@
 // running on :5173 for the next call. Stop it with: pkill -f vite
 
 import { execSync, spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { createHash, X509Certificate } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -33,6 +34,11 @@ async function serving() {
 
 async function ensureServer() {
   if (await serving()) return;
+  // Something else holds the port: most likely another repo's dev server in
+  // the same session (Thrive, Hive and cairn all use 5173).
+  if (await fetch('http://localhost:5173/').then(() => true, () => false)) {
+    throw new Error(`Port 5173 is serving something other than ${base}. Stop it (pkill -f vite) and retry.`);
+  }
   if (!existsSync(join(frontend, 'node_modules'))) {
     execSync('npm ci --no-audit --no-fund', { cwd: frontend, stdio: 'inherit' });
   }
@@ -45,6 +51,17 @@ async function ensureServer() {
     await new Promise((r) => setTimeout(r, 500));
   }
   throw new Error('Vite did not come up on :5173.');
+}
+
+// Cloud containers send HTTPS through a proxy that re-signs it with its own CA.
+// curl and Node trust that CA; Playwright's Chromium does not, so every
+// external script fails with ERR_CERT_AUTHORITY_INVALID. Trust exactly that
+// CA's key, which is what adding it to the store would do. Checking stays on.
+function proxyTrust() {
+  const ca = '/root/.ccr/agent-proxy-ca.crt';
+  if (!existsSync(ca)) return [];
+  const spki = new X509Certificate(readFileSync(ca)).publicKey.export({ type: 'spki', format: 'der' });
+  return [`--ignore-certificate-errors-spki-list=${createHash('sha256').update(spki).digest('base64')}`];
 }
 
 // Not a frontend dependency: cloud containers install it globally.
@@ -60,15 +77,12 @@ async function playwright() {
 export async function open({ route = '/', width = 375, height = 812, theme = 'light' } = {}) {
   await ensureServer();
   const { chromium } = await playwright();
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ args: proxyTrust() });
   // colorScheme drives the app's System theme, the default in demo mode.
   const page = await browser.newPage({ viewport: { width, height }, colorScheme: theme });
   const errors = [];
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   page.on('pageerror', (e) => errors.push(e.message));
-  // Demo mode never signs in, and the container's HTTPS proxy is not trusted by
-  // this Chromium, so the Google Identity script would only add a cert error.
-  await page.route('https://accounts.google.com/**', (r) => r.fulfill({ contentType: 'text/javascript', body: '' }));
   await page.goto(`${base}?demo=true#${route}`, { waitUntil: 'networkidle' });
   return { page, errors, close: () => browser.close() };
 }
