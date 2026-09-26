@@ -2,6 +2,7 @@
 // Thrive board helper. All project board writes go through this script.
 //
 //   node .thrive/board.mjs show <issue>
+//   node .thrive/board.mjs add <issue> [--status "<column>"]
 //   node .thrive/board.mjs set <issue> --status "In Development"
 //   node .thrive/board.mjs list --status Refined
 //   node .thrive/board.mjs sync          # refresh status option IDs from the API
@@ -23,7 +24,10 @@ const configPath = join(here, 'board.json');
 const config = JSON.parse(readFileSync(configPath, 'utf8'));
 
 function gh(args) {
-  return execFileSync('gh', args, { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
+  // Explicit stdio so a failing call's stderr is only ever captured (into the
+  // thrown error), never also echoed straight to our own stderr — `add`
+  // relies on catching and rewriting that error cleanly (AC3).
+  return execFileSync('gh', args, { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
 }
 
 function die(message) {
@@ -91,9 +95,22 @@ function rest(method, path, body) {
   return text ? JSON.parse(text) : null;
 }
 
+function setItemStatus(itemId, status) {
+  gh([
+    'api', 'graphql', '-f', `query=mutation {
+      updateProjectV2ItemFieldValue(input: {
+        projectId: "${config.projectId}"
+        itemId: "${itemId}"
+        fieldId: "${config.statusFieldId}"
+        value: { singleSelectOptionId: "${optionId(status)}" }
+      }) { projectV2Item { id } }
+    }`,
+  ]);
+}
+
 function runRemotely(args) {
   if (args[0] === 'sync') die('sync rewrites board.json locally; run it where gh is installed.');
-  if (!['show', 'set', 'list'].includes(args[0])) die('Usage: board.mjs <show|set|list|sync> ...');
+  if (!['show', 'add', 'set', 'list'].includes(args[0])) die('Usage: board.mjs <show|add|set|list|sync> ...');
   const workflow = 'actions/workflows/board.yml';
   const requestId = Math.random().toString(36).slice(2, 10);
   rest('POST', 'dispatches', { event_type: 'board', client_payload: { args, request_id: requestId } });
@@ -156,17 +173,42 @@ switch (command) {
       console.log(`#${issue} already in ${status}.`);
       break;
     }
-    gh([
-      'api', 'graphql', '-f', `query=mutation {
-        updateProjectV2ItemFieldValue(input: {
-          projectId: "${config.projectId}"
-          itemId: "${item.id}"
-          fieldId: "${config.statusFieldId}"
-          value: { singleSelectOptionId: "${optionId(status)}" }
-        }) { projectV2Item { id } }
-      }`,
-    ]);
+    setItemStatus(item.id, status);
     console.log(`#${issue}: ${item.status ?? '(none)'} -> ${status}`);
+    break;
+  }
+
+  case 'add': {
+    const issue = argv[0];
+    if (!issue || !/^\d+$/.test(issue)) die('Usage: board.mjs add <issue> [--status "<column>"]');
+    const status = flag(argv, 'status');
+    if (status) optionId(status); // refuse an unknown column before adding anything
+
+    let item;
+    try {
+      const raw = gh([
+        'project', 'item-add', String(config.projectNumber),
+        '--owner', config.owner,
+        '--url', `https://github.com/${config.repo}/issues/${issue}`,
+        '--format', 'json',
+      ]);
+      item = JSON.parse(raw);
+    } catch {
+      die(`Issue #${issue} not found in ${config.repo}.`);
+    }
+
+    // item-add is idempotent: a re-run returns the same item. An item that was
+    // already on the board carries whatever status it already had; a brand
+    // new one has none yet. No item-list call either way.
+    const existed = item.status != null;
+
+    if (status) setItemStatus(item.id, status);
+
+    if (existed) {
+      console.log(status ? `#${issue}: already on the board (${status})` : `#${issue}: already on the board`);
+    } else {
+      console.log(status ? `#${issue}: added (${status})` : `#${issue}: added to the board`);
+    }
     break;
   }
 
@@ -197,5 +239,5 @@ switch (command) {
   }
 
   default:
-    die('Usage: board.mjs <show|set|list|sync> ...');
+    die('Usage: board.mjs <show|add|set|list|sync> ...');
 }

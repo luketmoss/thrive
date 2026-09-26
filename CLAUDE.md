@@ -168,9 +168,13 @@ same operation through the GitHub MCP tools (`mcp__github__*`); the board still
 goes through `board.mjs`.
 
 **All board writes go through `node .thrive/board.mjs`** — never hand-write
-GraphQL against the project and never call `gh project field-list`. IDs live in
-`.thrive/board.json`; `board.mjs sync` refreshes them if a column is added or
-renamed.
+GraphQL against the project and never call `gh project field-list` or
+`gh project item-add` directly. IDs live in `.thrive/board.json`; `board.mjs
+sync` refreshes them if a column is added or renamed. `board.mjs add <issue>
+[--status "<column>"]` puts an issue on the project (idempotently) and
+optionally sets its column in the same run — this is how a cloud session,
+which can create issues but cannot otherwise reach the project, gets a new
+issue onto the board.
 
 Cloud Claude Code sessions have no `gh` and cannot reach the project, so there
 `board.mjs` hands the same command to `.github/workflows/board.yml` (a

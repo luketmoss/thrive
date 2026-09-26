@@ -85,3 +85,14 @@ jobs:
           cache-dependency-path: sync/package-lock.json
       - run: npm ci
       - run: npm test
+
+  # #216. board.mjs has no package.json — node --test runs it directly.
+  # Same "not path-filtered" reasoning as the jobs above.
+  board:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+      - run: node --test .thrive/board.test.mjs
