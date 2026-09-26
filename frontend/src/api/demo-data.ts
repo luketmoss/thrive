@@ -3,6 +3,7 @@
 import type { ExerciseWithRow, LabelWithRow, TemplateRowWithRow, Template, WorkoutWithRow, SetWithRow } from './types';
 import { colorKeyFromName } from './label-colors';
 import type { SyncLogEntryWithRow } from './sync-log-api';
+import { SyncLogNotSetUpError } from './sync-log-errors';
 
 let _isDemo: boolean | null = null;
 
@@ -215,16 +216,15 @@ export function demoSyncScenario(): DemoSyncScenario {
   return raw && (raw === 'error' || raw in DEMO_SYNC_SCENARIOS) ? raw as DemoSyncScenario : 'ok';
 }
 
-/** The demo SyncLog as the sheet would hold it, oldest row first. */
-export function demoSyncLog(now: Date, scenario: DemoSyncScenario = demoSyncScenario()): SyncLogEntryWithRow[] {
-  if (scenario === 'error') throw new Error('Demo: SyncLog unreadable (synclog=error)');
+/** Builds a scenario's runs, oldest row first — shared by COROS and Withings so their fixtures agree in shape. */
+function buildDemoSyncRuns(now: Date, scenario: Exclude<DemoSyncScenario, 'error'>, idPrefix: string): SyncLogEntryWithRow[] {
   const runs = DEMO_SYNC_SCENARIOS[scenario];
   return runs.slice().reverse().map((run, i) => {
     const started = new Date(now.getTime() - Math.round(run.hoursAgo * 3600_000));
     const finished = new Date(started.getTime() + 47_318);
     const failed = run.status === 'failed';
     return {
-      run_id: `schedule-demo${1000 + i}-1`,
+      run_id: `${idPrefix}${1000 + i}-1`,
       started_at: started.toISOString(),
       finished_at: finished.toISOString(),
       // D - 10 to D + 1, as the sync's window is (#156).
@@ -242,4 +242,36 @@ export function demoSyncLog(now: Date, scenario: DemoSyncScenario = demoSyncScen
       sheetRow: i + 2,
     };
   });
+}
+
+/** The demo SyncLog as the sheet would hold it, oldest row first. */
+export function demoSyncLog(now: Date, scenario: DemoSyncScenario = demoSyncScenario()): SyncLogEntryWithRow[] {
+  if (scenario === 'error') throw new Error('Demo: SyncLog unreadable (synclog=error)');
+  return buildDemoSyncRuns(now, scenario, 'schedule-demo');
+}
+
+// ── Demo WithingsSyncLog (#200, #210) ────────────────────────────────
+//
+// Same scenarios as COROS, plus `missing`, which previews AC3's "the tab
+// doesn't exist yet" state. `?demo=true&withingslog=<scenario>` drives it
+// independently of `synclog=`, so the two rows can be previewed in any
+// combination.
+
+export type DemoWithingsSyncScenario = DemoSyncScenario | 'missing';
+
+export function demoWithingsSyncScenario(): DemoWithingsSyncScenario {
+  const raw = new URLSearchParams(window.location.search).get('withingslog');
+  return raw && (raw === 'error' || raw === 'missing' || raw in DEMO_SYNC_SCENARIOS)
+    ? raw as DemoWithingsSyncScenario
+    : 'ok';
+}
+
+/** The demo WithingsSyncLog as the sheet would hold it, oldest row first. */
+export function demoWithingsSyncLog(
+  now: Date,
+  scenario: DemoWithingsSyncScenario = demoWithingsSyncScenario(),
+): SyncLogEntryWithRow[] {
+  if (scenario === 'missing') throw new SyncLogNotSetUpError('Demo: WithingsSyncLog not set up (withingslog=missing)');
+  if (scenario === 'error') throw new Error('Demo: WithingsSyncLog unreadable (withingslog=error)');
+  return buildDemoSyncRuns(now, scenario, 'withings-schedule-demo');
 }

@@ -5,8 +5,9 @@
 // Row mapping mirrors SYNC_LOG_FIELDS in apps-script/src/types.js; change both
 // together. The SPA never writes this tab.
 
-import { sheetsGet, withReauth } from './sheets';
-import { isDemo, demoSyncLog } from './demo-data';
+import { sheetsGet, withReauth, SheetsApiError } from './sheets';
+import { isDemo, demoSyncLog, demoWithingsSyncLog } from './demo-data';
+import { SyncLogNotSetUpError } from './sync-log-errors';
 
 export const SYNC_LOG_FIELDS = [
   'run_id',        // A
@@ -48,5 +49,32 @@ export async function fetchSyncLog(token: string): Promise<SyncLogEntryWithRow[]
     return rows
       .map((row, i) => rowToSyncLog(row, i + 2))
       .filter((e) => e.run_id);
+  });
+}
+
+/** True for the 400 Sheets returns when a tab doesn't exist, e.g. before #200's migration has run. */
+function isMissingTabError(err: unknown): boolean {
+  return err instanceof SheetsApiError && err.status === 400 && /unable to parse range/i.test(err.message);
+}
+
+/**
+ * Every WithingsSyncLog row with a run_id, in sheet order (#200, #210). Same
+ * A:N layout and mapping as `fetchSyncLog`; a missing tab (before #200's
+ * migration has run) throws `SyncLogNotSetUpError` instead of a plain read
+ * error, so Settings can tell "not set up yet" from a real failure.
+ */
+export async function fetchWithingsSyncLog(token: string): Promise<SyncLogEntryWithRow[]> {
+  if (isDemo()) return demoWithingsSyncLog(new Date());
+
+  return withReauth(token, async (t) => {
+    try {
+      const rows = await sheetsGet('WithingsSyncLog!A2:N', t);
+      return rows
+        .map((row, i) => rowToSyncLog(row, i + 2))
+        .filter((e) => e.run_id);
+    } catch (err) {
+      if (isMissingTabError(err)) throw new SyncLogNotSetUpError('WithingsSyncLog does not exist yet');
+      throw err;
+    }
   });
 }
