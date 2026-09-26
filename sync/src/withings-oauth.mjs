@@ -84,7 +84,7 @@ export const isWithingsTransient = (err) =>
  * untouched (it is transient). Withings' `error` text is redacted before it is
  * kept, because it can echo what was sent.
  */
-async function post(fetchImpl, endpoint, form, { accessToken } = {}) {
+export async function withingsPost(fetchImpl, endpoint, form, { accessToken } = {}) {
   const res = await fetchImpl(WITHINGS_ENDPOINTS[endpoint], {
     method: 'POST',
     headers: {
@@ -165,7 +165,7 @@ export function toWithingsTokenSet(body, now = Date.now()) {
 export async function exchangeWithingsCode(fetchImpl, { clientId, clientSecret, code }, now = Date.now()) {
   registerSecret(clientSecret);
   registerSecret(code);
-  const body = await post(fetchImpl, 'token', {
+  const body = await withingsPost(fetchImpl, 'token', {
     action: 'requesttoken',
     grant_type: 'authorization_code',
     client_id: clientId,
@@ -180,7 +180,7 @@ export async function exchangeWithingsCode(fetchImpl, { clientId, clientSecret, 
 export async function refreshWithings(fetchImpl, { clientId, clientSecret, refreshToken }, now = Date.now()) {
   registerSecret(clientSecret);
   registerSecret(refreshToken);
-  const body = await post(fetchImpl, 'token', {
+  const body = await withingsPost(fetchImpl, 'token', {
     action: 'requesttoken',
     grant_type: 'refresh_token',
     client_id: clientId,
@@ -195,7 +195,7 @@ export async function refreshWithings(fetchImpl, { clientId, clientSecret, refre
  * measure groups of the last 30 days. Returns only how many there were.
  */
 export async function countRecentMeasureGroups(fetchImpl, accessToken, now = Date.now()) {
-  const body = await post(fetchImpl, 'measure', {
+  const body = await withingsPost(fetchImpl, 'measure', {
     action: 'getmeas',
     startdate: String(Math.floor(now / 1000) - 30 * 86400),
     enddate: String(Math.floor(now / 1000)),

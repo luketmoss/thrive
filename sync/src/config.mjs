@@ -104,3 +104,27 @@ export const WITHINGS_DRIVE_ROOT_FOLDER = 'Thrive Withings';
 export const WITHINGS_APP_PROPERTY_ROOT = { kind: 'thrive-withings-root' };
 export const WITHINGS_APP_PROPERTY_TOKEN = { kind: 'withings-token' };
 export const WITHINGS_TOKEN_FILE_NAME = 'withings-token.json';
+
+/** Folders under `Thrive Withings`, found again by this property plus their path (#197). */
+export const WITHINGS_APP_PROPERTY_FOLDER_KIND = 'thrive-withings-folder';
+
+/**
+ * The measures window (#197): local D − 30 days to D + 1, in SYNC_TIME_ZONE.
+ * Re-reading 30 days, rather than asking for changes since the last run with
+ * `lastupdate`, is what picks up edits made in the Withings app. A scale and a
+ * cuff produce a few groups a day, so that is one or two pages.
+ */
+export const WITHINGS_WINDOW_DAYS_BACK = 30;
+export const WITHINGS_WINDOW_DAYS_AHEAD = 1;
+
+/** `getmeas` category 1: real measurements, not user objectives. */
+export const WITHINGS_MEASURE_CATEGORY = 1;
+
+/**
+ * The measure types asked for (#197): weight (1), fat-free mass (5), fat ratio
+ * (6), fat mass (8), diastolic (9) and systolic (10) blood pressure, heart
+ * pulse (11, the cuff's and the scale's standing heart rate alike), muscle
+ * mass (76), hydration (77) and bone mass (88). All are in the free plan. A
+ * listed type keeps any paid-plan type out even if the account gains one.
+ */
+export const WITHINGS_MEASURE_TYPES = [1, 5, 6, 8, 9, 10, 11, 76, 77, 88];

@@ -38,3 +38,38 @@ export function storedWithings({ expiresInMs, refresh = 'wt-refresh-0-xxxxxxxx' 
     updated_at: new Date(NOW - 3 * HOUR).toISOString(),
   };
 }
+
+// --- measures (#197) ----------------------------------------------------------
+
+/** A measure group shaped as `getmeas` returns one. `date` is epoch seconds. */
+export const measureGroup = (grpid, date, measures = [{ value: 81234, type: 1, unit: -3 }], extra = {}) => ({
+  grpid,
+  attrib: 0,
+  date,
+  created: date + 5,
+  modified: date + 5,
+  category: 1,
+  deviceid: 'dev-scale-1',
+  hash_deviceid: 'dev-scale-1',
+  measures,
+  modelid: 13,
+  model: 'Body+',
+  comment: null,
+  timezone: 'America/Denver',
+  ...extra,
+});
+
+/** One `getmeas` page. `offset` is only sent with `more`, as Withings does. */
+export const getmeasPage = (groups, { more = 0, offset } = {}) => ({
+  status: 200,
+  body: {
+    status: 0,
+    body: {
+      updatetime: 1790000000,
+      timezone: 'America/Denver',
+      measuregrps: groups,
+      more,
+      ...(offset !== undefined ? { offset } : {}),
+    },
+  },
+});
