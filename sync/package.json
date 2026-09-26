@@ -8,6 +8,7 @@
     "test": "node --test",
     "google-authorize": "node google-authorize.mjs",
     "authorize": "node authorize.mjs",
+    "withings-authorize": "node withings-authorize.mjs",
     "start": "node run.mjs"
   },
   "engines": {

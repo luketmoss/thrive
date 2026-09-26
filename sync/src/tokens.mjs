@@ -51,28 +51,54 @@ export async function getAccessToken({
     return { accessToken: current.access_token, clientId: current.client_id, refreshed: false };
   }
 
-  const attempt = (tokens) => withRetry(
-    () => refresh(fetchImpl, { clientId: tokens.client_id, refreshToken: tokens.refresh_token }, now()),
-    { isRetryable: isTransient, ...retry },
-  );
+  const next = await rotateAndPersist({
+    store,
+    current,
+    refresh: (tokens) => withRetry(
+      () => refresh(fetchImpl, { clientId: tokens.client_id, refreshToken: tokens.refresh_token }, now()),
+      { isRetryable: isTransient, ...retry },
+    ),
+    isInvalidGrant,
+    classify,
+    grantDead: (err) => new CorosGrantDeadError(err.code),
+    persistError: (detail) => new TokenPersistError(detail),
+  });
+  return { accessToken: next.access_token, clientId: next.client_id, refreshed: true };
+}
 
+/**
+ * The rotation rules both vendors share (#196): one refresh, a single re-read
+ * of Drive when the refresh token is refused, and persist before use.
+ *
+ * - `refresh(tokens)` makes one refresh, with its own retries, and returns the
+ *   new set or throws.
+ * - `isInvalidGrant(err)` says the refresh token itself was refused.
+ * - `classify(err)` turns any other failure into the error the run ends in.
+ * - `grantDead(err)` and `persistError(detail)` build the vendor's errors.
+ *
+ * Only a *different* refresh token in Drive is worth presenting after a
+ * refusal: the same one would be refused the same way.
+ */
+export async function rotateAndPersist({
+  store, current, refresh: refreshOnce, isInvalidGrant: invalid, classify: toRunError,
+  grantDead, persistError,
+}) {
   let next;
   try {
-    next = await attempt(current);
+    next = await refreshOnce(current);
   } catch (err) {
-    if (!isInvalidGrant(err)) throw classify(err);
+    if (!invalid(err)) throw toRunError(err);
 
-    // Someone else may have rotated first. Only a *different* token is worth
-    // presenting: the same one would be refused the same way.
+    // Someone else may have rotated first.
     const latest = await store.load();
     if (!latest?.refresh_token || latest.refresh_token === current.refresh_token) {
-      throw new CorosGrantDeadError(err.code);
+      throw grantDead(err);
     }
     try {
-      next = await attempt(latest);
+      next = await refreshOnce(latest);
     } catch (retryErr) {
-      if (isInvalidGrant(retryErr)) throw new CorosGrantDeadError(retryErr.code);
-      throw classify(retryErr);
+      if (invalid(retryErr)) throw grantDead(retryErr);
+      throw toRunError(retryErr);
     }
   }
 
@@ -80,7 +106,7 @@ export async function getAccessToken({
     await store.save(next);
   } catch (err) {
     if (err instanceof DriveAuthError) throw err;
-    throw new TokenPersistError(redact(err.message || String(err)));
+    throw persistError(redact(err.message || String(err)));
   }
-  return { accessToken: next.access_token, clientId: next.client_id, refreshed: true };
+  return next;
 }

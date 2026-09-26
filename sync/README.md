@@ -19,6 +19,8 @@ Drive too, within COROS's 50-a-day allowance (#154).
 | Bot account's Google OAuth client ID and secret | Actions secrets `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` | No |
 | Bot account's Drive refresh token (`drive.file`) | Actions secret `GOOGLE_DRIVE_REFRESH_TOKEN` | No, once published to Production |
 | COROS client ID, refresh and access tokens | `Thrive COROS/coros-token.json` in the bot's Drive | **Yes, on every refresh** |
+| Withings client ID and secret (#196) | Actions secrets `WITHINGS_CLIENT_ID`, `WITHINGS_CLIENT_SECRET`; environment variables for a local run | No |
+| Withings user ID, refresh and access tokens | `Thrive Withings/withings-token.json` in the bot's Drive | **Yes, on every refresh** |
 | Thrive API URL and key | Actions secrets `THRIVE_API_URL` (the Apps Script `/exec` URL) and `THRIVE_API_KEY` (its `API_KEY` script property); environment variables for a local run | No |
 
 **Why Drive, and why the bot account.** COROS rotates its refresh token on every use, and a workflow
@@ -371,6 +373,11 @@ the auto-disable after 60 days with no activity on a public repo. That layer is
 | `FIT budget unknown, so no FIT was requested this run` | `getSyncLog` failed, or 100 rows of the last 24 h leave older ones unread | Read the quoted reason. The next run tries again |
 | `activity <id>: FIT downloaded but not stored in Drive` | The Drive upload failed | Nothing. The next run requests it again, which spends one more of the allowance |
 | `COROS no longer offers downloadActivityFitFiles` | The FIT tool was renamed or removed. Everything else still ran | Check `tools/list` and update `src/fit.mjs` |
+| `WithingsGrantDeadError` | Withings refused the refresh token (or the grant was revoked), and Drive held no newer one | `node withings-authorize.mjs` |
+| `WithingsTokenPersistError` | A rotated Withings token could not be written to Drive | Re-run the workflow. If it then reports a dead grant, `node withings-authorize.mjs` |
+| `WithingsUnavailableError` | Withings is down, rate limiting, or erroring after 3 attempts | Nothing. The next run retries |
+| `WithingsRequestError` | Withings refused a request with a status that is neither the grant nor an outage | Look the quoted status up in Withings' [response status list](https://developer.withings.com/api-reference/#section/Response-status) and fix `src/withings-oauth.mjs` |
+| `WITHINGS_CLIENT_ID and WITHINGS_CLIENT_SECRET are not both set` | The Actions secrets are missing | `gh secret set WITHINGS_CLIENT_ID` and `gh secret set WITHINGS_CLIENT_SECRET` |
 
 ## How the token is kept
 
@@ -386,6 +393,78 @@ the auto-disable after 60 days with no activity on a public repo. That layer is
 In a summary-mode log, a failure is only counted, and an abort shows only its
 class, e.g. `Aborted by CorosGrantDeadError`. Match the class against the table
 above; the message is in that run's `SyncLog` row.
+
+## Withings (#196)
+
+Withings (scale, blood pressure) is authorized once, like COROS, and its
+rotating token lives in Drive, in its own root: `Thrive Withings/withings-token.json`,
+tagged `{ kind: 'withings-token' }` under a folder tagged `{ kind: 'thrive-withings-root' }`.
+It holds `userid`, `refresh_token`, `access_token`, `access_expires_at` and
+`updated_at`. A separate root and separate tags mean no lookup can match a
+COROS file. Fetching measures (#197), the tab (#198) and the schedule (#200)
+come later.
+
+### 1. Register the developer app
+
+In the [Withings developer dashboard](https://developer.withings.com/dashboard/),
+signed in as the Withings account whose data Thrive reads:
+
+1. **Create an application** of type **Public API integration** (free plan).
+2. **Callback URL:** `https://luketmoss.github.io/thrive/withings-callback.html`,
+   exactly. Withings refuses localhost and IP redirects, so the callback is a
+   static page on GitHub Pages (`frontend/public/withings-callback.html`). It
+   shows the authorization response for you to paste back, and sends it nowhere.
+3. **Scopes:** `user.metrics,user.info` (the script asks for these).
+4. Store the client ID and secret:
+   ```bash
+   gh secret set WITHINGS_CLIENT_ID --repo luketmoss/thrive
+   gh secret set WITHINGS_CLIENT_SECRET --repo luketmoss/thrive
+   ```
+
+### 2. Authorize
+
+Needs the Google credential from step 2 of the one-time setup.
+
+```bash
+cd sync
+WITHINGS_CLIENT_ID=… WITHINGS_CLIENT_SECRET=… node withings-authorize.mjs
+```
+
+It prints and opens the authorize URL. Sign in and allow access; Withings
+sends the browser to the callback page, which shows the **Authorization
+response** (`code=…&state=…`) with a **Copy** button. Paste it into the
+terminal and press Enter **within 30 seconds**: that is how long a Withings
+code lasts. The full callback URL or a bare code work too. A response whose
+`state` is not this sign-in's is refused. A code Withings refuses as expired or
+used is asked for again, up to 3 times. On success the script writes the token
+file (a re-run updates the same one), then makes one authenticated
+`user.metrics` call and prints only how many measure groups it returned.
+
+### How its token is kept
+
+As COROS's (above), through the same code (`rotateAndPersist` in `src/tokens.mjs`),
+with one difference: Withings access tokens last **3 hours**, so a run refreshes
+when less than **15 minutes** are left, and nearly every run rotates. The refresh
+token lasts a year but dies 8 hours after its replacement is issued, or as soon
+as the new access token is used. Persist-before-use and one run at a time are
+therefore what keep the grant alive.
+
+**Withings reports failure as HTTP 200 with a non-zero `status`.** The sync
+classifies on `status`, through one table, `WITHINGS_STATUS` in
+`src/withings-oauth.mjs`, built from Withings'
+[response status list](https://developer.withings.com/api-reference/#section/Response-status):
+
+| Row | Withings' label | Becomes |
+|---|---|---|
+| `auth` | Authentication failed, Unauthorized | `WithingsGrantDeadError` (after one re-read of Drive) |
+| `params` | Invalid params | At the token endpoint, a refused code or refresh token (as `auth`). Elsewhere `WithingsRequestError` |
+| `unavailable` | An error occurred, Timeout, Too many requests, An unknown error occurred | `WithingsUnavailableError`, retried with backoff first. So are an HTTP 5xx or 429 and a network failure |
+| `request` | Bad state, Wrong action or wrong webservice, and any status not in the list | `WithingsRequestError`, not retried |
+
+No Withings token, client secret or authorization code reaches a log, stdout or
+an error: each is registered with `redact()` when first seen, and `redact()`
+also masks them as JSON fields and as `code=`/`client_secret=`/`refresh_token=`/`access_token=`
+parameters.
 
 ## Tests
 

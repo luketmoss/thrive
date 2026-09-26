@@ -24,6 +24,13 @@ export function redact(text) {
     '$1[redacted]$2',
   );
   out = out.replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]+/g, '$1[redacted]');
+  // The same credentials as form or query parameters, and Withings' `code=`
+  // (#196): the authorization code arrives in a URL and is pasted back as
+  // `code=…&state=…`. `\b` keeps `grant_type=authorization_code` readable.
+  out = out.replace(
+    /\b((?:code|access_token|refresh_token|client_secret)=)[^&\s"'<>]+/gi,
+    '$1[redacted]',
+  );
   // A FIT download URL downloads with no credentials (sync plan §2), so it is
   // a secret, and the sync never asks for one (#154). Masked anyway, in case
   // COROS ever puts one in an error or a payload.
