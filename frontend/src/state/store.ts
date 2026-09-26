@@ -88,15 +88,19 @@ export function labelUsageCount(labelName: string): number {
   ).length;
 }
 
-// COROS SyncLog (#157), read when Settings opens rather than on initial load:
-// only the "Last synced" line uses it. Not to be confused with the offline
-// write queue below, which is the app's own "sync".
+// Sync log state (#157, #210), read when Settings opens rather than on
+// initial load: only the "last synced" rows use it. Not to be confused with
+// the offline write queue below, which is the app's own "sync". `not-set-up`
+// is only ever reached by `withingsSyncLog`, before #200's tab migration has
+// run, but the type is shared so both rows render off the same shape.
 export type SyncLogState =
   | { state: 'idle' }
   | { state: 'loading' }
   | { state: 'error' }
+  | { state: 'not-set-up' }
   | { state: 'loaded'; entries: SyncLogEntryWithRow[] };
 export const syncLog = signal<SyncLogState>({ state: 'idle' });
+export const withingsSyncLog = signal<SyncLogState>({ state: 'idle' });
 
 // Offline sync queue state
 export const pendingSyncCount = signal(0);

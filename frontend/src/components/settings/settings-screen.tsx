@@ -2,7 +2,7 @@ import { useAuth } from '../../auth/auth-context';
 import { ThemeToggle } from '../shared/theme-toggle';
 import { workouts, exercises, templates, labels } from '../../state/store';
 import { navigate } from '../../router/router';
-import { SyncStatusRow } from './sync-status-row';
+import { CorosSyncStatusRow, WithingsSyncStatusRow } from './sync-status-row';
 
 export function SettingsScreen() {
   const { user, token, logout } = useAuth();
@@ -48,8 +48,9 @@ export function SettingsScreen() {
         </div>
 
         <div class="settings-section">
-          <h2>COROS sync</h2>
-          <SyncStatusRow token={token} />
+          <h2>Sync status</h2>
+          <CorosSyncStatusRow token={token} />
+          <WithingsSyncStatusRow token={token} />
         </div>
 
         <div class="settings-section">

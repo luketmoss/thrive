@@ -1,5 +1,6 @@
-import { exercises, labels, templates, workouts, sets, loading, activeWorkoutId, activeWorkoutSets, activeWarmupExercises, isEditMode, showToast, syncLog } from './store';
-import { fetchSyncLog } from '../api/sync-log-api';
+import { exercises, labels, templates, workouts, sets, loading, activeWorkoutId, activeWorkoutSets, activeWarmupExercises, isEditMode, showToast, syncLog, withingsSyncLog } from './store';
+import { fetchSyncLog, fetchWithingsSyncLog } from '../api/sync-log-api';
+import { SyncLogNotSetUpError } from '../api/sync-log-errors';
 import { enqueueSet, initPendingCount } from '../api/sync-queue';
 import { isDemo } from '../api/demo-data';
 import { fetchExercises, createExercise, updateExercise as updateExerciseApi, deleteExercise as deleteExerciseApi } from '../api/exercises-api';
@@ -1179,5 +1180,27 @@ export async function loadSyncLog(token: string): Promise<void> {
     if (isReauthFailure(err)) return; // auth-provider handles this
     console.error('Failed to read SyncLog:', err);
     syncLog.value = { state: 'error' };
+  }
+}
+
+/**
+ * Read WithingsSyncLog for the Settings screen's "Withings last synced" row
+ * (#200, #210). Independent of `loadSyncLog`: a failure here never touches
+ * `syncLog`, and vice versa. A missing tab (before #200's migration has run)
+ * reads as "not set up yet", not as a failed read.
+ */
+export async function loadWithingsSyncLog(token: string): Promise<void> {
+  if (withingsSyncLog.value.state !== 'loaded') withingsSyncLog.value = { state: 'loading' };
+  try {
+    const entries = await fetchWithingsSyncLog(token);
+    withingsSyncLog.value = { state: 'loaded', entries };
+  } catch (err) {
+    if (isReauthFailure(err)) return; // auth-provider handles this
+    if (err instanceof SyncLogNotSetUpError) {
+      withingsSyncLog.value = { state: 'not-set-up' };
+      return;
+    }
+    console.error('Failed to read WithingsSyncLog:', err);
+    withingsSyncLog.value = { state: 'error' };
   }
 }

@@ -5,11 +5,20 @@
 import type { SyncLogEntry } from './sync-log-api';
 
 /**
- * The same threshold as the watchdog (`sync/src/deadman.mjs`), so the phone
- * and the failure email agree on what "stopped" means. Runs are four a day
- * with gaps of 4-9 h; one dropped run leaves at most ~15 h and heals itself.
+ * The same threshold as the COROS watchdog (`sync/src/deadman.mjs`), so the
+ * phone and the failure email agree on what "stopped" means. Runs are four a
+ * day with gaps of 4-9 h; one dropped run leaves at most ~15 h and heals
+ * itself.
  */
-export const STALE_AFTER_HOURS = 16;
+export const COROS_STALE_AFTER_HOURS = 16;
+
+/**
+ * The Withings watchdog's threshold (`sync/deadman.mjs`, #200) — a shorter
+ * window than COROS's because the Withings sync runs on its own schedule.
+ * Passed into `summarizeSyncLog` alongside `WithingsSyncLog`'s entries so
+ * neither vendor's staleness can hide behind the other's threshold.
+ */
+export const WITHINGS_STALE_AFTER_HOURS = 14;
 
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
@@ -40,7 +49,12 @@ export function newestFirst<T extends SyncLogEntry>(entries: T[]): T[] {
   return [...entries].sort((a, b) => startedMs(b) - startedMs(a));
 }
 
-export function summarizeSyncLog(entries: SyncLogEntry[], now: Date): SyncStatus {
+/**
+ * `staleAfterHours` is the caller's vendor threshold (`COROS_STALE_AFTER_HOURS`
+ * or `WITHINGS_STALE_AFTER_HOURS`), so one vendor's watchdog window never
+ * silently governs the other's row (#210).
+ */
+export function summarizeSyncLog(entries: SyncLogEntry[], now: Date, staleAfterHours: number): SyncStatus {
   if (entries.length === 0) return { kind: 'empty' };
   const sorted = newestFirst(entries).filter((e) => startedMs(e) > -Infinity);
   if (sorted.length === 0) return { kind: 'unreadable' };
@@ -54,7 +68,7 @@ export function summarizeSyncLog(entries: SyncLogEntry[], now: Date): SyncStatus
     const ok = sorted.find((e) => e.status === 'ok');
     lastOk = ok ? { entry: ok, ageMs: age(ok) } : null;
   }
-  return { kind: 'run', newest, ageMs, stale: ageMs > STALE_AFTER_HOURS * HOUR, lastOk };
+  return { kind: 'run', newest, ageMs, stale: ageMs > staleAfterHours * HOUR, lastOk };
 }
 
 /** "just now", "42 min ago", "5 h ago", "3 d ago". */
