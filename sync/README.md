@@ -378,6 +378,11 @@ the auto-disable after 60 days with no activity on a public repo. That layer is
 | `WithingsUnavailableError` | Withings is down, rate limiting, or erroring after 3 attempts | Nothing. The next run retries |
 | `WithingsRequestError` | Withings refused a request with a status that is neither the grant nor an outage | Look the quoted status up in Withings' [response status list](https://developer.withings.com/api-reference/#section/Response-status) and fix `src/withings-oauth.mjs` |
 | `WITHINGS_CLIENT_ID and WITHINGS_CLIENT_SECRET are not both set` | The Actions secrets are missing | `gh secret set WITHINGS_CLIENT_ID` and `gh secret set WITHINGS_CLIENT_SECRET` |
+| `withings-sync-watchdog`: `has not run for N hours` | No Withings run has recorded a row within 14 h | Actions → withings-sync: is the schedule enabled, and are runs cancelled or timing out? |
+| `withings-sync-watchdog`: `WithingsSyncLog is empty` or `Could not read WithingsSyncLog` | No run has logged yet, the tab is missing, or the API is down | Run `scripts/migrate-200-withings-sync-log-tab.mjs` if the tab is missing, then dispatch withings-sync |
+| `WithingsSyncLog row … was not written` | The tab is missing, or the API refused the row | Run `scripts/migrate-200-withings-sync-log-tab.mjs`; read the row's error with `node withings-run.mjs` locally |
+| `ApiIgnoresLogError` | The deployed Apps Script predates #200 and would file Withings runs in `SyncLog`. Nothing was written | Deploy `apps-script/`, then re-run |
+| `BodyMeasurements not written` | The API refused the rows, or `THRIVE_API_URL`/`THRIVE_API_KEY` is missing. The archive stands | Read the quoted error. The next run re-sends the whole window |
 
 ## How the token is kept
 
@@ -401,8 +406,8 @@ rotating token lives in Drive, in its own root: `Thrive Withings/withings-token.
 tagged `{ kind: 'withings-token' }` under a folder tagged `{ kind: 'thrive-withings-root' }`.
 It holds `userid`, `refresh_token`, `access_token`, `access_expires_at` and
 `updated_at`. A separate root and separate tags mean no lookup can match a
-COROS file. Fetching measures is below ("The Withings archive", #197); the
-tab (#198) and the schedule (#200) come later.
+COROS file. Fetching measures is below ("The Withings archive", #197), then
+the tab (#198) and the schedule, run log and watchdog (#200).
 
 ### 1. Register the developer app
 
@@ -514,7 +519,8 @@ Each group lands under `Thrive Withings` in the bot's Drive:
   (`WithingsUnavailableError`, or `WithingsGrantDeadError` for a refused token).
   A group whose Drive write fails is logged with its `grpid`, the others are
   still written, and the run exits non-zero.
-- The run prints counts and `grpid`s, never a measurement.
+- The run prints counts and `grpid`s, never a measurement. In summary mode
+  (the workflow's), not even the `grpid`s: see #200 below.
 
 ## BodyMeasurements (#198)
 
@@ -582,6 +588,66 @@ returned for that `grpid`: omitted (its file untouched, every other group
 `unchanged`), flagged (the file is rewritten; diff `payload.attrib` and
 `payload.category`), or returned unchanged. Then replace this paragraph with the
 answer, and if deletions are simply omitted, open an issue to reconcile them.
+
+## Withings: schedule, log and watchdog (#200)
+
+**Four runs a day**, `.github/workflows/withings-sync.yml` on
+`41 1,7,13,19 * * *`: 01:41, 07:41, 13:41 and 19:41 UTC, every 6 hours, at a
+minute clear of COROS's :17 and both watchdogs. Withings asks for at most one
+poll per 10 minutes, and weight and BP change slowly. `workflow_dispatch` works
+too. Each run is `node withings-run.mjs` with a 15-minute timeout, in the
+`withings-sync` concurrency group, which queues and never cancels: the 3-hour
+access token means nearly every run rotates the refresh token, and a cancelled
+run could die between refresh and persist. It is not the `coros-sync` group:
+the two share no token. The workflow gets only the three Google secrets, the
+two Withings secrets and `THRIVE_API_URL`/`THRIVE_API_KEY`.
+
+**One `WithingsSyncLog` row per run**, written last, whatever happened
+(`withingsSyncRun` in `withings-run.mjs`, the run-and-log shape of
+`src/sync-run.mjs`, built from `src/run-log.mjs`). The tab has `SyncLog`'s A:N
+layout, made by `scripts/migrate-200-withings-sync-log-tab.mjs`:
+
+| Field | Holds |
+|---|---|
+| `run_id` | as `SyncLog`: `schedule-<run id>-<attempt>`, `workflow_dispatch-…`, or `local-<started_at>` |
+| `started_at`, `finished_at` | ISO instants; `started_at` is the run's `synced_at` |
+| `window_start`, `window_end` | D − 30 and D + 1 |
+| `n_seen` | measure groups fetched |
+| `n_new`, `n_updated` | `BodyMeasurements` rows appended; rows changed |
+| `n_enriched`, `n_fit_fetched` | always `0` |
+| `n_errors`, `status`, `error_detail` | `ok` (exit 0), `partial` (a group not archived or not normalized, or the sheet write failed; exit 1), `failed` (the fetch was cut short or never began, e.g. `WithingsGrantDeadError: …`; exit 1). Redacted, and led by the error class |
+| `notes` | groups skipped as unattributed, with `grpid` and `attrib`. Not a failure |
+
+A row that cannot be written fails the run. A re-sent `run_id` is not appended
+twice.
+
+**Why a separate tab.** `SyncLog` has no source column. COROS's watchdog, the
+Settings "Last synced" line and COROS's FIT budget all read it, so a Withings
+row there would make a stopped COROS sync look alive. The API's
+`appendSyncLog`/`getSyncLog` take `log: 'withings'` to select
+`WithingsSyncLog`; without it they are exactly as before, `SyncLog` only. An API
+deployed before #200 ignores `log`, so before appending the run reads the newest
+row of both logs: if they are the same row, it writes nothing and fails with
+`ApiIgnoresLogError`.
+
+**The Actions log is public.** The workflow sets `SYNC_LOG=summary`: the log
+carries the `run_id`, window dates, counts, `status` and error class names. No
+`grpid`, measurement, device model or Withings response text; those are in the
+run's `WithingsSyncLog` row. Run `node withings-run.mjs` locally, without
+`SYNC_LOG`, for the full log.
+
+**The dead-man's switch** is `withings-sync-watchdog.yml`, on `53 */3 * * *`
+in its own concurrency group. It runs `node deadman.mjs --log withings`, and
+fails when the newest `WithingsSyncLog` row, of any status, is more than
+**14 hours** old, or the tab is empty or unreadable:
+- The runs are 6 h apart, so one dropped run leaves 12 h, plus an hour of
+  scheduler delay makes 13. That never alarms.
+- A stopped job is reported within 14 + 3 h.
+- It reads only `WithingsSyncLog`, and `node deadman.mjs` with no flag reads
+  only `SyncLog`, so neither sync can hide the other stopping.
+- `--now` and `--threshold-hours` prove it trips, as for COROS.
+
+As with COROS, it cannot see GitHub's scheduler stopping for the whole repo.
 
 ## Tests
 

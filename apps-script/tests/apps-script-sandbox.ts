@@ -352,6 +352,8 @@ export interface LoadedApi {
   syncLogRows?: CellValue[][];
   /** BodyMeasurements' backing array, or undefined when the tab does not exist (#198). */
   bodyRows?: CellValue[][];
+  /** WithingsSyncLog's backing array, or undefined when the tab does not exist (#200). */
+  withingsSyncLogRows?: CellValue[][];
   /** How many times the script lock was taken, and whether it is held now. */
   lock: { acquired: number; held: boolean };
   /** The script cache's live backing map (#144). */
@@ -375,6 +377,8 @@ export interface Fixtures {
   syncLog?: CellValue[][];
   /** As dailyHealth: omit to model the tab not existing yet (#198). */
   bodyMeasurements?: CellValue[][];
+  /** As dailyHealth: omit to model the tab not existing yet (#200). */
+  withingsSyncLog?: CellValue[][];
 }
 
 /**
@@ -463,6 +467,9 @@ export function loadApi(
   if (fixtures.bodyMeasurements) {
     sheets.BodyMeasurements = makeSheet(fixtures.bodyMeasurements, sandbox.BODY_MEASUREMENT_COLUMN_COUNT);
   }
+  if (fixtures.withingsSyncLog) {
+    sheets.WithingsSyncLog = makeSheet(fixtures.withingsSyncLog, sandbox.SYNC_LOG_COLUMN_COUNT);
+  }
 
   sandbox.getSheet = (name: string) => {
     const sheet = sheets[name];
@@ -478,7 +485,7 @@ export function loadApi(
   return {
     sandbox, rows: workoutRows, exerciseRows, templateRows, setRows, summaryRows,
     healthRows: fixtures.dailyHealth, syncLogRows: fixtures.syncLog,
-    bodyRows: fixtures.bodyMeasurements, lock, cache, fetches,
+    bodyRows: fixtures.bodyMeasurements, withingsSyncLogRows: fixtures.withingsSyncLog, lock, cache, fetches,
     driveCalls,
   };
 }

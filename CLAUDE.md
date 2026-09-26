@@ -87,8 +87,15 @@ Google Sheet "Groundwork" with these tabs:
   finished_at, window_start, window_end, n_seen, n_new, n_updated, n_enriched,
   n_fit_fetched, n_errors, status (`ok`/`partial`/`failed`), error_detail,
   notes (#155).
-  Appended only by the sync; the dead-man's switch
+  Appended only by the COROS sync; the dead-man's switch
   (`coros-sync-watchdog.yml`) fails when the newest row is over 16 h old.
+- **WithingsSyncLog** (A:N) — one row per Withings sync run (#200), `SyncLog`'s
+  layout exactly: `n_seen` is measure groups fetched, `n_new`/`n_updated` are
+  `BodyMeasurements` rows, `n_enriched`/`n_fit_fetched` are always `0`, `notes`
+  lists unattributed groups skipped. Appended only by `sync/withings-run.mjs`
+  through `appendSyncLog` with `log: 'withings'`; `withings-sync-watchdog.yml`
+  fails when the newest row is over 14 h old. A separate tab because `SyncLog`
+  has no source column: nothing that reads `SyncLog` may ever see a Withings run.
 
 `Created` on `Exercises`/`Workouts`/`Labels` is written but never read — a
 deliberate forensic trail, not dead weight to be removed.

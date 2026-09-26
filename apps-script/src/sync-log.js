@@ -2,9 +2,24 @@
 // Appended by the sync through appendSyncLog; read newest first by getSyncLog,
 // which the dead-man's switch (sync/deadman.mjs) and #157's Settings line use.
 //
+// WithingsSyncLog (#200) is the Withings sync's run log: the same A:N layout,
+// its own tab. Both actions take an optional `log`; only 'withings' selects
+// WithingsSyncLog, and absent means SyncLog, so every COROS caller is
+// untouched. They are separate tabs because SyncLog has no source column: a
+// Withings row there would make a stopped COROS sync look alive to its
+// watchdog and Settings line, and would count against COROS's FIT budget.
+//
 // SYNC_LOG_FIELDS in types.js is the only place the layout lives.
 
 var SYNC_LOG_SHEET = 'SyncLog';
+var WITHINGS_SYNC_LOG_SHEET = 'WithingsSyncLog';
+
+/** The tab `log` names: absent is SyncLog, 'withings' is WithingsSyncLog. */
+function syncLogSheetName(log) {
+  if (log === undefined || log === null || log === '') return SYNC_LOG_SHEET;
+  if (log === 'withings') return WITHINGS_SYNC_LOG_SHEET;
+  throw new Error('log must be "withings" or absent (SyncLog), got "' + log + '"');
+}
 
 var ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 
@@ -63,10 +78,12 @@ function normalizeSyncLogRow(row) {
  * Append one run's row. A run_id already in the tab is not appended again, so
  * a write that landed but whose answer was lost cannot double a run.
  * Every value goes through asText(): error_detail can begin with anything.
+ * `log` picks the tab (see syncLogSheetName).
  */
-function appendSyncLog(row) {
+function appendSyncLog(row, log) {
+  var name = syncLogSheetName(log);
   var entry = normalizeSyncLogRow(row);
-  var sheet = getSheet(SYNC_LOG_SHEET);
+  var sheet = getSheet(name);
   var lastRow = sheet.getLastRow();
   if (lastRow >= 2) {
     var ids = sheet.getRange(2, 1, lastRow - 1, 1).getDisplayValues();
@@ -88,12 +105,13 @@ function appendSyncLog(row) {
  * ISO instants in UTC sort as strings; anything else sorts by parsed time.
  */
 function getSyncLog(options) {
+  var name = syncLogSheetName(options && options.log);
   var raw = options && options.limit;
   var limit = raw === undefined || raw === null || raw === '' ? 10 : Number(raw);
   if (!(limit >= 1 && limit <= 100 && Math.floor(limit) === limit)) {
     throw new Error('limit must be a whole number from 1 to 100, got "' + raw + '"');
   }
-  var sheet = getSheet(SYNC_LOG_SHEET);
+  var sheet = getSheet(name);
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
   // A tab migrated before #155 has no column N; read what it has, and the

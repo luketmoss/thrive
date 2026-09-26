@@ -247,15 +247,26 @@ export function createThriveApi({
      * One run's SyncLog row (#156), keyed by field name. `error_detail` is cut
      * to fit the payload limit first, so a run with many failures still logs.
      *
+     * `log: 'withings'` sends it to WithingsSyncLog instead (#200). Absent, the
+     * request is exactly what it was before: COROS's SyncLog.
+     *
+     * @param {object} row
+     * @param {{ log?: 'withings' }} [opts]
      * @returns {Promise<{ status: 'appended' | 'exists', run_id: string }>}
      */
-    appendSyncLog(row) {
-      return write('appendSyncLog', { row: fitErrorDetail(row) });
+    appendSyncLog(row, { log } = {}) {
+      if (!log) return write('appendSyncLog', { row: fitErrorDetail(row) });
+      // The `log` field is sent too, so the cut leaves room for it.
+      const room = encodeURIComponent(`,"log":${JSON.stringify(log)}`).length;
+      return write('appendSyncLog', { row: fitErrorDetail(row, MAX_ENCODED_PAYLOAD - room), log });
     },
 
-    /** The newest `limit` SyncLog rows, newest first by `started_at`. A read, so retried. */
-    getSyncLog(limit = 1) {
-      return get('getSyncLog', { limit });
+    /**
+     * The newest `limit` SyncLog rows, newest first by `started_at`. A read, so
+     * retried. `log: 'withings'` reads WithingsSyncLog instead (#200).
+     */
+    getSyncLog(limit = 1, { log } = {}) {
+      return get('getSyncLog', log ? { limit, log } : { limit });
     },
   };
 }
