@@ -79,8 +79,8 @@ Google Sheet "Groundwork" with these tabs:
   weight_kg, fat_ratio_pct, systolic_mmhg, diastolic_mmhg, bp_count.
   Every total carries its coverage: `total_moving_s`/`total_elapsed_s` are blank
   when no activity recorded them, and S/T count those that did out of
-  `activity_count` (#181). S/T are appended, not beside D/E, because almanac
-  (luketmoss/keel) reads this tab by column: never move a column here.
+  `activity_count` (#181). S/T are appended, not beside D/E, because agents and the API read
+  this tab by column: never move a column here.
   `total_distance_m`/`total_ascent_m` are **outdoor only**, so they will not
   equal the sum of a day's activity distances on any day with an indoor
   session — correct, and surprising, so say so wherever it is displayed.
@@ -144,7 +144,7 @@ Comma-separated, multiple per exercise. Common tags: Push, Pull, Legs, Chest, Ba
 ## UX Design Decisions
 These decisions were made with the user and must be respected by all agents:
 
-- **Landing screen**: Activities (chronological workout list with floating "Start Workout" button)
+- **Landing screen**: the Day view (#228, decided 27 Sep 2026; #235 records the navigation). Until #235 ships, Activities
 - **Set logging**: Logbook-style — record sets when convenient, not real-time per-set
 - **Rest timers**: None in-app — rest times are planning data only (user uses watch)
 - **Supersets**: Flat list with section labels/colors (not grouped flow)

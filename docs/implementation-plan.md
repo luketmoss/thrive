@@ -1,5 +1,12 @@
 # Implementation Plan — Thrive & Hive
 
+> **27 September 2026: almanac is retired.** Its day view, trends and
+> journal move into Thrive; the Hive panel is dropped; the journal is a
+> free-text note in a Groundwork `Journal` tab, reversing §7. The plan is
+> `docs/health-aggregator-plan.md`. Sections below that describe almanac as
+> a separate app are history. The contracts they set — the Denver date key,
+> blank-is-not-zero, append-only `DailySummary` columns — still hold.
+
 **Revision 1** — 20 September 2026
 **Scope:** The work in **Thrive** and **Hive** only. The Journal app is
 specified in `almanac/docs/spec.md` (in `luketmoss/keel`) and is being built
