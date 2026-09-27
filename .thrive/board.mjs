@@ -43,10 +43,52 @@ function items() {
   return JSON.parse(raw).items;
 }
 
+const repoName = config.repo.slice(config.owner.length + 1);
+
+// One small lookup on the issue itself, instead of listing (and paging
+// through) every item on the project. An issue sits on only a handful of
+// projects, so `first: 20` comfortably covers it.
+const FIND_ITEM_QUERY = `query($owner: String!, $repo: String!, $number: Int!) {
+  repository(owner: $owner, name: $repo) {
+    issue(number: $number) {
+      number
+      title
+      url
+      projectItems(first: 20) {
+        nodes {
+          id
+          project { number }
+          fieldValueByName(name: "Status") {
+            ... on ProjectV2ItemFieldSingleSelectValue { name }
+          }
+        }
+      }
+    }
+  }
+}`;
+
 function findItem(issue) {
-  const item = items().find((i) => i.content?.number === Number(issue));
-  if (!item) die(`Issue #${issue} is not on project #${config.projectNumber}.`);
-  return item;
+  const raw = gh([
+    'api', 'graphql',
+    '-f', `query=${FIND_ITEM_QUERY}`,
+    '-f', `owner=${config.owner}`,
+    '-f', `repo=${repoName}`,
+    '-F', `number=${issue}`,
+  ]);
+  const issueData = JSON.parse(raw).data?.repository?.issue;
+  if (!issueData) die(`Issue #${issue} not found in ${config.repo}.`);
+  const node = issueData.projectItems.nodes.find((n) => n.project.number === config.projectNumber);
+  if (!node) {
+    die(
+      `Issue #${issue} is not on project #${config.projectNumber}. ` +
+      `Add it with: node .thrive/board.mjs add ${issue}`
+    );
+  }
+  return {
+    id: node.id,
+    status: node.fieldValueByName?.name ?? null,
+    content: { number: issueData.number, title: issueData.title, url: issueData.url },
+  };
 }
 
 function flag(argv, name) {
