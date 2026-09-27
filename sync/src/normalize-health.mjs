@@ -230,6 +230,13 @@ function parseTrainingLoad(text, tool) {
 }
 
 /**
+ * ` — Above normal` after the average (#258). COROS adds it, with `Normal
+ * Range` and `Baseline` lines, on days it has a baseline for. The status is
+ * discarded, so any wording passes; the number and unit before it stay strict.
+ */
+const HRV_STATUS = / — \S.*$/;
+
+/**
  * The official daily average from the "HRV Assessment" section. The raw time
  * series below it is ignored: COROS's own description says not to average it.
  */
@@ -250,7 +257,7 @@ function parseSleepHrv(text, tool) {
     const v = {};
     for (const line of lines) {
       const [[label, value]] = segments(line.trim());
-      if (label === 'HRV Avg' && value !== null) v.hrv = withUnit(tool, line, value, 'ms');
+      if (label === 'HRV Avg' && value !== null) v.hrv = withUnit(tool, line, value.replace(HRV_STATUS, ''), 'ms');
     }
     return v;
   });

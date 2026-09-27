@@ -134,7 +134,7 @@ D − 10 to D:
 | Field | From |
 |---|---|
 | `resting_hr` | `queryRestingHeartRate` (not `queryDailyHealthData`'s header, a window summary) |
-| `hrv` | `querySleepHrv`'s official daily average, never the raw series |
+| `hrv` | `querySleepHrv`'s official daily average, never the raw series. On days COROS has a baseline for, the average reads `52 ms — Above normal`: the status (any wording) is discarded, as are the `Normal Range` and `Baseline` lines (#258) |
 | `steps`, `calories`, `sleep_*_s` | `queryDailyHealthData`. `sleep_total_s` includes awake time |
 | `sleep_score`, `bed_time`, `wake_time` | `querySleepOverview`, main sleep window |
 | `training_load` | `queryTrainingLoadAssessment`'s short-term load |
