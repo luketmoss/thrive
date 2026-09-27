@@ -55,7 +55,7 @@ test('groups are returned as Withings sent them, key order included', async () =
 
 test('a transient non-zero status is retried, three attempts in all, and a recovered page carries on', async () => {
   const { fetchImpl, calls } = scriptedFetch([
-    withingsStatus(2555), { status: 503, body: 'down' }, getmeasPage([measureGroup(1, 1790000000)]),
+    withingsStatus(2556), { status: 503, body: 'down' }, getmeasPage([measureGroup(1, 1790000000)]),
   ]);
   const res = await fetchAll(fetchImpl);
   assert.equal(res.error, null);
@@ -66,7 +66,7 @@ test('a transient non-zero status is retried, three attempts in all, and a recov
 test('a page that still fails ends the fetch as WithingsUnavailableError, keeping earlier pages', async () => {
   const { fetchImpl, calls } = scriptedFetch([
     getmeasPage([measureGroup(1, 1790000000)], { more: 1, offset: 1 }),
-    withingsStatus(2555), withingsStatus(2555), withingsStatus(2555),
+    withingsStatus(2556), withingsStatus(2556), withingsStatus(2556),
   ]);
   const res = await fetchAll(fetchImpl);
   assert.equal(calls.length, 4);

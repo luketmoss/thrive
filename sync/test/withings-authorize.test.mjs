@@ -104,7 +104,7 @@ test('an expired code is reported, the URL printed again, and a new paste accept
     withingsStatus(503, 'Invalid Params: invalid code'), withingsTokens(1), measures(0),
   ]);
   await h.promise;
-  assert.ok(h.out.some((l) => /expired or already used/.test(l)));
+  assert.ok(h.out.some((l) => /expired or already used.*Status 503\./.test(l)));
   assert.equal(h.opened.length, 2);
   assert.equal(h.out.filter((l) => l.includes(h.opened[0])).length, 2);
   assert.equal(h.calls[1].form.code, 'code-new-xxxxxxxx');

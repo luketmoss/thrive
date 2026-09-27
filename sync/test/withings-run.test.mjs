@@ -112,7 +112,7 @@ test('a second run over the same groups writes nothing; an edited one is rewritt
 test('a page that fails after retrying keeps earlier pages, archives nothing from the error, and exits 1 naming the class', async () => {
   const h = harness([
     getmeasPage([measureGroup(1, D1)], { more: 1, offset: 1 }),
-    withingsStatus(2555, 'secret-ish error text'), withingsStatus(2555), withingsStatus(2555),
+    withingsStatus(2556, 'secret-ish error text'), withingsStatus(2556), withingsStatus(2556),
   ]);
   const res = await h.run();
   assert.equal(res.exitCode, 1);
@@ -227,7 +227,7 @@ test('AC2: a backfill re-dispatched after a partial run finishes what the first 
   // First dispatch: a page fails after retrying, so only the first page lands.
   const first = scriptedFetch([
     getmeasPage(groups.slice(0, 3), { more: 1, offset: 3 }),
-    withingsStatus(2555), withingsStatus(2555), withingsStatus(2555),
+    withingsStatus(2556), withingsStatus(2556), withingsStatus(2556),
   ]);
   const res1 = await withingsRun({
     env, now: () => NOW, fetchImpl: first.fetchImpl, retry, print: () => {}, printError: () => {},

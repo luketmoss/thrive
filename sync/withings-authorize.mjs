@@ -85,7 +85,7 @@ export async function authorizeWithings({
       tokens = await exchangeWithingsCode(fetchImpl, { clientId, clientSecret, code }, now());
     } catch (err) {
       if (!isWithingsInvalidGrant(err)) throw classifyWithingsError(err);
-      print('Withings refused that code as expired or already used (a code lasts 30 seconds).');
+      print(`Withings refused that code as expired or already used (a code lasts 30 seconds). Status ${err.status}.`);
       continue;
     }
 

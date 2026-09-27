@@ -441,7 +441,8 @@ response** (`code=…&state=…`) with a **Copy** button. Paste it into the
 terminal and press Enter **within 30 seconds**: that is how long a Withings
 code lasts. The full callback URL or a bare code work too. A response whose
 `state` is not this sign-in's is refused. A code Withings refuses as expired or
-used is asked for again, up to 3 times. On success the script writes the token
+used is asked for again, up to 3 times, with the status number it got. On
+success the script writes the token
 file (a re-run updates the same one), then makes one authenticated
 `user.metrics` call and prints only how many measure groups it returned.
 
@@ -465,6 +466,22 @@ classifies on `status`, through one table, `WITHINGS_STATUS` in
 | `params` | Invalid params | At the token endpoint, a refused code or refresh token (as `auth`). Elsewhere `WithingsRequestError` |
 | `unavailable` | An error occurred, Timeout, Too many requests, An unknown error occurred | `WithingsUnavailableError`, retried with backoff first. So are an HTTP 5xx or 429 and a network failure |
 | `request` | Bad state, Wrong action or wrong webservice, and any status not in the list | `WithingsRequestError`, not retried |
+
+Checked against the published list on 27 Sep 2026 (#212): two codes moved from
+the #196 guess — 2553 and 2555, both published as "Unauthorized", moved from
+`request`/`unavailable` into `auth`. 2554 ("Not implemented") stays `request`.
+See the comment above `WITHINGS_STATUS` in `src/withings-oauth.mjs` for the
+quoted wording and where the table itself came from (the rendered API
+reference page loads it client-side, so the check reads the OpenAPI spec
+behind it instead).
+
+**A spent or already-used authorization code's status number is pending an
+owner check**: run `node sync/withings-authorize.mjs` and paste a code that
+was already used (see "2. Authorize" above); the script's re-prompt now names
+the status it got. Record the number here once observed. (The #196 guess,
+503/`Invalid Params`, is what the token endpoint currently classifies as a
+dead grant either way, so nothing depends on this beyond documentation
+accuracy.)
 
 No Withings token, client secret or authorization code reaches a log, stdout or
 an error: each is registered with `redact()` when first seen, and `redact()`
@@ -607,8 +624,10 @@ row is never written.
 ### Readings deleted in the Withings app (#215)
 
 **`getmeas` silently omits a deleted group** once the deletion has propagated
-(minutes after the delete; found live in #212). There is no flag and no
-tombstone, so absence from a **complete** fetch is the only signal. After the
+(minutes, not seconds, after the delete; observed live against the account on
+26 Sep 2026, #212). There is no flag and no tombstone, so absence from a
+**complete** fetch is the only signal — which is what the rest of this section
+reconciles (#215). After the
 upsert, the run calls the API's `reconcileBodyMeasurements` once with the
 window's local dates (`from`/`to`), every `grpid` the fetch returned
 (`present_grpids`, unattributed and unnormalizable groups included, since

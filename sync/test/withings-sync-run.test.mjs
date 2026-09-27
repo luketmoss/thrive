@@ -180,7 +180,7 @@ test('AC2: no token file aborts before fetching, and the row is still written', 
 test('AC2: a page that fails mid-fetch fails the run; the groups before it still land', async () => {
   const r = await run([
     getmeasPage([measureGroup(1, D1, scale)], { more: 1, offset: 1 }),
-    withingsStatus(2555), withingsStatus(2555), withingsStatus(2555),
+    withingsStatus(2556), withingsStatus(2556), withingsStatus(2556),
   ]);
   assert.equal(r.exitCode, 1);
   assert.equal(r.row.status, 'failed');
@@ -290,9 +290,9 @@ test('AC4: summary mode prints counts, dates, status, run_id and class names onl
       measureGroup(777003, D1, scale, { attrib: 1, model: 'Body+ Secret Model' }),
       measureGroup(777004, D2, bp, { model: 'BPM Secret Cuff' }),
     ], { more: 1, offset: 4 }),
-    withingsStatus(2555, 'withings says something private'),
-    withingsStatus(2555, 'withings says something private'),
-    withingsStatus(2555, 'withings says something private'),
+    withingsStatus(2556, 'withings says something private'),
+    withingsStatus(2556, 'withings says something private'),
+    withingsStatus(2556, 'withings says something private'),
   ], { drive, mode: 'summary' });
 
   assert.equal(r.exitCode, 1);
@@ -374,7 +374,7 @@ test('AC2: a backfill that stopped partway is still safe to re-dispatch: no dupl
 
   const partial = await run([
     getmeasPage(groups.slice(0, 3), { more: 1, offset: 3 }),
-    withingsStatus(2555), withingsStatus(2555), withingsStatus(2555),
+    withingsStatus(2556), withingsStatus(2556), withingsStatus(2556),
   ], { env: { ...DISPATCH_ENV }, api, drive });
   assert.equal(partial.exitCode, 1);
   assert.equal(partial.row.status, 'failed');
