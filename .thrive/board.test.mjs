@@ -101,6 +101,16 @@ test('add: an already-added issue is reported, not re-added (AC1)', () => {
   assert.equal(log[0][1], 'item-add');
 });
 
+test('add --status leaves an issue already on the board in its column', () => {
+  const { stdout, log } = run(['add', '216', '--status', 'To Do'], {
+    GH_ITEM_ADD_JSON: JSON.stringify({ id: 'PVTI_existing', status: 'PM Refining' }),
+  });
+  assert.equal(stdout.trim(), '#216: already on the board (PM Refining), left there — use set to move it');
+  // item-add only: no status mutation, so a late add cannot undo a move.
+  assert.equal(log.length, 1);
+  assert.equal(log[0][1], 'item-add');
+});
+
 test('add --status sets the column on the item-add id, with no item-list call (AC2)', () => {
   const { stdout, log } = run(['add', '216', '--status', 'To Do'], {
     GH_ITEM_ADD_JSON: JSON.stringify({ id: 'PVTI_new' }),

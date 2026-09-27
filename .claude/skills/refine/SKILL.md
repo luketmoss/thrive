@@ -27,6 +27,19 @@ do not ask the user whether to continue between stages, and do not report
 progress and wait. The only things that end this run early are the halt
 conditions below.
 
+## One issue, or several
+
+**One issue runs inline**, in this session, on whatever model the session is
+on. Starting a sub-agent for a single issue costs more than it saves: it starts
+cold and re-reads everything you already have.
+
+**Several issues are `/orchestrator`'s job**: "refine all children of #228", or
+a list of issue numbers. It orders them by dependency and runs each through
+this skill in its own sub-agent, on a model it picks per issue. Do not loop over
+a batch here by hand.
+
+The user's word overrides either default: "all on Opus" or "no sub-agents" wins.
+
 ## Board
 
 `/pm` moves the issue to PM Refining on entry and to Refined on exit; `/ux`
