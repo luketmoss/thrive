@@ -185,6 +185,39 @@ test('an HRV average in an unknown unit fails that date', () => {
   assertOnlyDateFails(b, '2026-09-23', 'querySleepHrv', 'HRV Avg: 0.041 s');
 });
 
+// --- #258: HRV Avg with COROS's status -------------------------------------
+
+// Verbatim shape from the 2026-09-27 bundle: once COROS has a baseline, each
+// day's average carries a status, and a range (and a baseline) follow it.
+const WITH_STATUS = (status) =>
+  `HRV Avg: 41 ms — ${status}\n  Normal Range: 40 - 50 ms\n  Baseline: 45 ms`;
+
+test('an HRV average with a status after it parses to the number', () => {
+  for (const status of ['Above normal', 'Normal', 'Below normal', 'Some wording not yet seen']) {
+    const { rows, failures } = parse(replace('querySleepHrv', 'HRV Avg: 41 ms', WITH_STATUS(status)));
+    assert.deepEqual(failures, [], status);
+    assert.equal(byDate(rows)['2026-09-23'].hrv, '41', status);
+  }
+});
+
+test('an HRV status leaves every other value on its date as it was', () => {
+  const plain = byDate(parse().rows)['2026-09-23'];
+  const withStatus = byDate(parse(replace('querySleepHrv', 'HRV Avg: 41 ms', WITH_STATUS('Normal'))).rows)['2026-09-23'];
+  assert.deepEqual(withStatus, plain);
+});
+
+for (const bad of ['HRV Avg: 0.041 s — Normal', 'HRV Avg: — Normal', 'HRV Avg: 41 ms —', 'HRV Avg: 41 ms - Normal']) {
+  test(`an HRV average still fails its date when the value is unrecognized: "${bad}"`, () => {
+    const b = replace('querySleepHrv', 'HRV Avg: 41 ms', bad);
+    assertOnlyDateFails(b, '2026-09-23', 'querySleepHrv', bad);
+  });
+}
+
+test('a status is accepted after HRV Avg only, not after any other value', () => {
+  const b = replace('queryRestingHeartRate', '2026-09-23: 57 bpm', '2026-09-23: 57 bpm — Normal');
+  assertOnlyDateFails(b, '2026-09-23', 'queryRestingHeartRate', '57 bpm — Normal');
+});
+
 test('a sleep window in a new shape fails its wake-up day', () => {
   const b = replace('querySleepOverview', 'Main Sleep Window: 2026-09-22 22:51 - 2026-09-23 06:06',
     'Main Sleep Window: 10:51 PM to 6:06 AM');
