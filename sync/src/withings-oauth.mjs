@@ -33,10 +33,22 @@ import { redact, registerSecret } from './redact.mjs';
  *
  * A status not listed here is treated as `request`: it is reported with its
  * number, never guessed to be an outage or a dead grant.
+ *
+ * Checked against the published list (`response_status` in
+ * https://developer.withings.com/openapi.yaml, the spec behind
+ * https://developer.withings.com/api-reference/#section/Response-status,
+ * since the rendered page loads that table client-side) on 27 Sep 2026.
+ * That pass moved two codes the #196 guess (from `python_withings_api`'s
+ * constants) had wrong:
+ * - **2553** published as "Unauthorized" — was `request`, now `auth`.
+ * - **2555** published as "Unauthorized" — was `unavailable`, now `auth`.
+ * **2554** published as "Not implemented" stays `request`: not one of the
+ * four family names in the class doc above, but the same kind of dead end —
+ * the service doesn't exist, so neither retrying nor re-authorizing helps.
  */
 export const WITHINGS_STATUS = Object.freeze({
   ok: [0],
-  auth: [100, 101, 102, 200, 214, 277, 401],
+  auth: [100, 101, 102, 200, 214, 277, 401, 2553, 2555],
   params: [
     201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 216, 217, 218, 220, 221,
     223, 225, 227, 228, 229, 230, 234, 235, 236, 238, 240, 241, 242, 243, 244, 245, 246, 247,
@@ -51,11 +63,11 @@ export const WITHINGS_STATUS = Object.freeze({
     274, 278, 279, 280, 281, 282, 289, 291, 292, 296, 298, 305, 306, 308, 309, 310, 311, 312,
     313, 314, 315, 316, 317, 318, 319, 320, 322, 370, 371, 372, 373, 374, 375, 383, 391, 402,
     516, 517, 518, 519, 520, 521, 522, 525, 526, 527, 528, 529, 530, 531, 533, 601, 602, 700,
-    1051, 1052, 1053, 1054, 2551, 2552, 2555, 2556, 2557, 2558, 2559, 3000, 3001, 3002, 3003,
+    1051, 1052, 1053, 1054, 2551, 2552, 2556, 2557, 2558, 2559, 3000, 3001, 3002, 3003,
     3004, 3005, 3006, 3007, 3008, 3009, 3010, 3011, 3012, 3013, 3014, 3015, 3016, 3020, 3021,
     3022, 3023, 3024, 5000, 5001, 5005, 5006, 6000, 6010, 6011, 9000, 10000,
   ],
-  request: [524, 2553, 2554],
+  request: [524, 2554],
 });
 
 const CATEGORY_BY_STATUS = new Map(

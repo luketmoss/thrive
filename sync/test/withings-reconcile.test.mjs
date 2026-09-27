@@ -133,7 +133,7 @@ test('AC2: a fetch whose paging failed partway never calls the action, and says 
   const api = fakeApi(threeRows());
   const r = await run([
     getmeasPage([measureGroup(101, D101, scale)], { more: 1, offset: 1 }),
-    withingsStatus(2555), withingsStatus(2555), withingsStatus(2555),
+    withingsStatus(2556), withingsStatus(2556), withingsStatus(2556),
   ], { api });
   assert.equal(api.reconcileCalls.length, 0);
   assert.equal(api.body.size, 3);
