@@ -36,7 +36,7 @@ if (args[0] === 'project' && args[1] === 'item-add') {
   process.exit(0);
 }
 if (args[0] === 'api' && args[1] === 'graphql') {
-  process.stdout.write('{}');
+  process.stdout.write(process.env.GH_GRAPHQL_JSON || '{}');
   process.exit(0);
 }
 if (args[0] === 'project' && args[1] === 'item-list') {
@@ -205,4 +205,158 @@ if (method === 'POST' && url.endsWith('/dispatches')) {
   assert.equal(stdout.trim(), '#216: added (To Do)');
   const state = JSON.parse(readFileSync(stateFile, 'utf8'));
   assert.deepEqual(state.args, ['add', '216', '--status', 'To Do']);
+});
+
+// #224: `show` and `set` look up an issue's project item with one small
+// GraphQL query on the issue itself, instead of `gh project item-list`.
+
+function graphqlResponse({ number = 224, title = 'Test issue', url = 'https://github.com/luketmoss/thrive/issues/224', nodes }) {
+  return JSON.stringify({
+    data: { repository: { issue: { number, title, url, projectItems: { nodes } } } },
+  });
+}
+
+function notFoundResponse() {
+  return JSON.stringify({ data: { repository: { issue: null } } });
+}
+
+test('show: finds the item with a single graphql lookup, not a listing (AC1)', () => {
+  const { stdout, log } = run(['show', '224'], {
+    GH_GRAPHQL_JSON: graphqlResponse({
+      nodes: [{ id: 'PVTI_224', project: { number: 4 }, fieldValueByName: { name: 'Testing' } }],
+    }),
+  });
+  assert.equal(stdout.trim(), [
+    '#224  Test issue',
+    'Status: Testing',
+    'https://github.com/luketmoss/thrive/issues/224',
+  ].join('\n'));
+  assert.equal(log.length, 1);
+  assert.equal(log[0][0], 'api');
+  assert.equal(log[0][1], 'graphql');
+  assert.equal(log[0][2], '-f');
+  assert.match(log[0][3], /^query=/);
+  assert.match(log[0][3], /issue\(number: \$number\)/);
+  assert.match(log[0][3], /project \{ number \}/);
+  assert.deepEqual(log[0].slice(4), ['-f', 'owner=luketmoss', '-f', 'repo=thrive', '-F', 'number=224']);
+  assert.ok(!log.some((call) => call[1] === 'item-list'));
+});
+
+test('show: finds an item regardless of its position among the issue\'s project items (AC2)', () => {
+  // Build 25 unrelated project-item nodes (more than fit in an item-list page
+  // of 200 by proportion) plus the real one at the end, proving the result
+  // does not depend on position.
+  const decoys = Array.from({ length: 25 }, (_, i) => ({
+    id: `PVTI_decoy_${i}`, project: { number: 99 }, fieldValueByName: null,
+  }));
+  const { stdout, log } = run(['show', '224'], {
+    GH_GRAPHQL_JSON: graphqlResponse({
+      nodes: [...decoys, { id: 'PVTI_224', project: { number: 4 }, fieldValueByName: { name: 'Refined' } }],
+    }),
+  });
+  assert.match(stdout, /Status: Refined/);
+  assert.equal(log.length, 1);
+});
+
+test('show: an item with no status prints (none) (AC1)', () => {
+  const { stdout } = run(['show', '224'], {
+    GH_GRAPHQL_JSON: graphqlResponse({
+      nodes: [{ id: 'PVTI_224', project: { number: 4 }, fieldValueByName: null }],
+    }),
+  });
+  assert.match(stdout, /Status: \(none\)/);
+});
+
+test('show: issue exists but is not on project #4 (AC3)', () => {
+  const { stderr, status } = run(['show', '224'], {
+    GH_GRAPHQL_JSON: graphqlResponse({
+      nodes: [{ id: 'PVTI_other', project: { number: 7 }, fieldValueByName: { name: 'Done' } }],
+    }),
+  });
+  assert.equal(status, 1);
+  assert.equal(stderr.trim(), 'Issue #224 is not on project #4. Add it with: node .thrive/board.mjs add 224');
+});
+
+test('show: issue exists but is on no project at all (AC3)', () => {
+  const { stderr, status } = run(['show', '224'], {
+    GH_GRAPHQL_JSON: graphqlResponse({ nodes: [] }),
+  });
+  assert.equal(status, 1);
+  assert.equal(stderr.trim(), 'Issue #224 is not on project #4. Add it with: node .thrive/board.mjs add 224');
+});
+
+test('show: no such issue (AC3)', () => {
+  const { stderr, status } = run(['show', '999999'], {
+    GH_GRAPHQL_JSON: notFoundResponse(),
+  });
+  assert.equal(status, 1);
+  assert.equal(stderr.trim(), 'Issue #999999 not found in luketmoss/thrive.');
+});
+
+test('set: moves the status with 2 gh calls — the lookup, then the mutation (AC1)', () => {
+  const { stdout, log } = run(['set', '224', '--status', 'Testing'], {
+    GH_GRAPHQL_JSON: graphqlResponse({
+      nodes: [{ id: 'PVTI_224', project: { number: 4 }, fieldValueByName: { name: 'In Development' } }],
+    }),
+  });
+  assert.equal(stdout.trim(), '#224: In Development -> Testing');
+  assert.equal(log.length, 2);
+  assert.equal(log[0][1], 'graphql');
+  assert.equal(log[1][1], 'graphql');
+  assert.match(log[1][3], /itemId: "PVTI_224"/);
+  assert.match(log[1][3], /singleSelectOptionId: "1bd1ca27"/); // "Testing" from board.json
+  assert.ok(!log.some((call) => call[1] === 'item-list'));
+});
+
+test('set: an item already in the target status makes only 1 gh call (AC1)', () => {
+  const { stdout, log } = run(['set', '224', '--status', 'Testing'], {
+    GH_GRAPHQL_JSON: graphqlResponse({
+      nodes: [{ id: 'PVTI_224', project: { number: 4 }, fieldValueByName: { name: 'Testing' } }],
+    }),
+  });
+  assert.equal(stdout.trim(), '#224 already in Testing.');
+  assert.equal(log.length, 1);
+});
+
+test('set: issue not on project #4 (AC3)', () => {
+  const { stderr, status } = run(['set', '224', '--status', 'Testing'], {
+    GH_GRAPHQL_JSON: graphqlResponse({ nodes: [] }),
+  });
+  assert.equal(status, 1);
+  assert.equal(stderr.trim(), 'Issue #224 is not on project #4. Add it with: node .thrive/board.mjs add 224');
+});
+
+test('set: no such issue (AC3)', () => {
+  const { stderr, status } = run(['set', '999999', '--status', 'Testing'], {
+    GH_GRAPHQL_JSON: notFoundResponse(),
+  });
+  assert.equal(status, 1);
+  assert.equal(stderr.trim(), 'Issue #999999 not found in luketmoss/thrive.');
+});
+
+test('list: still uses item-list, unaffected by the findItem rewrite (AC4)', () => {
+  const binDir = mkdtempSync(join(tmpdir(), 'board-test-bin-'));
+  const path = join(binDir, 'gh');
+  writeFileSync(path, `#!/usr/bin/env node
+const fs = require('fs');
+const args = process.argv.slice(2);
+if (process.env.GH_LOG) fs.appendFileSync(process.env.GH_LOG, JSON.stringify(args) + '\\n');
+if (args[0] === 'project' && args[1] === 'item-list') {
+  process.stdout.write(JSON.stringify({ items: [{ id: 'PVTI_224', status: 'Refined', content: { number: 224, title: 'Test issue', url: 'https://x' } }] }));
+  process.exit(0);
+}
+if (args[0] === '--version') process.exit(0);
+process.stderr.write('unexpected gh invocation: ' + JSON.stringify(args) + '\\n');
+process.exit(1);
+`);
+  chmodSync(path, 0o755);
+  const logFile = join(binDir, 'gh.log');
+  const stdout = execFileSync(process.execPath, [boardScript, 'list', '--status', 'Refined'], {
+    encoding: 'utf8',
+    env: { ...process.env, PATH: `${binDir}:${process.env.PATH}`, GH_LOG: logFile },
+  });
+  assert.match(stdout, /#224\s+\[Refined\]\s+Test issue/);
+  const log = readLog(logFile);
+  assert.equal(log.length, 1);
+  assert.equal(log[0][1], 'item-list');
 });
