@@ -2,7 +2,7 @@
 // Thrive board helper. All project board writes go through this script.
 //
 //   node .thrive/board.mjs show <issue>
-//   node .thrive/board.mjs add <issue> [--status "<column>"]
+//   node .thrive/board.mjs add <issue> [--status "<column>"]   (status only for a new item)
 //   node .thrive/board.mjs set <issue> --status "In Development"
 //   node .thrive/board.mjs list --status Refined
 //   node .thrive/board.mjs sync          # refresh status option IDs from the API
@@ -244,13 +244,18 @@ switch (command) {
     // new one has none yet. No item-list call either way.
     const existed = item.status != null;
 
-    if (status) setItemStatus(item.id, status);
-
+    // --status only places a *new* item. An issue already on the board keeps
+    // its column: a late `add --status "To Do"` must never undo a move a
+    // refinement agent made in the meantime. Moving a card is `set`'s job.
     if (existed) {
-      console.log(status ? `#${issue}: already on the board (${status})` : `#${issue}: already on the board`);
-    } else {
-      console.log(status ? `#${issue}: added (${status})` : `#${issue}: added to the board`);
+      console.log(status && status !== item.status
+        ? `#${issue}: already on the board (${item.status}), left there — use set to move it`
+        : `#${issue}: already on the board`);
+      break;
     }
+
+    if (status) setItemStatus(item.id, status);
+    console.log(status ? `#${issue}: added (${status})` : `#${issue}: added to the board`);
     break;
   }
 

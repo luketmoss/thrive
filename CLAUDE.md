@@ -79,8 +79,8 @@ Google Sheet "Groundwork" with these tabs:
   weight_kg, fat_ratio_pct, systolic_mmhg, diastolic_mmhg, bp_count.
   Every total carries its coverage: `total_moving_s`/`total_elapsed_s` are blank
   when no activity recorded them, and S/T count those that did out of
-  `activity_count` (#181). S/T are appended, not beside D/E, because almanac
-  (luketmoss/keel) reads this tab by column: never move a column here.
+  `activity_count` (#181). S/T are appended, not beside D/E, because agents and the API read
+  this tab by column: never move a column here.
   `total_distance_m`/`total_ascent_m` are **outdoor only**, so they will not
   equal the sum of a day's activity distances on any day with an indoor
   session — correct, and surprising, so say so wherever it is displayed.
@@ -144,7 +144,7 @@ Comma-separated, multiple per exercise. Common tags: Push, Pull, Legs, Chest, Ba
 ## UX Design Decisions
 These decisions were made with the user and must be respected by all agents:
 
-- **Landing screen**: Activities (chronological workout list with floating "Start Workout" button)
+- **Landing screen**: the Day view (#228, decided 27 Sep 2026; #235 records the navigation). Until #235 ships, Activities remains the landing screen
 - **Set logging**: Logbook-style — record sets when convenient, not real-time per-set
 - **Rest timers**: None in-app — rest times are planning data only (user uses watch)
 - **Supersets**: Flat list with section labels/colors (not grouped flow)
@@ -171,8 +171,9 @@ goes through `board.mjs`.
 GraphQL against the project and never call `gh project field-list` or
 `gh project item-add` directly. IDs live in `.thrive/board.json`; `board.mjs
 sync` refreshes them if a column is added or renamed. `board.mjs add <issue>
-[--status "<column>"]` puts an issue on the project (idempotently) and
-optionally sets its column in the same run — this is how a cloud session,
+[--status "<column>"]` puts an issue on the project (idempotently) and, for an
+issue not already there, sets its column in the same run; an issue already on
+the board keeps its column (`set` moves it) — this is how a cloud session,
 which can create issues but cannot otherwise reach the project, gets a new
 issue onto the board.
 
@@ -215,8 +216,16 @@ design gate, which is the only review of the spec.
 **Do not chain the stages by hand.** If the request is a run, invoke the run
 skill; it owns the sequence, the halt conditions, and the report.
 
-Outside the runs: `/devops` for CI/CD and deployment problems, `/ux` on its own
-for a standalone audit.
+Outside the runs: `/orchestrator` to take several issues (a parent's children,
+or a list) through the runs in a batch, `/devops` for CI/CD and deployment
+problems, `/ux` on its own for a standalone audit.
+
+**Sub-agents and models are the skills' call.** One issue runs inline, on the
+session's model. A batch goes to `/orchestrator`, which refines in dependency
+waves with a sub-agent per issue on a model it picks (Opus for issues that set
+contracts or carry design, Sonnet for those that fill them) and checks the
+siblings for conflicts before the design gate. `/finish` runs its `/review` step
+in a fresh Opus sub-agent. The user's word overrides any of it.
 
 ## Halting
 

@@ -1,5 +1,12 @@
 # Journal — Product Specification (superseded)
 
+> **27 September 2026: almanac is retired.** Its day view, trends and
+> journal move into Thrive; the Hive panel is dropped; the journal is a
+> free-text note in a Groundwork `Journal` tab, reversing §7. The plan is
+> `docs/health-aggregator-plan.md`. Sections below that describe almanac as
+> a separate app are history. The contracts they set — the Denver date key,
+> blank-is-not-zero, append-only `DailySummary` columns — still hold.
+
 **This document is superseded. Do not work from it.**
 
 The Journal is named **almanac** and is built in the **keel** workspace. Its
