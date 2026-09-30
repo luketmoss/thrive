@@ -8,11 +8,6 @@ import type { DayState } from '../../day/dates';
 afterEach(cleanup);
 
 const COPY: Record<string, Partial<Record<DayState, string>>> = {
-  training: {
-    past: 'What you did this day will show here.',
-    today: "What's planned today, and what you've done, will show here.",
-    future: "What's planned for this day will show here.",
-  },
   health: {
     past: "That day's sleep, heart rate and steps will show here.",
     today: "Last night's sleep, heart rate and steps so far will show here.",
@@ -39,6 +34,7 @@ describe('slots', () => {
 
   for (const state of ['past', 'today', 'future'] as DayState[]) {
     for (const name of slotsFor(state)) {
+      if (name === 'training') continue; // #238: see training-panel.test.tsx
       it(`${name} placeholder on a ${state} day shows its title and line`, () => {
         const Slot = SLOTS[name];
         const { container } = render(<Slot date="2026-09-30" state={state} today="2026-09-30" />);
