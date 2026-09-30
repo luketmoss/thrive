@@ -37,6 +37,7 @@ export function TrendTable({ group, from, to, range, avgDays, today }: Props) {
     if (typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(check);
     ro.observe(node);
+    if (node.firstElementChild) ro.observe(node.firstElementChild);
     return () => ro.disconnect();
   });
 

@@ -3411,7 +3411,11 @@ input, select, textarea {
   font-weight: 500;
 }
 
+/* Headers may wrap ("Resting HR / (bpm)") so one metric fits a 320px column
+   without the sideways scroll that would stop the header sticking. */
 .trend-table thead th {
+  white-space: normal;
+  vertical-align: bottom;
   position: sticky;
   top: 0;
   z-index: 1;

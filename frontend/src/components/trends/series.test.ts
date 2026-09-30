@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   addDays, averageDays, dateTicks, datesBetween, earliestDate, metricSeries, niceTicks,
-  rangeBounds, rolling, rowDate, segments, windowText, yDomain,
+  rangeBounds, rolling, rowDate, segments, tickLabel, windowText, yDomain,
 } from './series';
 import type { TrendMetric, TrendPoint } from './metrics';
 
@@ -98,6 +98,19 @@ describe('niceTicks and yDomain', () => {
     for (const v of t) expect(Number.isInteger(v * 2) || Number.isInteger(v)).toBe(true);
   });
 
+  it('uses 1, 2 or 5 steps, and labels them to the step precision', () => {
+    for (const [lo, hi] of [[47.3, 58.1], [0.2, 1.7], [4000, 11000]]) {
+      const t = niceTicks(lo, hi);
+      const step = t[1] - t[0];
+      const mant = step / 10 ** Math.floor(Math.log10(step));
+      expect([1, 2, 5]).toContain(Math.round(mant * 1000) / 1000);
+    }
+    expect(tickLabel(52.5, [50, 52.5])).toBe('53'); // guarded: 2.5 steps are never produced
+    expect(tickLabel(0.5, [0, 0.5, 1])).toBe('0.5');
+    expect(tickLabel(1, [0, 0.5, 1])).toBe('1.0');
+    expect(tickLabel(10000, [0, 5000, 10000])).toBe('10,000');
+  });
+
   it('copes with a flat series', () => {
     expect(niceTicks(50, 50).length).toBeGreaterThanOrEqual(2);
   });
@@ -158,6 +171,11 @@ describe('dateTicks', () => {
     const t = noOverlap(...Object.values(rangeBounds(r, TODAY, null)) as [string, string]);
     expect(t.length).toBeGreaterThanOrEqual(2);
     expect(t.every((x) => /^([A-Z][a-z]{2}|\d{4})$/.test(x.label))).toBe(true);
+  });
+
+  it('keeps January, labelled with its year, when months are thinned', () => {
+    const t = dateTicks(...Object.values(rangeBounds('1Y', TODAY, null)) as [string, string], WIDTH_375);
+    expect(t.map((x) => x.label)).toContain('2026');
   });
 
   it('uses years for a long All, without overlap', () => {

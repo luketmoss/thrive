@@ -131,11 +131,11 @@ export function segments<T extends { date: string }>(points: readonly T[]): T[][
 
 // ── Axes ─────────────────────────────────────────────────────────────
 
-/** A 1, 2, 2.5 or 5 × 10^k step giving about `count` intervals over min..max. */
+/** A 1, 2 or 5 × 10^k step giving about `count` intervals over min..max. */
 function niceStep(span: number, count: number): number {
   const raw = span / Math.max(1, count);
   const mag = 10 ** Math.floor(Math.log10(raw));
-  for (const m of [1, 2, 2.5, 5, 10]) if (m * mag >= raw) return m * mag;
+  for (const m of [1, 2, 5, 10]) if (m * mag >= raw) return m * mag;
   return 10 * mag;
 }
 
@@ -179,6 +179,16 @@ export function yDomain(
   else if (Math.min(...all) >= 0 && min < 0) min = 0;
   const ticks = niceTicks(min, max, 4);
   return { min: ticks[0], max: ticks[ticks.length - 1], ticks };
+}
+
+/**
+ * A gridline value printed to the precision its step needs, so a 0.5 step
+ * never shows as rounded whole numbers. For metrics without `axisFormat`.
+ */
+export function tickLabel(v: number, ticks: readonly number[]): string {
+  const step = ticks.length > 1 ? Math.abs(ticks[1] - ticks[0]) : 1;
+  const decimals = step >= 1 ? 0 : Math.min(4, Math.ceil(-Math.log10(step) - 1e-9));
+  return v.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -242,8 +252,11 @@ export function dateTicks(from: string, to: string, plotWidth: number): DateTick
     steps = [1, 2, 5, 10, 20];
   }
   const index = new Map(dates.map((d, i) => [d, i]));
+  // Thinned months keep January, which carries the year.
+  const jan = n > 45 && n <= 400 ? candidates.findIndex((c) => /^\d{4}$/.test(c.label)) : -1;
   for (const step of steps) {
-    const picked = candidates.filter((_, i) => i % step === 0);
+    const phase = jan >= 0 ? jan % step : 0;
+    const picked = candidates.filter((_, i) => i % step === phase);
     let fits = true;
     for (let i = 1; i < picked.length && fits; i++) {
       const gap = Math.abs(index.get(picked[i].date)! - index.get(picked[i - 1].date)!) * pxPerDay;

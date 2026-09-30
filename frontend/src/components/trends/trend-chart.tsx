@@ -10,7 +10,7 @@
 import { useLayoutEffect, useState } from 'preact/hooks';
 import type { TrendGroup, TrendMetric } from './metrics';
 import {
-  RANGE_PHRASE, type RangeKey, dateTicks, metricSeries, segments, windowText, yDomain,
+  RANGE_PHRASE, type RangeKey, dateTicks, metricSeries, segments, tickLabel, windowText, yDomain,
   type MetricSeries,
 } from './series';
 
@@ -80,8 +80,7 @@ export function TrendPlot({ metric, series, width, label, describedBy }: PlotPro
   const values = series.points.map((p) => p.value);
   for (const v of series.average.values()) values.push(v);
   const dom = yDomain(values, series.band, metric.zeroBased);
-  const axisFmt = metric.axisFormat ?? metric.format;
-  const tickLabels = dom.ticks.map((t) => axisFmt(t));
+  const tickLabels = dom.ticks.map((t) => (metric.axisFormat ? metric.axisFormat(t) : tickLabel(t, dom.ticks)));
   const padLeft = PAD_LEFT;
   const plotW = Math.max(40, width - padLeft - PAD_RIGHT);
   const plotH = CHART_HEIGHT - PAD_TOP - PAD_BOTTOM;
