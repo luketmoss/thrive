@@ -263,6 +263,23 @@ var DAILY_HEALTH_COLUMN_COUNT = 18;
 // together. Its test fails if they drift.
 
 
+// --- Journal (A:D) — #233 -------------------------------------------
+//
+// One free-text note per local calendar day, keyed by `date`. Written by the
+// SPA directly (frontend/src/api/journal-api.ts, which mirrors this list;
+// change both together). No API action reads or writes it yet: getJournal and
+// upsertJournal arrive with #234. A day with no note has no row, never a row
+// with a blank `note`. DailySummary never reads this tab.
+var JOURNAL_FIELDS = [
+  'date',    // A  PK, local YYYY-MM-DD
+  'note',    // B  free text, never blank
+  'created', // C  ISO 8601, set on first write and kept
+  'updated', // D  ISO 8601, set on every write
+];
+
+var JOURNAL_COLUMN_COUNT = 4;
+
+
 // --- SyncLog (A:N) — #156, #155 -------------------------------------
 //
 // One row per sync run, appended by the COROS sync through appendSyncLog, read

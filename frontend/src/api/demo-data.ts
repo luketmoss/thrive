@@ -1,6 +1,6 @@
 // Demo mode detection and seed data for offline/preview usage.
 
-import type { ExerciseWithRow, LabelWithRow, TemplateRowWithRow, Template, Workout, WorkoutWithRow, SetWithRow } from './types';
+import type { ExerciseWithRow, LabelWithRow, JournalEntryWithRow, TemplateRowWithRow, Template, Workout, WorkoutWithRow, SetWithRow } from './types';
 import type { DailyHealthRow, BodyMeasurementRow, DailySummaryRow } from './health-api';
 import { colorKeyFromName } from './label-colors';
 import type { SyncLogEntryWithRow } from './sync-log-api';
@@ -177,6 +177,31 @@ export function shiftDemoWorkouts(now: Date, fixture: WorkoutWithRow[] = DEMO_WO
     synced_at: addDaysToIso(w.synced_at, delta),
     started_at_utc: addDaysToIso(w.started_at_utc, delta),
     fit_fetched_at: addDaysToIso(w.fit_fetched_at, delta),
+  }));
+}
+
+// ── Demo Journal (#233) ──────────────────────────────────────────────
+//
+// Literal dates around DEMO_ANCHOR_DATE, like DEMO_WORKOUTS; `fetchJournal`
+// shifts them with `shiftDemoJournal` so "today" and the days behind it stay
+// current. One note per day, none blank, sheet order (oldest first).
+export const DEMO_JOURNAL: JournalEntryWithRow[] = [
+  { date: '2024-12-20', note: 'Travel day. No training, long walk at the airport.', created: '2024-12-20T23:10:00.000Z', updated: '2024-12-20T23:10:00.000Z', sheetRow: 2 },
+  { date: '2025-01-02', note: 'Back in the gym after the break. Legs felt heavy, kept the weights light.', created: '2025-01-02T19:40:00.000Z', updated: '2025-01-02T19:55:00.000Z', sheetRow: 3 },
+  { date: '2025-01-08', note: 'Squats moved well. Slept badly the night before but energy was fine.', created: '2025-01-08T20:05:00.000Z', updated: '2025-01-08T20:05:00.000Z', sheetRow: 4 },
+  { date: '2025-01-12', note: 'Easy hike with the dog. Left knee a little sore on the descent.', created: '2025-01-12T22:30:00.000Z', updated: '2025-01-13T14:02:00.000Z', sheetRow: 5 },
+  { date: '2025-01-13', note: 'Rest day. Stretched for twenty minutes, meal prepped for the week.', created: '2025-01-13T21:15:00.000Z', updated: '2025-01-13T21:15:00.000Z', sheetRow: 6 },
+  { date: '2025-01-14', note: 'Bench felt strong, hit 185 for five. Shoulder is fine. Pull day tomorrow.', created: '2025-01-14T18:20:00.000Z', updated: '2025-01-14T18:20:00.000Z', sheetRow: 7 },
+];
+
+/** The demo journal with every date moved as `shiftDemoWorkouts` moves the workouts. Pure. */
+export function shiftDemoJournal(now: Date, fixture: JournalEntryWithRow[] = DEMO_JOURNAL): JournalEntryWithRow[] {
+  const delta = dayNumber(demoDenverDate(now)) - dayNumber(DEMO_ANCHOR_DATE);
+  return fixture.map((e) => ({
+    ...e,
+    date: addDaysToDateStr(e.date, delta),
+    created: addDaysToIso(e.created, delta),
+    updated: addDaysToIso(e.updated, delta),
   }));
 }
 

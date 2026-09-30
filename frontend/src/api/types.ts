@@ -103,6 +103,18 @@ export interface Label {
 }
 export interface LabelWithRow extends Label { sheetRow: number; }
 
+/** One note per local day (#233); a day with no note has no row. */
+export interface JournalEntry {
+  /** Local YYYY-MM-DD, the key. */
+  date: string;
+  note: string;
+  /** ISO 8601, set on first write and kept. */
+  created: string;
+  /** ISO 8601, set on every write. */
+  updated: string;
+}
+export interface JournalEntryWithRow extends JournalEntry { sheetRow: number; }
+
 export interface UserInfo {
   email: string;
   name: string;
