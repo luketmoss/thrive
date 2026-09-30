@@ -104,3 +104,20 @@ export function formatHeartRate(bpm: string): string {
   const n = parse(bpm);
   return n === null ? '' : `${Math.round(n)} bpm`;
 }
+
+// ── Body weight (#239, shared with #244) ────────────────────────────
+// BodyMeasurements stores kg (CLAUDE.md); the kg → lb display is here, once.
+
+const LB_PER_KG = 2.20462262185;
+
+/** Stored kg → lb to 0.1, or `null` when unset. `'0'` → `0`. */
+export function kgToLb(kg: string): number | null {
+  const n = parse(kg);
+  return n === null ? null : Math.round(n * LB_PER_KG * 10) / 10;
+}
+
+/** `"178.4 lb"`, or `''` when unset. Always one decimal. */
+export function formatWeight(kg: string): string {
+  const lb = kgToLb(kg);
+  return lb === null ? '' : `${lb.toFixed(1)} lb`;
+}

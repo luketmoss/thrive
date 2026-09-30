@@ -18,16 +18,6 @@ function placeholder(title: string, copy: Copy) {
   };
 }
 
-export const HealthPlaceholder = placeholder('Health', {
-  past: "That day's sleep, heart rate and steps will show here.",
-  today: "Last night's sleep, heart rate and steps so far will show here.",
-});
-
-export const BodyPlaceholder = placeholder('Body', {
-  past: "That day's weight and blood pressure will show here.",
-  today: "Today's weight and blood pressure will show here once they arrive.",
-});
-
 export const NotePlaceholder = placeholder('Note', {
   past: "That day's note will show here.",
   today: "Today's note will show here.",

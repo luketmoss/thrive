@@ -363,13 +363,15 @@ export function demoWithingsSyncLog(
 // holds exactly one cycle (health-demo.test.ts checks the invariants).
 //
 // `?demo=true&health=empty` loads all three tabs empty and `health=error`
-// fails all three, following `synclog=`.
+// fails all three, following `synclog=`. `health=presync` (#239) is the
+// morning before the day's first sync: today has no DailyHealth row and no
+// BodyMeasurements readings, and DailySummary is rolled up without them.
 
-export type DemoHealthScenario = 'ok' | 'empty' | 'error';
+export type DemoHealthScenario = 'ok' | 'empty' | 'error' | 'presync';
 
 export function demoHealthScenario(): DemoHealthScenario {
   const raw = new URLSearchParams(window.location.search).get('health');
-  return raw === 'empty' || raw === 'error' ? raw : 'ok';
+  return raw === 'empty' || raw === 'error' || raw === 'presync' ? raw : 'ok';
 }
 
 /** How many local days the demo history spans, today included. */
@@ -390,6 +392,10 @@ const SCALE_WEIGHT_ONLY = 24;                // a weight with no body compositio
 const ACTIVITY_PARTIAL = 11;                 // two outdoor sessions, one unmeasured
 const ACTIVITY_ZERO_DISTANCE = 26;           // a measured 0 distance
 const ACTIVITY_INDOOR_ONLY = 13;             // an indoor ride: no outdoor distance at all
+// #239: one day a cycle outside your range the unwelcome way, so the Day view's
+// colouring can always be seen within the last 30 days.
+const HEALTH_RHR_HIGH = 4;                   // resting HR well above its range
+const HEALTH_HRV_LOW = 15;                   // HRV well below its range
 
 function cyclePos(day: number): number {
   return ((day % 30) + 30) % 30;
@@ -447,8 +453,8 @@ function asBackfilled<T extends { date: string; sheetRow: number }>(rows: Omit<T
   return [...recent, ...backfilled].map((r, i) => ({ ...r, sheetRow: i + 2 }) as T);
 }
 
-function buildDemoDailyHealth(now: Date): DailyHealthRow[] {
-  const days = demoHealthDays(now);
+function buildDemoDailyHealth(now: Date, presync = false): DailyHealthRow[] {
+  const days = demoHealthDays(now).filter((d) => !(presync && d.isToday));
   const rows: Omit<DailyHealthRow, 'sheetRow'>[] = [];
   for (const { date, day, isToday } of days) {
     const p = cyclePos(day);
@@ -473,8 +479,8 @@ function buildDemoDailyHealth(now: Date): DailyHealthRow[] {
 
     rows.push({
       date,
-      resting_hr: String(Math.round(51 + 2.5 * wave(day, 17) + 3 * (demoNoise(day, 1) - 0.5))),
-      hrv: hrvBlank ? '' : String(Math.round(58 + 8 * wave(day, 23) + 10 * (demoNoise(day, 2) - 0.5))),
+      resting_hr: String(Math.round(51 + 2.5 * wave(day, 17) + 3 * (demoNoise(day, 1) - 0.5)) + (p === HEALTH_RHR_HIGH ? 9 : 0)),
+      hrv: hrvBlank ? '' : String(Math.round(58 + 8 * wave(day, 23) + 10 * (demoNoise(day, 2) - 0.5)) - (p === HEALTH_HRV_LOW ? 30 : 0)),
       steps: String(steps),
       calories: String(calories),
       sleep_total_s: sleep(sleepMin * 60),
@@ -539,8 +545,8 @@ function bpMeasures(day: number, salt: number, fixed?: [number, number]): DemoMe
   };
 }
 
-function buildDemoBodyMeasurements(now: Date): BodyMeasurementRow[] {
-  const days = demoHealthDays(now);
+function buildDemoBodyMeasurements(now: Date, presync = false): BodyMeasurementRow[] {
+  const days = demoHealthDays(now).filter((d) => !(presync && d.isToday));
   const rows: Omit<BodyMeasurementRow, 'sheetRow'>[] = [];
   for (const { date, day } of days) {
     const p = cyclePos(day);
@@ -708,12 +714,12 @@ function summarizeDemoDay(
   };
 }
 
-function buildDemoDailySummary(now: Date): DailySummaryRow[] {
+function buildDemoDailySummary(now: Date, presync = false): DailySummaryRow[] {
   const days = demoHealthDays(now);
   const todayNum = days[days.length - 1].day;
-  const health = new Map(buildDemoDailyHealth(now).map((h) => [h.date, h]));
+  const health = new Map(buildDemoDailyHealth(now, presync).map((h) => [h.date, h]));
   const body = new Map<string, BodyMeasurementRow[]>();
-  for (const m of buildDemoBodyMeasurements(now)) {
+  for (const m of buildDemoBodyMeasurements(now, presync)) {
     if (!body.has(m.date)) body.set(m.date, []);
     body.get(m.date)!.push(m);
   }
@@ -739,17 +745,17 @@ function buildDemoDailySummary(now: Date): DailySummaryRow[] {
 /** The demo DailyHealth tab as the sheet would hold it, in sheet order. */
 export function demoDailyHealth(now: Date, scenario: DemoHealthScenario = demoHealthScenario()): DailyHealthRow[] {
   if (scenario === 'error') throw new Error('Demo: DailyHealth unreadable (health=error)');
-  return scenario === 'empty' ? [] : buildDemoDailyHealth(now);
+  return scenario === 'empty' ? [] : buildDemoDailyHealth(now, scenario === 'presync');
 }
 
 /** The demo BodyMeasurements tab as the sheet would hold it, in sheet order. */
 export function demoBodyMeasurements(now: Date, scenario: DemoHealthScenario = demoHealthScenario()): BodyMeasurementRow[] {
   if (scenario === 'error') throw new Error('Demo: BodyMeasurements unreadable (health=error)');
-  return scenario === 'empty' ? [] : buildDemoBodyMeasurements(now);
+  return scenario === 'empty' ? [] : buildDemoBodyMeasurements(now, scenario === 'presync');
 }
 
 /** The demo DailySummary tab, rolled up from the other two by the tab's own rules, in sheet order. */
 export function demoDailySummary(now: Date, scenario: DemoHealthScenario = demoHealthScenario()): DailySummaryRow[] {
   if (scenario === 'error') throw new Error('Demo: DailySummary unreadable (health=error)');
-  return scenario === 'empty' ? [] : buildDemoDailySummary(now);
+  return scenario === 'empty' ? [] : buildDemoDailySummary(now, scenario === 'presync');
 }

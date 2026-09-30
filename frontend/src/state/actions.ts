@@ -1265,12 +1265,18 @@ async function loadHealthTab<T>(
  * these copies in memory, so moving between days or Trends ranges never
  * re-reads the sheet. Consumers decide when to call it.
  */
-export async function loadHealth(token: string): Promise<void> {
-  await Promise.all([
+let healthInFlight: Promise<void> | null = null;
+
+export function loadHealth(token: string): Promise<void> {
+  // One load at a time (#239 AC5): a call while one runs joins it rather than
+  // starting a second, whether it comes from the throttle or from Try again.
+  if (healthInFlight) return healthInFlight;
+  healthInFlight = Promise.all([
     loadHealthTab(dailyHealth, fetchDailyHealth, token, 'DailyHealth'),
     loadHealthTab(bodyMeasurements, fetchBodyMeasurements, token, 'BodyMeasurements'),
     loadHealthTab(dailySummary, fetchDailySummary, token, 'DailySummary'),
-  ]);
+  ]).then(() => undefined).finally(() => { healthInFlight = null; });
+  return healthInFlight;
 }
 
 /**

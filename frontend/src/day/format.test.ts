@@ -2,6 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   weekdayName, weekdayLetter, dayOfMonth, fullDate, weekdayFullDate, stripDayLabel, moveAnnouncement,
+  hoursMinutes, clock12, nightOf, syncedLabel,
 } from './format';
 
 describe('format', () => {
@@ -24,5 +25,37 @@ describe('format', () => {
   it('announces a move with the whole date and the pill (AC4)', () => {
     expect(moveAnnouncement('2026-09-12', '2026-09-22')).toBe('Saturday, September 12, 2026, 10 days ago');
     expect(moveAnnouncement('2026-09-22', '2026-09-22')).toBe('Tuesday, September 22, 2026, Today');
+  });
+});
+
+// #239 — the Health and Body panels' durations, clocks and sync time.
+describe('health formatting (#239)', () => {
+  it('writes durations as Hh MMm, rounded to the minute', () => {
+    expect(hoursMinutes(7 * 3600 + 12 * 60)).toBe('7h 12m');
+    expect(hoursMinutes(12 * 60 + 29)).toBe('0h 12m');
+    expect(hoursMinutes(3600 * 7 + 59 * 60 + 31)).toBe('8h 00m');
+    expect(hoursMinutes(0)).toBe('0h 00m');
+    expect(hoursMinutes(null)).toBe('');
+  });
+
+  it('writes local clock times in 12-hour form', () => {
+    expect(clock12('23:24')).toBe('11:24 PM');
+    expect(clock12('06:12')).toBe('6:12 AM');
+    expect(clock12('00:05')).toBe('12:05 AM');
+    expect(clock12('12:00:30')).toBe('12:00 PM');
+    expect(clock12('')).toBe('');
+    expect(clock12('nope')).toBe('');
+  });
+
+  it('names the night before a wake-up day', () => {
+    expect(nightOf('2026-09-26', false)).toBe('Fri night'); // a Saturday
+    expect(nightOf('2026-09-30', true)).toBe('last night');
+  });
+
+  it('says when the sync ran, in Denver, with the date when it was an earlier day', () => {
+    expect(syncedLabel('2026-09-30T13:17:04.000Z', '2026-09-30')).toBe('Synced 7:17 AM');
+    expect(syncedLabel('2026-09-27T00:17:00.000Z', '2026-09-30')).toBe('Synced Sep 26, 6:17 PM');
+    expect(syncedLabel('', '2026-09-30')).toBe('');
+    expect(syncedLabel('not a date', '2026-09-30')).toBe('');
   });
 });

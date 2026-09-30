@@ -1,7 +1,7 @@
 // #242 AC3 — yourRange: the 30 days before D, never D, ≥ 14 values.
 
 import { describe, it, expect } from 'vitest';
-import { yourRange } from './your-range';
+import { yourRange, zoneOf, valuesInWindow } from './your-range';
 
 const D = '2026-09-27';
 
@@ -74,5 +74,35 @@ describe('yourRange', () => {
     // Remove one more: 14 still a range; 13 is not.
     const fewer = new Map([...mapOf(dates, () => 1)].slice(0, 13));
     expect(yourRange(fewer, D)).toBeNull();
+  });
+});
+
+describe('zoneOf (#239)', () => {
+  const r = { lo: 49, hi: 55 };
+  it('is within at both bounds, inclusive', () => {
+    expect(zoneOf(49, r, 'above')).toEqual({ zone: 'within', attention: false });
+    expect(zoneOf(55, r, 'above')).toEqual({ zone: 'within', attention: false });
+  });
+  it('flags attention only in the unwelcome direction', () => {
+    expect(zoneOf(56, r, 'above')).toEqual({ zone: 'above', attention: true });
+    expect(zoneOf(48, r, 'above')).toEqual({ zone: 'below', attention: false });
+    expect(zoneOf(48, r, 'below')).toEqual({ zone: 'below', attention: true });
+    expect(zoneOf(56, r, 'below')).toEqual({ zone: 'above', attention: false });
+  });
+  it('never flags a metric with no unwelcome direction', () => {
+    expect(zoneOf(10, r, null)).toEqual({ zone: 'below', attention: false });
+    expect(zoneOf(100, r, null)).toEqual({ zone: 'above', attention: false });
+  });
+  it('treats 0 as a value', () => {
+    expect(zoneOf(0, { lo: 0, hi: 0 }, 'above')).toEqual({ zone: 'within', attention: false });
+  });
+});
+
+describe('valuesInWindow (#239)', () => {
+  it('counts the values in the 30 days before D, never D', () => {
+    const m = mapOf(daysBefore(9), () => 1);
+    m.set(D, 1);
+    m.set('2026-08-01', 1); // outside the window
+    expect(valuesInWindow(m, D)).toBe(9);
   });
 });

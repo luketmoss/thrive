@@ -68,3 +68,19 @@ describe('Day screen CSS (#237)', () => {
     expect(rule('.day-title')).toMatch(/font-size:\s*var\(--text-2xl\)/);
   });
 });
+
+describe('Day Health and Body panels CSS (#239)', () => {
+  it('bolds and colours the unwelcome direction; everything else stays plain caption text', () => {
+    expect(rule('.health-attention')).toMatch(/font-weight:\s*700/);
+    expect(rule('.health-attention')).toMatch(/color:\s*var\(--color-warning\)/);
+    expect(rule('.health-caption')).toMatch(/font-weight:\s*400/);
+    expect(rule('.health-caption')).toMatch(/color:\s*var\(--color-text-secondary\)/);
+    expect(rule('.health-value-blank')).toMatch(/color:\s*var\(--color-text-muted\)/);
+  });
+
+  it('wraps sleep stages only between items, and keeps Try again 44 px', () => {
+    expect(rule('.health-stage')).toMatch(/white-space:\s*nowrap/);
+    expect(rule('.panel-retry')).toMatch(/min-height:\s*44px/);
+    expect(rule('.panel-retry')).toMatch(/min-width:\s*44px/);
+  });
+});
