@@ -124,6 +124,61 @@ export const DEMO_WORKOUTS: WorkoutWithRow[] = [
   { id: 'w_demo005', date: workoutDate, time: '06:30', type: 'weight', name: 'Upper Pull A', template_id: 'tpl_demo002', notes: '', elapsed_seconds: '', created: '2025-01-14T06:30:00.000Z', copied_from: '', status: 'planned', moving_seconds: '', effort: '', distance_m: '', ascent_m: '', descent_m: '', avg_hr: '', sub_type: '', source: '', source_activity_id: '', raw_ref: '', fit_ref: '', fit_fetched_at: '', synced_at: '', started_at_utc: '', calories: '', estimated_seconds: '2820', sheetRow: 6 },
 ];
 
+// ── Demo workout dates relative to today (#250) ──────────────────────
+//
+// `DEMO_WORKOUTS` keeps its literal January 2025 dates (demo-provenance.test.ts
+// asserts on them). The Day view and Activities read "today", so the read
+// boundary (`fetchWorkouts`) shifts the whole fixture by one whole-day delta.
+// Every workout moves together, so done/planned ordering stays coherent.
+
+/** The fixture's own "today": carries both a done and a planned workout. */
+export const DEMO_ANCHOR_DATE = '2025-01-14';
+
+/** The calendar date of `now` in America/Denver, as YYYY-MM-DD. */
+export function demoDenverDate(now: Date): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Denver', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(now);
+  const get = (t: string) => parts.find((p) => p.type === t)!.value;
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+
+const MS_PER_DAY = 86_400_000;
+
+function dayNumber(ymd: string): number {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return Date.UTC(y, m - 1, d) / MS_PER_DAY;
+}
+
+/** Adds whole days to a YYYY-MM-DD string using UTC arithmetic (DST-proof). */
+export function addDaysToDateStr(ymd: string, days: number): string {
+  return new Date((dayNumber(ymd) + days) * MS_PER_DAY).toISOString().slice(0, 10);
+}
+
+/** Shifts an ISO-8601 timestamp by whole days, preserving time-of-day. Blank stays blank. */
+export function addDaysToIso(iso: string, days: number): string {
+  if (!iso) return iso;
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return iso;
+  return new Date(t + days * MS_PER_DAY).toISOString();
+}
+
+/**
+ * The fixture with every date moved so `DEMO_ANCHOR_DATE` lands on today in
+ * Denver. Pure and deterministic; never mutates the fixture.
+ */
+export function shiftDemoWorkouts(now: Date, fixture: WorkoutWithRow[] = DEMO_WORKOUTS): WorkoutWithRow[] {
+  const delta = dayNumber(demoDenverDate(now)) - dayNumber(DEMO_ANCHOR_DATE);
+  return fixture.map((w) => ({
+    ...w,
+    date: w.date ? addDaysToDateStr(w.date, delta) : w.date,
+    created: addDaysToIso(w.created, delta),
+    synced_at: addDaysToIso(w.synced_at, delta),
+    started_at_utc: addDaysToIso(w.started_at_utc, delta),
+    fit_fetched_at: addDaysToIso(w.fit_fetched_at, delta),
+  }));
+}
+
 export const DEMO_SETS: SetWithRow[] = [
   // Warmup — Push Ups (no weight/reps tracked for warmup)
   { workout_id: 'w_demo001', exercise_id: 'ex_demo_pushup', exercise_name: 'Push Ups', section: 'warmup', exercise_order: 1, set_number: 1, planned_reps: '', weight: '', reps: '15', effort: '', sheetRow: 2 },

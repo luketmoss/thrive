@@ -2,7 +2,7 @@
 
 import type { Workout, WorkoutWithRow, WorkoutSet, SetWithRow, WorkoutType, Effort } from './types';
 import { sheetsGet, sheetsAppend, sheetsUpdate, sheetsDeleteRow, getSheetId, withReauth } from './sheets';
-import { isDemo, DEMO_WORKOUTS, DEMO_SETS } from './demo-data';
+import { isDemo, DEMO_SETS, shiftDemoWorkouts } from './demo-data';
 import { toLocalDateStr } from '../components/activities/activities-helpers';
 
 /**
@@ -20,8 +20,15 @@ export class WorkoutRowMismatchError extends Error {
 
 // ── Workouts tab (A:AA) ──────────────────────────────────────────────
 
+// Demo dates are shifted once per page load (#250): a later call must neither
+// re-shift nor recompute against a `now` that has crossed midnight.
+let _shiftedDemoWorkouts: WorkoutWithRow[] | null = null;
+
 export async function fetchWorkouts(token: string): Promise<WorkoutWithRow[]> {
-  if (isDemo()) return [...DEMO_WORKOUTS];
+  if (isDemo()) {
+    if (!_shiftedDemoWorkouts) _shiftedDemoWorkouts = shiftDemoWorkouts(new Date());
+    return [..._shiftedDemoWorkouts];
+  }
 
   return withReauth(token, async (t) => {
     const rows = await sheetsGet('Workouts!A2:AA', t);
