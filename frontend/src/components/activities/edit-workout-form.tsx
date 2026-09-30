@@ -38,7 +38,7 @@ export function EditWorkoutForm({ workoutId }: Props) {
       <div class="screen">
         <div class="empty-state">
           <p>Workout not found</p>
-          <button class="btn btn-primary" onClick={() => navigate('/')}>Back to Activities</button>
+          <button class="btn btn-primary" onClick={() => navigate('/activities')}>Back to Activities</button>
         </div>
       </div>
     );

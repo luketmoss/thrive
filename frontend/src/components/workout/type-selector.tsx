@@ -1,5 +1,5 @@
 import type { WorkoutType } from '../../api/types';
-import { navigate } from '../../router/router';
+import { goBack } from '../../router/router';
 
 interface Props {
   onSelect: (type: WorkoutType) => void;
@@ -20,7 +20,7 @@ export function TypeSelector({ onSelect }: Props) {
       <div class="template-editor-header">
         <button
           class="template-editor-back"
-          onClick={() => navigate('/')}
+          onClick={() => goBack()}
           aria-label="Back"
         >
           ← Back

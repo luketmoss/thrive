@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // We cannot directly test parseHash since it's not exported,
 // but we can test the router behavior by manipulating window.location.hash
@@ -14,7 +14,7 @@ describe('router', () => {
     window.location.hash = '';
   });
 
-  it('parses empty hash as activities route', async () => {
+  it('parses empty hash as day route', async () => {
     // Re-import to re-evaluate
     window.location.hash = '';
     const { currentRoute } = await import('./router');
@@ -22,7 +22,7 @@ describe('router', () => {
     window.location.hash = '';
     window.dispatchEvent(new Event('hashchange'));
 
-    expect(currentRoute.value.name).toBe('activities');
+    expect(currentRoute.value.name).toBe('day');
     expect(currentRoute.value.params).toEqual({});
   });
 
@@ -152,12 +152,21 @@ describe('router', () => {
     });
   });
 
-  it('falls back to activities for unknown routes', async () => {
+  it('falls back to day for unknown routes', async () => {
     const { currentRoute } = await import('./router');
     window.location.hash = '/nonexistent/path';
     window.dispatchEvent(new Event('hashchange'));
 
-    expect(currentRoute.value.name).toBe('activities');
+    expect(currentRoute.value.name).toBe('day');
+  });
+
+  it('parses #/ as day, /activities as activities and /trends as trends (#235)', async () => {
+    const { currentRoute } = await import('./router');
+    for (const [hash, name] of [['/', 'day'], ['/activities', 'activities'], ['/trends', 'trends'], ['/exercises', 'exercises'], ['/settings/labels', 'manage-labels']]) {
+      window.location.hash = hash;
+      window.dispatchEvent(new Event('hashchange'));
+      expect(currentRoute.value.name).toBe(name);
+    }
   });
 
   it('navigate() sets the window hash', async () => {
@@ -165,5 +174,30 @@ describe('router', () => {
     navigate('/templates');
 
     expect(window.location.hash).toBe('#/templates');
+  });
+
+  // #235 AC3: Back uses history.back() only when an earlier in-app screen exists.
+  describe('goBack (#235 AC3)', () => {
+    it('falls back to the given route when there is no earlier in-app screen', async () => {
+      vi.resetModules();
+      window.location.hash = '/workout/new';
+      const r = await import('./router');
+      expect(r.canGoBack()).toBe(false);
+      r.goBack();
+      expect(window.location.hash).toBe('#/activities');
+    });
+
+    it('calls history.back() once the user has navigated in-app', async () => {
+      vi.resetModules();
+      window.location.hash = '/';
+      const r = await import('./router');
+      window.location.hash = '/workout/new';
+      window.dispatchEvent(new Event('hashchange'));
+      expect(r.canGoBack()).toBe(true);
+      const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+      r.goBack();
+      expect(back).toHaveBeenCalledOnce();
+      back.mockRestore();
+    });
   });
 });

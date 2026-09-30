@@ -3,6 +3,7 @@ import { navigate } from '../../router/router';
 import { currentRoute } from '../../router/router';
 import { TemplateEditor } from './template-editor';
 import { TemplateDetail } from './template-detail';
+import { LibraryHeader } from '../shared/library-header';
 
 function sectionSummary(tpl: { exercises: Array<{ section: string }> }): string {
   const sections = new Set(tpl.exercises.map((e) => e.section));
@@ -19,9 +20,7 @@ function sectionSummary(tpl: { exercises: Array<{ section: string }> }): string 
 function TemplateList() {
   return (
     <div class="screen templates-screen">
-      <header class="screen-header">
-        <h1>Templates</h1>
-      </header>
+      <LibraryHeader />
       <div class="screen-body">
         {templates.value.length === 0 ? (
           <div class="empty-state">

@@ -58,15 +58,40 @@ function parseHash(hash: string): ParsedRoute {
   // /settings
   if (path === '/settings') return { name: 'settings', params: {}, hash: path };
 
-  // Default: activities
-  return { name: 'activities', params: {}, hash: '/' };
+  // /trends (#235)
+  if (path === '/trends') return { name: 'trends', params: {}, hash: path };
+
+  // /activities (#235): the list that used to live at `/`
+  if (path === '/activities') return { name: 'activities', params: {}, hash: path };
+
+  // Default: Day, for the empty hash, `#/` and any hash that matches no route (#235)
+  return { name: 'day', params: {}, hash: '/' };
 }
 
 export const currentRoute = signal<ParsedRoute>(parseHash(window.location.hash));
 
+// In-app history (#235): lets a Back arrow use `history.back()` only when there
+// is an earlier in-app screen, and fall back to a fixed place otherwise (a deep
+// link opened fresh has nothing before it, and back would leave the app).
+const visited: string[] = [window.location.hash];
+
 window.addEventListener('hashchange', () => {
-  currentRoute.value = parseHash(window.location.hash);
+  const hash = window.location.hash;
+  if (visited.length > 1 && visited[visited.length - 2] === hash) visited.pop();
+  else visited.push(hash);
+  currentRoute.value = parseHash(hash);
 });
+
+/** True when an earlier in-app screen exists for `history.back()` to return to. */
+export function canGoBack(): boolean {
+  return visited.length > 1;
+}
+
+/** Back to the previous in-app screen, or to `fallback` when there is none. */
+export function goBack(fallback = '/activities') {
+  if (canGoBack()) window.history.back();
+  else navigate(fallback);
+}
 
 export function navigate(path: string) {
   window.location.hash = path;

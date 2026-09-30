@@ -28,7 +28,7 @@ export function WorkoutEdit({ workoutId }: Props) {
   // Cleanup on unmount
   useEffect(() => {
     if (!workout) {
-      navigate('/');
+      navigate('/activities');
       return;
     }
 
@@ -146,7 +146,7 @@ function PlannedWorkoutEditor({ workoutId }: { workoutId: string }) {
         { type: 'weight', name, exercises: builderExercises, date, estimated_seconds: estimatedSeconds },
         token,
       );
-      navigate('/');
+      navigate('/activities');
     } catch {
       // Error toast shown by action
     } finally {
