@@ -3731,7 +3731,8 @@ a.training-card {
   color: var(--color-text-secondary);
 }
 
-.health-stage {
+.health-stage,
+.health-zone {
   white-space: nowrap;
 }
 

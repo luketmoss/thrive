@@ -23,14 +23,19 @@ function Caption({ c }: { c: HealthCaption }) {
       </span>
     );
   }
-  if (c.kind === 'range' && c.zone !== 'within') {
+  if (c.kind === 'range') {
+    // The zone words never break across lines.
     return (
       <span class="health-caption">
         {`Your range ${c.bounds} · `}
-        <span class={c.attention ? 'health-attention' : undefined}>
-          <span aria-hidden="true">{c.zone === 'above' ? '↑ ' : '↓ '}</span>
-          {`${c.zone} your range`}
-        </span>
+        {c.zone === 'within' ? (
+          <span class="health-zone">in range</span>
+        ) : (
+          <span class={c.attention ? 'health-zone health-attention' : 'health-zone'}>
+            <span aria-hidden="true">{c.zone === 'above' ? '↑ ' : '↓ '}</span>
+            {`${c.zone} your range`}
+          </span>
+        )}
       </span>
     );
   }

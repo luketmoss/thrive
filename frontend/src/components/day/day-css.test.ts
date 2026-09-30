@@ -79,7 +79,8 @@ describe('Day Health and Body panels CSS (#239)', () => {
   });
 
   it('wraps sleep stages only between items, and keeps Try again 44 px', () => {
-    expect(rule('.health-stage')).toMatch(/white-space:\s*nowrap/);
+    expect(rule('.health-zone')).toMatch(/white-space:\s*nowrap/);
+    expect(css).toMatch(/\.health-stage,\s*\.health-zone\s*\{/);
     expect(rule('.panel-retry')).toMatch(/min-height:\s*44px/);
     expect(rule('.panel-retry')).toMatch(/min-width:\s*44px/);
   });
