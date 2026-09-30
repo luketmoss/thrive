@@ -199,5 +199,44 @@ describe('router', () => {
       expect(back).toHaveBeenCalledOnce();
       back.mockRestore();
     });
+
+    it('never returns to the edit form after editing (A -> D -> E -> D, then Back)', async () => {
+      vi.resetModules();
+      window.location.hash = '/activities';
+      const r = await import('./router');
+      r.navigate('/history/w1');
+      window.dispatchEvent(new Event('hashchange'));
+      r.navigate('/history/w1/edit');
+      window.dispatchEvent(new Event('hashchange'));
+      r.navigate('/history/w1');
+      window.dispatchEvent(new Event('hashchange'));
+      const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+      r.goBack();
+      expect(back).not.toHaveBeenCalled();
+      expect(window.location.hash).toBe('#/activities');
+      back.mockRestore();
+    });
+
+    it('does not use Back to reach a workout tracker', async () => {
+      vi.resetModules();
+      window.location.hash = '/activities';
+      const r = await import('./router');
+      r.navigate('/workout/w1');
+      window.dispatchEvent(new Event('hashchange'));
+      r.navigate('/history/w1');
+      window.dispatchEvent(new Event('hashchange'));
+      expect(r.canGoBack()).toBe(false);
+    });
+
+    it('treats a browser back to the previous entry as a pop', async () => {
+      vi.resetModules();
+      window.location.hash = '/activities';
+      const r = await import('./router');
+      r.navigate('/history/w1');
+      window.dispatchEvent(new Event('hashchange'));
+      window.location.hash = '/activities';
+      window.dispatchEvent(new Event('hashchange'));
+      expect(r.canGoBack()).toBe(false);
+    });
   });
 });

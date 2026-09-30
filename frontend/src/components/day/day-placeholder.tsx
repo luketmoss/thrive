@@ -22,7 +22,12 @@ export function DayPlaceholder() {
         <p class="placeholder-copy">
           The Day view is on its way. For now, your workouts are in Activities.
         </p>
-        <a class="btn btn-secondary placeholder-link" href="#/activities">
+        <a class="btn btn-secondary placeholder-link" href="#/activities"
+          onClick={(e: Event) => {
+            e.preventDefault();
+            navigate('/activities');
+          }}
+        >
           Go to Activities
         </a>
       </div>

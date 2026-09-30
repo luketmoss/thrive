@@ -9,7 +9,7 @@ const TABS = [
 ];
 
 /** Which tab each route belongs to (#235). Every route marks exactly one tab. */
-export const TAB_FOR_ROUTE: Record<string, string> = {
+const TAB_FOR_ROUTE: Record<string, string> = {
   day: 'day',
   trends: 'trends',
   activities: 'activities',

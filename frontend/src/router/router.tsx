@@ -70,29 +70,50 @@ function parseHash(hash: string): ParsedRoute {
 
 export const currentRoute = signal<ParsedRoute>(parseHash(window.location.hash));
 
-// In-app history (#235): lets a Back arrow use `history.back()` only when there
-// is an earlier in-app screen, and fall back to a fixed place otherwise (a deep
-// link opened fresh has nothing before it, and back would leave the app).
-const visited: string[] = [window.location.hash];
+// In-app history (#235): lets a Back arrow use `history.back()` only when the
+// screen before this one is a sensible place to land. A deep link opened fresh
+// has nothing before it, and back would leave the app.
+//
+// `navigate()` and `goBack()` say which way they are going. A hashchange nobody
+// announced (browser back/forward, a plain link) is a pop when it returns to the
+// previous entry and a push otherwise.
+const normalise = (hash: string): string => (hash === '' ? '#/' : hash);
+const visited: string[] = [normalise(window.location.hash)];
+let expected: 'push' | 'pop' | null = null;
+
+// Screens that are steps of a flow, never somewhere to go "back" to: returning
+// from a workout's detail must not reopen its edit form or its tracker (#235).
+const NOT_A_BACK_TARGET = ['workout-edit', 'workout-active'];
 
 window.addEventListener('hashchange', () => {
-  const hash = window.location.hash;
-  if (visited.length > 1 && visited[visited.length - 2] === hash) visited.pop();
+  const hash = normalise(window.location.hash);
+  const previous = visited[visited.length - 2];
+  const isPop = expected === 'pop' || (expected === null && previous === hash);
+  expected = null;
+  if (isPop) visited.pop();
   else visited.push(hash);
-  currentRoute.value = parseHash(hash);
+  currentRoute.value = parseHash(window.location.hash);
 });
 
-/** True when an earlier in-app screen exists for `history.back()` to return to. */
+/** True when the previous in-app screen is a sensible place for Back to land. */
 export function canGoBack(): boolean {
-  return visited.length > 1;
+  if (visited.length < 2) return false;
+  const previous = parseHash(visited[visited.length - 2]);
+  return !NOT_A_BACK_TARGET.includes(previous.name);
 }
 
 /** Back to the previous in-app screen, or to `fallback` when there is none. */
-export function goBack(fallback = '/activities') {
-  if (canGoBack()) window.history.back();
-  else navigate(fallback);
+export function goBack(fallback = '/activities'): void {
+  if (canGoBack()) {
+    expected = 'pop';
+    window.history.back();
+  } else {
+    navigate(fallback);
+  }
 }
 
-export function navigate(path: string) {
+export function navigate(path: string): void {
+  // Setting the hash it already has fires no hashchange, so announce nothing.
+  if (normalise('#' + path.replace(/^#/, '')) !== normalise(window.location.hash)) expected = 'push';
   window.location.hash = path;
 }
