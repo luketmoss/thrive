@@ -3,6 +3,7 @@
 // break the screen. A missing, unknown or unreadable value gives the default;
 // a failed write is ignored, and the choice still applies for this visit.
 
+import { TREND_GROUPS, type TrendGroup } from './metrics';
 import { RANGES, AVERAGES, VIEWS, type RangeKey, type AverageKey, type ViewKey } from './series';
 
 export interface Pref<T extends string> {
@@ -14,6 +15,12 @@ export interface Pref<T extends string> {
 export const RANGE_PREF: Pref<RangeKey> = { key: 'thrive-trends-range', options: RANGES, fallback: '3M' };
 export const AVERAGE_PREF: Pref<AverageKey> = { key: 'thrive-trends-average', options: AVERAGES, fallback: '7d' };
 export const VIEW_PREF: Pref<ViewKey> = { key: 'thrive-trends-view', options: VIEWS, fallback: 'Chart' };
+
+/** The metric-group choice (#243): any registered group id; the first group when missing or unknown. */
+export function groupPref(groups: readonly TrendGroup[]): Pref<string> {
+  return { key: 'thrive-trends-group', options: groups.map((g) => g.id), fallback: groups[0]?.id ?? '' };
+}
+export const GROUP_PREF: Pref<string> = groupPref(TREND_GROUPS);
 
 /** The stored choice, or the default when it is missing, unknown or unreadable. */
 export function readPref<T extends string>(pref: Pref<T>): T {

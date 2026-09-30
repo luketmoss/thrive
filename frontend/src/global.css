@@ -3638,3 +3638,49 @@ input, select, textarea {
   font-size: var(--text-sm);
   color: var(--color-text-muted);
 }
+
+/* ===== Trends: metric groups (#243) ===== */
+/* The switcher scrolls sideways inside its own wrapper, never the page: three
+   groups fit a 320px column, six do not. */
+.trends-group-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  padding-bottom: var(--space-xs);
+}
+
+.trends-group-scroll:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.trends-group-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--space-xs);
+  width: max-content;
+  min-width: 100%;
+}
+
+.sub-type-btn.trends-group-btn {
+  flex: 1 0 auto;
+  white-space: nowrap;
+  min-width: 44px;
+  min-height: 44px;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.sub-type-btn.trends-group-btn.active {
+  background: var(--color-primary-light);
+  border-color: var(--color-primary);
+  border-width: 2px;
+  color: var(--color-primary-on-light);
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px currentColor;
+}

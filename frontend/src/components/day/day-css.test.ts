@@ -6,7 +6,10 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const raw = readFileSync(resolve(__dirname, '../../global.css'), 'utf-8').replace(/\r\n/g, '\n');
-const section = raw.slice(raw.indexOf('/* ===== Day screen (#237)'));
+const start = raw.indexOf('/* ===== Day screen (#237)');
+// Up to the next section banner, so sections appended after it (#243...) are not judged as Day CSS.
+const next = raw.indexOf('/* ===== ', start + 10);
+const section = raw.slice(start, next === -1 ? undefined : next);
 const css = section.replace(/\/\*[\s\S]*?\*\//g, '');
 
 function rule(selector: string): string {
