@@ -3638,3 +3638,39 @@ input, select, textarea {
   font-size: var(--text-sm);
   color: var(--color-text-muted);
 }
+
+/* ===== Day Training panel (#238) =====
+   After the Day section and apart from it. Cards reuse .workout-card,
+   .type-badge and .workout-effort; only what they lack is here. */
+.training-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+a.training-card {
+  text-decoration: none;
+}
+
+/* "Bike · Mountain" is longer than any single-word badge: never wrap it. */
+.training-type {
+  white-space: nowrap;
+}
+
+.training-plan-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 var(--space-sm);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-primary-text);
+  text-decoration: none;
+}
+
+.training-plan-btn {
+  align-self: flex-start;
+  text-decoration: none;
+}
