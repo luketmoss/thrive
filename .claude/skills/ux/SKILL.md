@@ -17,7 +17,7 @@ Senior UX designer + accessibility specialist. Audits ACs and UI for usability, 
 
 - CSS custom properties in `global.css` · 375px mobile-first · Touch targets ≥ 44×44px
 - Light/Dark/System theme via `data-theme` attribute + `gw-theme` localStorage
-- Bottom tab bar: History | Templates | Settings
+- Bottom tab bar: Day | Activities | Trends | Library | Settings (Library = Templates + Exercises)
 
 ## Process
 

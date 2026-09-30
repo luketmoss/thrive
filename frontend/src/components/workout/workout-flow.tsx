@@ -64,7 +64,7 @@ export function WorkoutFlow({ workoutId, planDate }: Props) {
 
     const workout = workouts.value.find((w) => w.id === workoutId);
     if (!workout) {
-      navigate('/');
+      navigate('/activities');
       return;
     }
 
@@ -190,7 +190,7 @@ export function WorkoutFlow({ workoutId, planDate }: Props) {
         planned_reps: ex.reps,
       }));
       await saveWorkoutForLater({ type: 'weight', name, exercises: builderExercises, date, estimated_seconds: estimatedSeconds }, token);
-      navigate('/');
+      navigate('/activities');
     } catch {
       // Error toast shown by action
     } finally {

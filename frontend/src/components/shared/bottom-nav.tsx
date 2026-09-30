@@ -1,22 +1,39 @@
 import { currentRoute, navigate } from '../../router/router';
 
+const TABS = [
+  { name: 'day', label: 'Day', icon: '\u{1F5D3}️', path: '/' },
+  { name: 'activities', label: 'Activities', icon: '\u{1F4CB}', path: '/activities' },
+  { name: 'trends', label: 'Trends', icon: '\u{1F4C8}', path: '/trends' },
+  { name: 'library', label: 'Library', icon: '\u{1F4DA}', path: '/templates' },
+  { name: 'settings', label: 'Settings', icon: '⚙️', path: '/settings' },
+];
+
+/** Which tab each route belongs to (#235). Every route marks exactly one tab. */
+const TAB_FOR_ROUTE: Record<string, string> = {
+  day: 'day',
+  trends: 'trends',
+  activities: 'activities',
+  'workout-detail': 'activities',
+  'workout-edit': 'activities',
+  'workout-new': 'activities',
+  'workout-active': 'activities',
+  templates: 'library',
+  'template-new': 'library',
+  'template-detail': 'library',
+  'template-edit': 'library',
+  exercises: 'library',
+  settings: 'settings',
+  'manage-labels': 'settings',
+};
+
 export function BottomNav() {
   const route = currentRoute.value;
-
-  const tabs = [
-    { name: 'activities', label: 'Activities', icon: '\u{1F4CB}', path: '/' },
-    { name: 'templates', label: 'Templates', icon: '\u{1F4DD}', path: '/templates' },
-    { name: 'exercises', label: 'Exercises', icon: '\u{1F4AA}', path: '/exercises' },
-    { name: 'settings', label: 'Settings', icon: '\u2699\uFE0F', path: '/settings' },
-  ];
+  const activeTab = TAB_FOR_ROUTE[route.name];
 
   return (
     <nav class="bottom-nav">
-      {tabs.map(tab => {
-        const isActive = route.name === tab.name ||
-          (tab.name === 'activities' && ['workout-detail', 'workout-edit', 'workout-new', 'workout-active'].includes(route.name)) ||
-          (tab.name === 'templates' && ['template-new', 'template-edit'].includes(route.name)) ||
-          (tab.name === 'settings' && route.name === 'manage-labels');
+      {TABS.map(tab => {
+        const isActive = tab.name === activeTab;
         return (
           <button
             key={tab.name}

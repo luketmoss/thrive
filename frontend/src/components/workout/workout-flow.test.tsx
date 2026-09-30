@@ -87,7 +87,7 @@ describe('WorkoutFlow ?plan= deep link (#143)', () => {
         name: 'Upper Push A',
         date: '2026-09-24',
       });
-      expect(navigate).toHaveBeenCalledWith('/');
+      expect(navigate).toHaveBeenCalledWith('/activities');
     });
 
     it('does not count the linked date as an unsaved edit', async () => {

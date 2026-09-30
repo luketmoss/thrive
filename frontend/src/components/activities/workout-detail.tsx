@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks';
 import { workouts, sets, templates, activeWorkoutId, showToast } from '../../state/store';
 import { deleteWorkout, copyWorkout, saveWorkoutAsTemplate, startPlannedWorkout } from '../../state/actions';
 import { useAuth } from '../../auth/auth-context';
-import { navigate } from '../../router/router';
+import { navigate, goBack } from '../../router/router';
 import { ExerciseDetail, groupSetsIntoExercises } from './exercise-detail';
 import { ExerciseCompactCard } from '../shared/exercise-compact-card';
 import { formatDuration, formatEstimate } from '../../api/duration';
@@ -50,7 +50,7 @@ export function WorkoutDetail({ workoutId }: Props) {
       <div class="screen">
         <div class="empty-state">
           <p>Workout not found</p>
-          <button class="btn btn-primary" onClick={() => navigate('/')}>Back to Activities</button>
+          <button class="btn btn-primary" onClick={() => navigate('/activities')}>Back to Activities</button>
         </div>
       </div>
     );
@@ -93,7 +93,7 @@ export function WorkoutDetail({ workoutId }: Props) {
     setDeleting(true);
     try {
       await deleteWorkout(workoutId, token);
-      navigate('/');
+      navigate('/activities');
     } catch {
       // Error toast shown by action
     } finally {
@@ -131,7 +131,7 @@ export function WorkoutDetail({ workoutId }: Props) {
       <div class="template-editor-header">
         <button
           class="template-editor-back"
-          onClick={() => navigate('/')}
+          onClick={() => goBack()}
           aria-label="Back"
         >
           ← Back

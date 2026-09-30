@@ -3,6 +3,7 @@ import { exercises as exercisesSignal, sets, workouts, allTags } from '../../sta
 import { addExercise, editExercise, removeExercise } from '../../state/actions';
 import { useAuth } from '../../auth/auth-context';
 import { ExerciseForm } from './exercise-form';
+import { LibraryHeader } from '../shared/library-header';
 import { LabelBadge } from '../shared/label-badge';
 import { getLastTimeDataFrom, formatLastTimeDate } from '../workout/last-time-data';
 import type { ExerciseWithRow, SetWithRow, WorkoutWithRow } from '../../api/types';
@@ -167,9 +168,7 @@ export function ExercisesScreen() {
 
   return (
     <div class="screen exercises-screen">
-      <header class="screen-header">
-        <h1>Exercises</h1>
-      </header>
+      <LibraryHeader />
       <div class="screen-body">
         <input
           class="form-input search-input"

@@ -530,7 +530,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
       }
 
       await finishWorkout(workoutId, notes, finishEffort, token);
-      navigate('/');
+      navigate('/activities');
     } catch {
       // Error toast shown by action
     } finally {
@@ -552,7 +552,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
     setFinishing(true);
     try {
       await deleteWorkout(workoutId, token);
-      navigate('/');
+      navigate('/activities');
     } catch {
       // Error toast shown by action
     } finally {

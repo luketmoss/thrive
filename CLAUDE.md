@@ -144,7 +144,7 @@ Comma-separated, multiple per exercise. Common tags: Push, Pull, Legs, Chest, Ba
 ## UX Design Decisions
 These decisions were made with the user and must be respected by all agents:
 
-- **Landing screen**: the Day view (#228, decided 27 Sep 2026; #235 records the navigation). Until #235 ships, Activities remains the landing screen
+- **Landing screen**: the Day view (#228, decided 27 Sep 2026; #235 records the navigation). Until #237 replaces the placeholder, Day shows a short note and a link to Activities.
 - **Set logging**: Logbook-style — record sets when convenient, not real-time per-set
 - **Rest timers**: None in-app — rest times are planning data only (user uses watch)
 - **Supersets**: Flat list with section labels/colors (not grouped flow)
@@ -152,7 +152,7 @@ These decisions were made with the user and must be respected by all agents:
 - **Exercise library**: Inline creation (on-the-fly during workout/template building)
 - **Set entry**: Quick-fill weight for all sets, override individual sets if different
 - **Templates**: Create via dedicated editor AND save-from-workout
-- **Navigation**: Bottom tab bar (Activities | Templates | Exercises | Settings)
+- **Navigation**: Bottom tab bar (Day | Activities | Trends | Library | Settings); Library = Templates + Exercises
 - **Activity cards**: Compact (Date, Name, Type badge) — tap to view details
 - **Activity detail**: Summary per exercise, tap to expand set-by-set
 - **Copy workout**: Pre-fill from previous + show "last time" reference while logging

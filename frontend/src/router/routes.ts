@@ -4,7 +4,9 @@ export interface Route {
 }
 
 export const routes: Route[] = [
-  { pattern: '/', name: 'history' },
+  { pattern: '/', name: 'day' },
+  { pattern: '/trends', name: 'trends' },
+  { pattern: '/activities', name: 'activities' },
   { pattern: '/history/:id', name: 'workout-detail' },
   { pattern: '/history/:id/edit', name: 'workout-edit' },
   { pattern: '/workout/new', name: 'workout-new' },

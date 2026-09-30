@@ -60,7 +60,7 @@ export function SimpleWorkout({ workoutType, onBack }: Props) {
         sub_type: subType,
         date: safeDate,
       }, token);
-      navigate('/');
+      navigate('/activities');
     } catch {
       // Error toast shown by action
     } finally {

@@ -14,12 +14,18 @@ import { ExercisesScreen } from './components/exercises/exercises-screen';
 import { WorkoutFlow } from './components/workout/workout-flow';
 import { WorkoutDetail } from './components/activities/workout-detail';
 import { WorkoutEdit } from './components/activities/workout-edit';
+import { DayPlaceholder } from './components/day/day-placeholder';
+import { TrendsPlaceholder } from './components/trends/trends-placeholder';
 import { ManageLabelsScreen } from './components/settings/manage-labels-screen';
 
 function Router() {
   const route = currentRoute.value;
 
   switch (route.name) {
+    case 'day':
+      return <DayPlaceholder />;
+    case 'trends':
+      return <TrendsPlaceholder />;
     case 'activities':
       return <ActivitiesScreen />;
     case 'workout-new':
@@ -42,7 +48,7 @@ function Router() {
     case 'settings':
       return <SettingsScreen />;
     default:
-      return <ActivitiesScreen />;
+      return <DayPlaceholder />;
   }
 }
 
