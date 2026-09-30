@@ -1,11 +1,13 @@
 import { useEffect } from 'preact/hooks';
+import { effect } from '@preact/signals';
 import { AuthProvider } from './auth/auth-provider';
 import { useAuth } from './auth/auth-context';
 import { LoginScreen } from './auth/login-screen';
 import { BottomNav } from './components/shared/bottom-nav';
 import { Toast } from './components/shared/toast';
-import { loadInitialData } from './state/actions';
-import { loading } from './state/store';
+import { loadInitialData, workoutsRefresh } from './state/actions';
+import { loading, pendingSyncCount, isSyncing } from './state/store';
+import { onPageVisible } from './state/page-visible';
 import { currentRoute } from './router/router';
 import { ActivitiesScreen } from './components/activities/activities-screen';
 import { TemplatesScreen } from './components/templates/templates-screen';
@@ -52,8 +54,44 @@ function Router() {
   }
 }
 
+const EDIT_ROUTES = new Set(['workout-new', 'workout-active', 'workout-edit']);
+
+/** True while a refresh of workouts/sets could overwrite something in progress (#249 AC3). */
+function refreshHeld(): boolean {
+  return (
+    EDIT_ROUTES.has(currentRoute.value.name) ||
+    pendingSyncCount.value > 0 ||
+    isSyncing.value
+  );
+}
+
+/** Refresh on the page coming back into view; hold it while an edit is in progress. */
+function useRefreshOnVisible(token: string | null) {
+  useEffect(() => {
+    if (!token) return;
+    let pending = false;
+    const unsubscribe = onPageVisible(() => {
+      if (refreshHeld()) {
+        pending = true;
+        return;
+      }
+      void workoutsRefresh.run(token);
+    });
+    const stop = effect(() => {
+      if (refreshHeld() || !pending) return;
+      pending = false;
+      void workoutsRefresh.run(token);
+    });
+    return () => {
+      unsubscribe();
+      stop();
+    };
+  }, [token]);
+}
+
 function AuthenticatedApp() {
   const { token } = useAuth();
+  useRefreshOnVisible(token);
 
   useEffect(() => {
     if (!token) return;

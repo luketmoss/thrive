@@ -1,3 +1,4 @@
+import { batch } from '@preact/signals';
 import { exercises, labels, templates, workouts, sets, loading, activeWorkoutId, activeWorkoutSets, activeWarmupExercises, isEditMode, showToast, syncLog, withingsSyncLog, dailyHealth, bodyMeasurements, dailySummary } from './store';
 import type { HealthTabState } from './store';
 import { fetchSyncLog, fetchWithingsSyncLog } from '../api/sync-log-api';
@@ -5,6 +6,7 @@ import { fetchDailyHealth, fetchBodyMeasurements, fetchDailySummary } from '../a
 import { SyncLogNotSetUpError } from '../api/sync-log-errors';
 import { enqueueSet, initPendingCount } from '../api/sync-queue';
 import { isDemo } from '../api/demo-data';
+import { throttled } from './page-visible';
 import { fetchExercises, createExercise, updateExercise as updateExerciseApi, deleteExercise as deleteExerciseApi } from '../api/exercises-api';
 import { fetchLabels, createLabel as createLabelApi, updateLabel as updateLabelApi, deleteLabel as deleteLabelApi, appendLabels } from '../api/labels-api';
 import { fetchTemplateRows, groupTemplateRows, createTemplate as createTemplateApi, updateTemplate as updateTemplateApi, deleteTemplate as deleteTemplateApi, updateExerciseNameInTemplates } from '../api/templates-api';
@@ -48,6 +50,7 @@ export function parseSetCount(setsStr: string): number {
 
 export async function loadInitialData(token: string): Promise<void> {
   loading.value = true;
+  workoutsRefresh.markStarted(); // the initial read counts toward the 60 s guard (#249)
   try {
     const [exerciseData, labelData, templateRowData, workoutData, setData] = await Promise.all([
       fetchExercises(token),
@@ -85,6 +88,34 @@ export async function loadInitialData(token: string): Promise<void> {
     loading.value = false;
   }
 }
+
+// ── Background refresh on visibility (#249) ──────────────────────────
+
+/**
+ * Re-read Workouts and Sets with no spinner and swap them in together. All or
+ * nothing: a failure leaves both untouched. If either signal was replaced
+ * locally while the read was in flight, the result is discarded whole.
+ * The edit-route / offline-queue guard lives in app.tsx.
+ */
+export async function refreshWorkouts(token: string): Promise<void> {
+  if (isDemo() || loading.value) return;
+  const startWorkouts = workouts.value;
+  const startSets = sets.value;
+  try {
+    const [workoutData, setData] = await Promise.all([fetchWorkouts(token), fetchSets(token)]);
+    if (workouts.value !== startWorkouts || sets.value !== startSets) return;
+    batch(() => {
+      workouts.value = workoutData;
+      sets.value = setData;
+    });
+  } catch (err) {
+    if (isReauthFailure(err)) return; // auth-provider handles this
+    console.warn('Background refresh of workouts failed:', err);
+  }
+}
+
+/** The shared throttle for the Workouts refresh; `loadInitialData` stamps it. */
+export const workoutsRefresh = throttled(refreshWorkouts);
 
 /** One-time migration: create label rows for all unique tags found in exercises. */
 async function bootstrapLabels(

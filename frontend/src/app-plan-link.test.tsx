@@ -27,6 +27,7 @@ vi.mock('./auth/auth-context', () => ({
 }));
 vi.mock('./state/actions', () => ({
   loadInitialData: (token: string) => loadInitialData(token),
+  workoutsRefresh: { run: vi.fn(), markStarted: vi.fn() },
   startWorkout: vi.fn(),
   saveWorkoutForLater: vi.fn(),
 }));
