@@ -15,7 +15,11 @@ const METERS_PER_FOOT = 0.3048;
 /** Elevation is recorded to this precision; see `feetToMeters`. */
 export const ELEVATION_STEP_FT = 10;
 
-function parse(value: string): number | null {
+/**
+ * A sheet cell as a number: `''` (blank, nobody said) → `null`, `'0'` → `0`.
+ * The one parse for stored numerics; Trends (#242) reads health cells with it.
+ */
+export function parse(value: string): number | null {
   if (value.trim() === '') return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;

@@ -1,9 +1,8 @@
-// #235 AC1 — Day and Trends placeholders.
+// #235 AC1 — the Day placeholder. (#242 replaced the Trends one.)
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, cleanup, fireEvent } from '@testing-library/preact';
 import { h } from 'preact';
 import { DayPlaceholder } from './day-placeholder';
-import { TrendsPlaceholder } from '../trends/trends-placeholder';
 
 afterEach(cleanup);
 
@@ -20,14 +19,5 @@ describe('DayPlaceholder', () => {
     const { getByLabelText } = render(h(DayPlaceholder, {}));
     fireEvent.click(getByLabelText('Start workout'));
     expect(window.location.hash).toBe('#/workout/new');
-  });
-});
-
-describe('TrendsPlaceholder', () => {
-  it('has a heading and one sentence, no chart and no FAB', () => {
-    const { container } = render(h(TrendsPlaceholder, {}));
-    expect(container.querySelector('h1')?.textContent).toBe('Trends');
-    expect(container.querySelectorAll('p')).toHaveLength(1);
-    expect(container.querySelector('svg, canvas, .fab')).toBeNull();
   });
 });

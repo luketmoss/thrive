@@ -94,6 +94,13 @@
   --overlay-2xl: rgba(0, 0, 0, 0.32);
   --overlay-3xl: rgba(0, 0, 0, 0.40);
   --overlay-4xl: rgba(0, 0, 0, 0.60);
+  /* Trends chart marks (#242). Dot and line are >= 3:1 (WCAG 1.4.11) on the
+     card and on the band: dot 3.98 / 3.29, line 5.91 / 4.89. --color-primary
+     is 2.84:1 on the card, so it is never the light line. Grid is decoration. */
+  --chart-dot: #7a8088;
+  --chart-line: #b83508;
+  --chart-band: #ffe4d9;
+  --chart-grid: #e8eaed;
 }
 
 /* ===== Dark Theme ===== */
@@ -133,6 +140,11 @@
   --overlay-2xl: rgba(255, 255, 255, 0.32);
   --overlay-3xl: rgba(255, 255, 255, 0.40);
   --overlay-4xl: rgba(0, 0, 0, 0.60);
+  /* Trends (#242): dot 5.11 / 4.03, line 6.12 / 4.82 on the card / band. */
+  --chart-dot: #868c93;
+  --chart-line: #ff6b35;
+  --chart-band: #402819;
+  --chart-grid: #2c2c30;
 }
 
 /* ===== Base Styles ===== */
@@ -3234,7 +3246,7 @@ input, select, textarea {
   box-shadow: 0 1px 3px var(--color-shadow);
 }
 
-/* ===== Day / Trends placeholders (#235) ===== */
+/* ===== Day placeholder (#235) ===== */
 .placeholder-date {
   font-weight: 600;
 }
@@ -3250,4 +3262,170 @@ input, select, textarea {
   min-height: 44px;
   align-self: flex-start;
   text-decoration: none;
+}
+
+/* ===== Trends (#242) ===== */
+.trends-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.trends-control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.trends-control-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+/* Six 44px buttons at 8px gaps overflow the 288px column at 320px; 4px fits (286px). */
+.sub-type-toggle.trends-toggle-tight {
+  gap: var(--space-xs);
+}
+
+.trends-caption {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.trends-loading,
+.trend-empty {
+  color: var(--color-text-muted);
+}
+
+.trends-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-sm);
+}
+
+.trends-retry {
+  min-height: 44px;
+}
+
+.trend-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.trend-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  box-shadow: 0 1px 3px var(--color-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.trend-card-title {
+  font-size: var(--text-base);
+  font-weight: 700;
+}
+
+.trend-unit {
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.trend-note,
+.trend-summary {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The chart takes its card's width, never a fixed one. */
+.trend-plot-wrap {
+  width: 100%;
+  min-width: 0;
+}
+
+.trend-plot {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.trend-axis-label {
+  font-size: 11px;
+  fill: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The page scrolls the table; see trend-table.tsx for why the wrapper only
+   scrolls sideways once the table is wider than the column. */
+.trend-table-wrap {
+  max-width: 100%;
+}
+
+.trend-table-wrap.trend-table-scroll {
+  overflow-x: auto;
+}
+
+.trend-table-wrap:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.trend-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+.trend-table caption {
+  caption-side: top;
+  text-align: left;
+  padding-bottom: var(--space-sm);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.trend-table th,
+.trend-table td {
+  padding: var(--space-sm);
+  border-bottom: 1px solid var(--color-border-light);
+  white-space: nowrap;
+}
+
+.trend-table td {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.trend-table th[scope="row"] {
+  text-align: left;
+  font-weight: 500;
+}
+
+.trend-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-surface);
+  text-align: right;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.trend-table thead th:first-child {
+  text-align: left;
+}
+
+.trend-partial {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
 }
