@@ -5,6 +5,7 @@ import type { DailyHealthRow, BodyMeasurementRow, DailySummaryRow } from './heal
 import { colorKeyFromName } from './label-colors';
 import type { SyncLogEntryWithRow } from './sync-log-api';
 import { SyncLogNotSetUpError } from './sync-log-errors';
+import { todayInDenver } from '../day/dates'; // the one copy of the Denver date rule (#262)
 
 let _isDemo: boolean | null = null;
 
@@ -135,15 +136,6 @@ export const DEMO_WORKOUTS: WorkoutWithRow[] = [
 /** The fixture's own "today": carries both a done and a planned workout. */
 export const DEMO_ANCHOR_DATE = '2025-01-14';
 
-/** The calendar date of `now` in America/Denver, as YYYY-MM-DD. */
-export function demoDenverDate(now: Date): string {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Denver', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(now);
-  const get = (t: string) => parts.find((p) => p.type === t)!.value;
-  return `${get('year')}-${get('month')}-${get('day')}`;
-}
-
 const MS_PER_DAY = 86_400_000;
 
 function dayNumber(ymd: string): number {
@@ -169,7 +161,7 @@ export function addDaysToIso(iso: string, days: number): string {
  * Denver. Pure and deterministic; never mutates the fixture.
  */
 export function shiftDemoWorkouts(now: Date, fixture: WorkoutWithRow[] = DEMO_WORKOUTS): WorkoutWithRow[] {
-  const delta = dayNumber(demoDenverDate(now)) - dayNumber(DEMO_ANCHOR_DATE);
+  const delta = dayNumber(todayInDenver(now)) - dayNumber(DEMO_ANCHOR_DATE);
   return fixture.map((w) => ({
     ...w,
     date: w.date ? addDaysToDateStr(w.date, delta) : w.date,
@@ -196,7 +188,7 @@ export const DEMO_JOURNAL: JournalEntryWithRow[] = [
 
 /** The demo journal with every date moved as `shiftDemoWorkouts` moves the workouts. Pure. */
 export function shiftDemoJournal(now: Date, fixture: JournalEntryWithRow[] = DEMO_JOURNAL): JournalEntryWithRow[] {
-  const delta = dayNumber(demoDenverDate(now)) - dayNumber(DEMO_ANCHOR_DATE);
+  const delta = dayNumber(todayInDenver(now)) - dayNumber(DEMO_ANCHOR_DATE);
   return fixture.map((e) => ({
     ...e,
     date: addDaysToDateStr(e.date, delta),
@@ -438,7 +430,7 @@ function notAfter(t: number, now: Date): string {
 
 /** The 90 local days ending today, oldest first, with their day numbers. */
 function demoHealthDays(now: Date): { date: string; day: number; isToday: boolean }[] {
-  const today = demoDenverDate(now);
+  const today = todayInDenver(now);
   const todayNum = dayNumber(today);
   const days = [];
   for (let i = DEMO_HEALTH_DAYS - 1; i >= 0; i--) {

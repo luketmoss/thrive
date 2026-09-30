@@ -1,9 +1,12 @@
 import { signal } from '@preact/signals';
+import { validPlanDate } from '../components/workout/plan-date';
 
 export interface ParsedRoute {
   name: string;
   params: Record<string, string>;
   hash: string;
+  /** A `#/day…` hash that names no real date (#237): shown as today, URL replaced with `#/`. */
+  badDay?: boolean;
 }
 
 function parseHash(hash: string): ParsedRoute {
@@ -64,11 +67,31 @@ function parseHash(hash: string): ParsedRoute {
   // /activities (#235): the list that used to live at `/`
   if (path === '/activities') return { name: 'activities', params: {}, hash: path };
 
+  // /day/YYYY-MM-DD (#237): one real calendar date. Anything else under /day
+  // (no date, a date that does not exist, a loose or extra part) is today, and
+  // `settle` replaces its URL with `#/`.
+  match = path.match(/^\/day\/([^/]+)$/);
+  if (match && validPlanDate(match[1])) return { name: 'day', params: { date: match[1] }, hash: path };
+  if (path === '/day' || path.startsWith('/day/')) return { name: 'day', params: {}, hash: '/', badDay: true };
+
   // Default: Day, for the empty hash, `#/` and any hash that matches no route (#235)
   return { name: 'day', params: {}, hash: '/' };
 }
 
-export const currentRoute = signal<ParsedRoute>(parseHash(window.location.hash));
+/** Rewrite the current history entry's hash without adding one or firing hashchange. */
+function replaceHash(hash: string): void {
+  window.history.replaceState(window.history.state, '', hash);
+}
+
+/** Parse, and replace a bad `#/day…` URL with `#/` in place (#237 AC1). */
+function settle(hash: string): ParsedRoute {
+  const route = parseHash(hash);
+  if (!route.badDay) return route;
+  replaceHash('#/');
+  return { name: route.name, params: route.params, hash: route.hash };
+}
+
+export const currentRoute = signal<ParsedRoute>(settle(window.location.hash));
 
 // In-app history (#235): lets a Back arrow use `history.back()` only when the
 // screen before this one is a sensible place to land. A deep link opened fresh
@@ -78,7 +101,7 @@ export const currentRoute = signal<ParsedRoute>(parseHash(window.location.hash))
 // announced (browser back/forward, a plain link) is a pop when it returns to the
 // previous entry and a push otherwise.
 const normalise = (hash: string): string => (hash === '' ? '#/' : hash);
-const visited: string[] = [normalise(window.location.hash)];
+const visited: string[] = [normalise(window.location.hash)]; // after `settle` above
 let expected: 'push' | 'pop' | null = null;
 
 // Screens that are steps of a flow, never somewhere to go "back" to: returning
@@ -92,7 +115,8 @@ window.addEventListener('hashchange', () => {
   expected = null;
   if (isPop) visited.pop();
   else visited.push(hash);
-  currentRoute.value = parseHash(window.location.hash);
+  currentRoute.value = settle(window.location.hash);
+  visited[visited.length - 1] = normalise(window.location.hash);
 });
 
 /** True when the previous in-app screen is a sensible place for Back to land. */
@@ -116,4 +140,17 @@ export function navigate(path: string): void {
   // Setting the hash it already has fires no hashchange, so announce nothing.
   if (normalise('#' + path.replace(/^#/, '')) !== normalise(window.location.hash)) expected = 'push';
   window.location.hash = path;
+}
+
+/**
+ * Show `path` in place of the current screen, without a new history entry or
+ * a hashchange (#237 AC1): moving between days on the Day screen replaces, so
+ * Back leaves the Day screen rather than stepping back through every day seen.
+ */
+export function replaceRoute(path: string): void {
+  const hash = normalise('#' + path.replace(/^#/, ''));
+  if (hash === normalise(window.location.hash)) return;
+  replaceHash(hash);
+  visited[visited.length - 1] = hash;
+  currentRoute.value = settle(hash);
 }

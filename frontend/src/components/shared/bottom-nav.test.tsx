@@ -58,3 +58,40 @@ describe('BottomNav', () => {
     }
   }
 });
+
+// #237 AC1 — re-tapping Day.
+describe('BottomNav Day re-tap (#237 AC1)', () => {
+  it('goes to today from another date, replacing, and scrolls to the top', async () => {
+    const { vi } = await import('vitest');
+    const { replaceRoute } = await import('../../router/router');
+    const { fireEvent } = await import('@testing-library/preact');
+    const scrollTo = vi.fn();
+    const saved = window.scrollTo;
+    window.scrollTo = scrollTo as unknown as typeof window.scrollTo;
+    window.history.replaceState(null, '', '#/activities');
+    replaceRoute('/day/2026-09-12');
+    const before = window.history.length;
+    const { getByLabelText } = render(h(BottomNav, {}));
+    fireEvent.click(getByLabelText('Day'));
+    expect(window.location.hash).toBe('#/');
+    expect(currentRoute.value.params).toEqual({});
+    expect(window.history.length).toBe(before);
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    // On today it only scrolls
+    fireEvent.click(getByLabelText('Day'));
+    expect(window.location.hash).toBe('#/');
+    expect(window.history.length).toBe(before);
+    expect(scrollTo).toHaveBeenCalledTimes(2);
+    window.scrollTo = saved;
+  });
+
+  it('opens today from another tab, not the last date viewed', async () => {
+    const { fireEvent } = await import('@testing-library/preact');
+    const { replaceRoute } = await import('../../router/router');
+    window.history.replaceState(null, '', '#/day/2026-09-12');
+    replaceRoute('/settings');
+    const { getByLabelText } = render(h(BottomNav, {}));
+    fireEvent.click(getByLabelText('Day'));
+    expect(window.location.hash).toBe('#/');
+  });
+});

@@ -1272,3 +1272,10 @@ export async function loadHealth(token: string): Promise<void> {
     loadHealthTab(dailySummary, fetchDailySummary, token, 'DailySummary'),
   ]);
 }
+
+/**
+ * The Day screen's health load (#237 AC5): on show and on the page becoming
+ * visible, never while one is in flight or within 60 s of the last start.
+ * Each load is three Sheets reads against a quota of 60 a minute.
+ */
+export const healthRefresh = throttled(loadHealth, { minIntervalMs: 60_000 });

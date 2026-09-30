@@ -2,6 +2,7 @@
 // that mirrors apps-script/src/types.js (change both together).
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { todayInDenver } from '../day/dates';
 import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -27,7 +28,7 @@ vi.mock('./demo-data', async () => {
 });
 
 import { JOURNAL_FIELDS, fetchJournal, upsertJournalEntry } from './journal-api';
-import { DEMO_JOURNAL, shiftDemoJournal, demoDenverDate, DEMO_ANCHOR_DATE } from './demo-data';
+import { DEMO_JOURNAL, shiftDemoJournal, DEMO_ANCHOR_DATE } from './demo-data';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const typesJs = readFileSync(resolve(__dirname, '../../../apps-script/src/types.js'), 'utf-8');
@@ -129,7 +130,7 @@ describe('AC5: demo mode', () => {
     expect(sheetsGet).not.toHaveBeenCalled();
     expect(out).toHaveLength(DEMO_JOURNAL.length);
     expect(out.length).toBeGreaterThanOrEqual(4);
-    expect(out.map((e) => e.date)).toContain(demoDenverDate(new Date()));
+    expect(out.map((e) => e.date)).toContain(todayInDenver(new Date()));
   });
 
   it('upsert and clear persist nothing', async () => {

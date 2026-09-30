@@ -1,4 +1,4 @@
-import { currentRoute, navigate } from '../../router/router';
+import { currentRoute, navigate, replaceRoute } from '../../router/router';
 
 const TABS = [
   { name: 'day', label: 'Day', icon: '\u{1F5D3}️', path: '/' },
@@ -26,6 +26,15 @@ const TAB_FOR_ROUTE: Record<string, string> = {
   'manage-labels': 'settings',
 };
 
+/**
+ * Re-tapping Day while Day shows (#237 AC1): back to today, replacing the
+ * history entry rather than adding one, and to the top of the screen.
+ */
+function reselectDay() {
+  replaceRoute('/');
+  window.scrollTo({ top: 0 });
+}
+
 export function BottomNav() {
   const route = currentRoute.value;
   const activeTab = TAB_FOR_ROUTE[route.name];
@@ -38,7 +47,7 @@ export function BottomNav() {
           <button
             key={tab.name}
             class={`bottom-nav-tab ${isActive ? 'active' : ''}`}
-            onClick={() => navigate(tab.path)}
+            onClick={() => (isActive && tab.name === 'day' ? reselectDay() : navigate(tab.path))}
             aria-label={tab.label}
             aria-current={isActive ? 'page' : undefined}
           >

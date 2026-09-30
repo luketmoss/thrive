@@ -2,7 +2,8 @@
 // page load at the fetchWorkouts read boundary. The raw fixture never changes.
 
 import { describe, it, expect, vi } from 'vitest';
-import { DEMO_WORKOUTS, DEMO_ANCHOR_DATE, shiftDemoWorkouts, demoDenverDate, addDaysToDateStr } from './demo-data';
+import { todayInDenver } from '../day/dates';
+import { DEMO_WORKOUTS, DEMO_ANCHOR_DATE, shiftDemoWorkouts, addDaysToDateStr } from './demo-data';
 
 vi.mock('./sheets', () => ({
   sheetsGet: vi.fn(), sheetsAppend: vi.fn(), sheetsUpdate: vi.fn(), sheetsDeleteRow: vi.fn(),
@@ -21,7 +22,7 @@ describe('AC1: shiftDemoWorkouts', () => {
 
   it('uses the Denver date, not UTC, near midnight', () => {
     // 03:00 UTC on the 1st is still the evening of Sep 30 in Denver (MDT).
-    expect(demoDenverDate(new Date('2026-10-01T03:00:00Z'))).toBe('2026-09-30');
+    expect(todayInDenver(new Date('2026-10-01T03:00:00Z'))).toBe('2026-09-30');
     expect(shiftDemoWorkouts(new Date('2026-10-01T03:00:00Z')).find((w) => w.id === 'w_demo001')!.date).toBe('2026-09-30');
   });
 

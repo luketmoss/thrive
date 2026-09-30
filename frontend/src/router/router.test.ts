@@ -240,3 +240,70 @@ describe('router', () => {
     });
   });
 });
+
+// #237 AC1 — Day is addressed by date.
+describe('day route (#237 AC1)', () => {
+  async function fresh(hash: string) {
+    vi.resetModules();
+    window.history.replaceState(null, '', hash === '' ? window.location.pathname : hash);
+    return import('./router');
+  }
+
+  it('parses #/day/YYYY-MM-DD for a real date and leaves the URL alone', async () => {
+    const r = await fresh('#/day/2028-02-29');
+    expect(r.currentRoute.value).toEqual({ name: 'day', params: { date: '2028-02-29' }, hash: '/day/2028-02-29' });
+    expect(window.location.hash).toBe('#/day/2028-02-29');
+  });
+
+  it.each(['#/day', '#/day/', '#/day/2026-02-30', '#/day/2026-9-1', '#/day/2026-09-01/x', '#/day/today'])(
+    'shows today for %s and replaces the URL with #/, adding no history entry',
+    async (hash) => {
+      const r = await fresh(hash);
+      expect(r.currentRoute.value).toEqual({ name: 'day', params: {}, hash: '/' });
+      expect(window.location.hash).toBe('#/');
+      expect(r.canGoBack()).toBe(false);
+    },
+  );
+
+  it('replaces a bad day hash reached by a hashchange too', async () => {
+    const r = await fresh('#/activities');
+    const before = window.history.length;
+    window.location.hash = '/day/2026-13-01';
+    window.dispatchEvent(new Event('hashchange'));
+    expect(r.currentRoute.value.params).toEqual({});
+    expect(window.location.hash).toBe('#/');
+    expect(window.history.length).toBe(before + 1); // the push itself, and nothing more
+    // Back from there still reaches Activities
+    expect(r.canGoBack()).toBe(true);
+  });
+
+  it('leaves an unknown hash showing today with its URL unchanged', async () => {
+    const r = await fresh('#/nowhere');
+    expect(r.currentRoute.value.name).toBe('day');
+    expect(window.location.hash).toBe('#/nowhere');
+  });
+
+  it('replaceRoute moves between days without a history entry or hashchange', async () => {
+    const r = await fresh('#/activities');
+    r.navigate('/');
+    window.dispatchEvent(new Event('hashchange'));
+    const before = window.history.length;
+    const onChange = vi.fn();
+    window.addEventListener('hashchange', onChange);
+    for (let i = 1; i <= 10; i++) r.replaceRoute(`/day/2026-09-${String(i).padStart(2, '0')}`);
+    window.removeEventListener('hashchange', onChange);
+    expect(window.history.length).toBe(before);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(window.location.hash).toBe('#/day/2026-09-10');
+    expect(r.currentRoute.value.params).toEqual({ date: '2026-09-10' });
+    // Back still leaves the Day screen for Activities, not the previous day
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+    expect(r.canGoBack()).toBe(true);
+    r.goBack();
+    expect(back).toHaveBeenCalledOnce();
+    back.mockRestore();
+    r.replaceRoute('#/');
+    expect(window.location.hash).toBe('#/');
+    expect(r.currentRoute.value.params).toEqual({});
+  });
+});
