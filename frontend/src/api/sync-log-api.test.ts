@@ -25,6 +25,8 @@ vi.mock('./sheets', () => {
   }
   return {
     SheetsApiError: MockSheetsApiError,
+    isMissingTabError: (err: unknown) =>
+      err instanceof MockSheetsApiError && err.status === 400 && /unable to parse range/i.test(err.message),
     sheetsGet: (...args: unknown[]) => sheetsGet(...args),
     withReauth: (token: string, fn: (t: string) => unknown) => fn(token),
   };

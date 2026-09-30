@@ -1,6 +1,7 @@
 // Demo mode detection and seed data for offline/preview usage.
 
-import type { ExerciseWithRow, LabelWithRow, TemplateRowWithRow, Template, WorkoutWithRow, SetWithRow } from './types';
+import type { ExerciseWithRow, LabelWithRow, TemplateRowWithRow, Template, Workout, WorkoutWithRow, SetWithRow } from './types';
+import type { DailyHealthRow, BodyMeasurementRow, DailySummaryRow } from './health-api';
 import { colorKeyFromName } from './label-colors';
 import type { SyncLogEntryWithRow } from './sync-log-api';
 import { SyncLogNotSetUpError } from './sync-log-errors';
@@ -329,4 +330,409 @@ export function demoWithingsSyncLog(
   if (scenario === 'missing') throw new SyncLogNotSetUpError('Demo: WithingsSyncLog not set up (withingslog=missing)');
   if (scenario === 'error') throw new Error('Demo: WithingsSyncLog unreadable (withingslog=error)');
   return buildDemoSyncRuns(now, scenario, 'withings-schedule-demo');
+}
+
+// ── Demo health data (#236) ──────────────────────────────────────────
+//
+// 90 local days of DailyHealth, BodyMeasurements and DailySummary ending
+// today in Denver, generated relative to `now` so the Day view and Trends
+// always have a recent history. Deterministic: every value is a function of
+// its date alone (a hash of the day number, never Math.random), so the same
+// date always shows the same values. The one exception is today, which is a
+// partial day: steps so far, and only the readings taken before `now`.
+//
+// Gaps and edge cases repeat on a 30-day cycle keyed by the day number, so
+// the 90 days carry each of them at least twice, and every 30-day window
+// holds exactly one cycle (health-demo.test.ts checks the invariants).
+//
+// `?demo=true&health=empty` loads all three tabs empty and `health=error`
+// fails all three, following `synclog=`.
+
+export type DemoHealthScenario = 'ok' | 'empty' | 'error';
+
+export function demoHealthScenario(): DemoHealthScenario {
+  const raw = new URLSearchParams(window.location.search).get('health');
+  return raw === 'empty' || raw === 'error' ? raw : 'ok';
+}
+
+/** How many local days the demo history spans, today included. */
+export const DEMO_HEALTH_DAYS = 90;
+
+/** The oldest days' rows sit at the end of the sheet, as a backfill leaves them. */
+const DEMO_BACKFILLED_DAYS = 10;
+
+// Positions in the 30-day cycle (day number mod 30).
+const HEALTH_NO_ROW = [5, 6, 7, 19];         // no DailyHealth row at all; 5-7 is a run of 3
+const HEALTH_CHARGER_NIGHT = [12, 25];       // steps present, sleep (and its HRV) blank
+const HEALTH_HRV_BLANK = [9, 22];            // slept, but no HRV average
+const SCALE_NONE = [2, 5, 6, 7, 13, 20, 27]; // mornings with no scale reading
+const SCALE_TWO = 10;                        // a morning and an evening weigh-in
+const SCALE_NO_WEIGHT_FIRST = 16;            // the first reading has no weight, the second does
+const SCALE_NO_WEIGHT_ONLY = 23;             // the day's only reading has no weight
+const SCALE_WEIGHT_ONLY = 24;                // a weight with no body composition
+const ACTIVITY_PARTIAL = 11;                 // two outdoor sessions, one unmeasured
+const ACTIVITY_ZERO_DISTANCE = 26;           // a measured 0 distance
+const ACTIVITY_INDOOR_ONLY = 13;             // an indoor ride: no outdoor distance at all
+
+function cyclePos(day: number): number {
+  return ((day % 30) + 30) % 30;
+}
+
+/** A deterministic value in [0, 1) for a day and a salt. */
+function demoNoise(day: number, salt: number): number {
+  let x = (Math.imul(day, 374761393) + Math.imul(salt, 668265263)) | 0;
+  x = Math.imul(x ^ (x >>> 13), 1274126177);
+  x ^= x >>> 16;
+  return (x >>> 0) / 4294967296;
+}
+
+function wave(day: number, period: number): number {
+  return Math.sin((2 * Math.PI * day) / period);
+}
+
+function hhmm(minutes: number): string {
+  const m = ((Math.round(minutes) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+}
+
+/** Denver's UTC offset on a local date, as "-06:00" or "-07:00" (read at noon, clear of the 02:00 switch). */
+function denverOffset(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const noonUtc = new Date(Date.UTC(y, m - 1, d, 12));
+  const hour = Number(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Denver', hour: '2-digit', hourCycle: 'h23',
+  }).format(noonUtc));
+  const off = hour - 12;
+  return `${off < 0 ? '-' : '+'}${String(Math.abs(off)).padStart(2, '0')}:00`;
+}
+
+/** An instant no later than `now`, as ISO. */
+function notAfter(t: number, now: Date): string {
+  return new Date(Math.min(t, now.getTime())).toISOString();
+}
+
+/** The 90 local days ending today, oldest first, with their day numbers. */
+function demoHealthDays(now: Date): { date: string; day: number; isToday: boolean }[] {
+  const today = demoDenverDate(now);
+  const todayNum = dayNumber(today);
+  const days = [];
+  for (let i = DEMO_HEALTH_DAYS - 1; i >= 0; i--) {
+    days.push({ date: addDaysToDateStr(today, -i), day: todayNum - i, isToday: i === 0 });
+  }
+  return days;
+}
+
+/** Sheet order after a backfill: the oldest days' rows were appended last. */
+function asBackfilled<T extends { date: string; sheetRow: number }>(rows: Omit<T, 'sheetRow'>[], oldestDate: string): T[] {
+  const cutoff = addDaysToDateStr(oldestDate, DEMO_BACKFILLED_DAYS);
+  const recent = rows.filter((r) => r.date >= cutoff);
+  const backfilled = rows.filter((r) => r.date < cutoff);
+  return [...recent, ...backfilled].map((r, i) => ({ ...r, sheetRow: i + 2 }) as T);
+}
+
+function buildDemoDailyHealth(now: Date): DailyHealthRow[] {
+  const days = demoHealthDays(now);
+  const rows: Omit<DailyHealthRow, 'sheetRow'>[] = [];
+  for (const { date, day, isToday } of days) {
+    const p = cyclePos(day);
+    // Today always has its partial row, whatever the cycle says.
+    if (!isToday && HEALTH_NO_ROW.includes(p)) continue;
+
+    const charger = !isToday && HEALTH_CHARGER_NIGHT.includes(p);
+    const hrvBlank = charger || (!isToday && HEALTH_HRV_BLANK.includes(p));
+    const fullSteps = Math.round(8800 + 3200 * wave(day, 7) + 3000 * (demoNoise(day, 3) - 0.5));
+    // Today is partial: the steps and calories so far.
+    const steps = isToday ? Math.round(fullSteps * 0.4) : fullSteps;
+    const calories = Math.round((isToday ? 900 : 1950) + steps * 0.04 + 120 * demoNoise(day, 4));
+
+    const sleepMin = 6 * 60 + Math.round(150 * demoNoise(day, 5));
+    const awakeMin = Math.round(sleepMin * (0.03 + 0.04 * demoNoise(day, 6)));
+    const deepMin = Math.round(sleepMin * (0.13 + 0.05 * demoNoise(day, 7)));
+    const remMin = Math.round(sleepMin * (0.19 + 0.05 * demoNoise(day, 8)));
+    const lightMin = sleepMin - awakeMin - deepMin - remMin;
+    const bedMin = 21 * 60 + 45 + Math.round(75 * demoNoise(day, 9));
+    // A night on the charger is blank, never zero sleep.
+    const sleep = (v: number | string) => (charger ? '' : String(v));
+
+    rows.push({
+      date,
+      resting_hr: String(Math.round(51 + 2.5 * wave(day, 17) + 3 * (demoNoise(day, 1) - 0.5))),
+      hrv: hrvBlank ? '' : String(Math.round(58 + 8 * wave(day, 23) + 10 * (demoNoise(day, 2) - 0.5))),
+      steps: String(steps),
+      calories: String(calories),
+      sleep_total_s: sleep(sleepMin * 60),
+      sleep_deep_s: sleep(deepMin * 60),
+      sleep_rem_s: sleep(remMin * 60),
+      sleep_light_s: sleep(lightMin * 60),
+      sleep_awake_s: sleep(awakeMin * 60),
+      sleep_score: sleep(Math.round(62 + 30 * demoNoise(day, 10))),
+      // Current-state snapshots: written on some days only, and on today's.
+      vo2max: isToday || p % 4 === 0 ? String(47 + Math.floor(3 * demoNoise(day, 11))) : '',
+      recovery: isToday || p % 3 === 0 ? String(Math.round(35 + 60 * demoNoise(day, 12))) : '',
+      // The day is not over, so its load is not in yet.
+      training_load: isToday ? '' : String(Math.round(20 + 100 * demoNoise(day, 13))),
+      bed_time: sleep(hhmm(bedMin)),
+      wake_time: sleep(hhmm(bedMin + sleepMin)),
+      raw_ref: `demo/health/${date}.json`,
+      synced_at: notAfter(Date.parse(`${addDaysToDateStr(date, isToday ? 0 : 1)}T12:17:04.000Z`), now),
+    });
+  }
+  return asBackfilled<DailyHealthRow>(rows, days[0].date);
+}
+
+type DemoMeasures = Pick<BodyMeasurementRow,
+  'weight_kg' | 'fat_ratio_pct' | 'fat_mass_kg' | 'fat_free_mass_kg' | 'muscle_mass_kg' |
+  'hydration_kg' | 'bone_mass_kg' | 'systolic_mmhg' | 'diastolic_mmhg' | 'pulse_bpm'>;
+
+const NO_MEASURES: DemoMeasures = {
+  weight_kg: '', fat_ratio_pct: '', fat_mass_kg: '', fat_free_mass_kg: '', muscle_mass_kg: '',
+  hydration_kg: '', bone_mass_kg: '', systolic_mmhg: '', diastolic_mmhg: '', pulse_bpm: '',
+};
+
+function scaleMeasures(day: number, shiftKg: number, composition: boolean): DemoMeasures {
+  const weight = 81.4 + 0.9 * wave(day, 29) + 0.6 * (demoNoise(day, 20) - 0.5) + shiftKg;
+  const pulse = String(Math.round(60 + 8 * demoNoise(day, 21)));
+  if (!composition) return { ...NO_MEASURES, weight_kg: weight.toFixed(1), pulse_bpm: pulse };
+  const ratio = 19.2 + 0.8 * wave(day, 31) + 0.6 * (demoNoise(day, 22) - 0.5);
+  const fatMass = (weight * ratio) / 100;
+  const fatFree = weight - fatMass;
+  return {
+    ...NO_MEASURES,
+    weight_kg: weight.toFixed(1),
+    fat_ratio_pct: ratio.toFixed(1),
+    fat_mass_kg: fatMass.toFixed(2),
+    fat_free_mass_kg: fatFree.toFixed(2),
+    muscle_mass_kg: (fatFree * 0.94).toFixed(2),
+    hydration_kg: (fatFree * 0.72).toFixed(2),
+    bone_mass_kg: '3.31',
+    pulse_bpm: pulse,
+  };
+}
+
+function bpMeasures(day: number, salt: number, fixed?: [number, number]): DemoMeasures {
+  const [sys, dia] = fixed ?? [
+    116 + Math.round(8 * demoNoise(day, 30 + salt)),
+    74 + Math.round(6 * demoNoise(day, 40 + salt)),
+  ];
+  return {
+    ...NO_MEASURES,
+    systolic_mmhg: String(sys),
+    diastolic_mmhg: String(dia),
+    pulse_bpm: String(Math.round(62 + 8 * demoNoise(day, 50 + salt))),
+  };
+}
+
+function buildDemoBodyMeasurements(now: Date): BodyMeasurementRow[] {
+  const days = demoHealthDays(now);
+  const rows: Omit<BodyMeasurementRow, 'sheetRow'>[] = [];
+  for (const { date, day } of days) {
+    const p = cyclePos(day);
+    const offset = denverOffset(date);
+    const readings: { minutes: number; kind: 'scale' | 'bp'; measures: DemoMeasures }[] = [];
+    const morning = 6 * 60 + 25 + Math.round(20 * demoNoise(day, 23));
+
+    if (p === SCALE_NO_WEIGHT_FIRST) {
+      // Stepped off early: the scale kept only the standing heart rate.
+      readings.push({ minutes: morning, kind: 'scale', measures: { ...NO_MEASURES, pulse_bpm: '64' } });
+      readings.push({ minutes: morning + 2, kind: 'scale', measures: scaleMeasures(day, 0, true) });
+    } else if (p === SCALE_NO_WEIGHT_ONLY) {
+      readings.push({ minutes: morning, kind: 'scale', measures: { ...NO_MEASURES, pulse_bpm: '66' } });
+    } else if (p === SCALE_TWO) {
+      readings.push({ minutes: morning, kind: 'scale', measures: scaleMeasures(day, 0, true) });
+      readings.push({ minutes: 19 * 60 + 20, kind: 'scale', measures: scaleMeasures(day, 0.9, true) });
+    } else if (!SCALE_NONE.includes(p)) {
+      readings.push({ minutes: morning, kind: 'scale', measures: scaleMeasures(day, 0, p !== SCALE_WEIGHT_ONLY) });
+    }
+
+    if (p % 5 === 1) {
+      // A pair a few minutes apart. On the cycle's 1st day their means land on
+      // .5, so the summary's half-up rounding shows; the 11th adds an evening one.
+      readings.push({ minutes: 7 * 60 + 5, kind: 'bp', measures: bpMeasures(day, 0, p === 1 ? [118, 76] : undefined) });
+      readings.push({ minutes: 7 * 60 + 8, kind: 'bp', measures: bpMeasures(day, 1, p === 1 ? [121, 79] : undefined) });
+      if (p === 11) readings.push({ minutes: 21 * 60 + 40, kind: 'bp', measures: bpMeasures(day, 2) });
+    } else if (p % 5 === 3) {
+      readings.push({ minutes: 7 * 60 + 5, kind: 'bp', measures: bpMeasures(day, 0) });
+    }
+
+    readings.forEach((r, k) => {
+      const time = hhmm(r.minutes);
+      const measured = `${date}T${time}:00${offset}`;
+      const t = Date.parse(measured);
+      if (t > now.getTime()) return; // not taken yet today
+      const grpid = String(5_000_000 + day * 10 + k);
+      rows.push({
+        grpid,
+        date,
+        time,
+        measured_at_utc: measured,
+        kind: r.kind,
+        device_model: r.kind === 'scale' ? 'Body+' : 'BPM Connect',
+        ...r.measures,
+        attrib: '0',
+        source: 'withings',
+        raw_ref: `demo/withings/${grpid}.json`,
+        synced_at: notAfter(t + 40 * 60_000, now),
+      });
+    });
+  }
+  return asBackfilled<BodyMeasurementRow>(rows, days[0].date);
+}
+
+// Demo activities, only so DailySummary's activity columns have something to
+// roll up. The last seven days are the demo Workouts themselves, so a day's
+// summary agrees with its activity list; older days follow the cycle and
+// exist only in the summary.
+
+type DemoActivity = Pick<Workout, 'type' | 'sub_type' | 'moving_seconds' | 'elapsed_seconds' | 'distance_m' | 'ascent_m' | 'effort'>;
+
+function act(
+  type: Workout['type'], sub_type: string, moving: string, elapsed: string,
+  distance: string, ascent: string, effort: Workout['effort'],
+): DemoActivity {
+  return { type, sub_type, moving_seconds: moving, elapsed_seconds: elapsed, distance_m: distance, ascent_m: ascent, effort };
+}
+
+function syntheticActivities(day: number): DemoActivity[] {
+  const p = cyclePos(day);
+  if ([0, 8, 15, 22].includes(p)) {
+    return [act('weight', '', '', String(3300 + Math.round(600 * demoNoise(day, 60))), '', '', demoNoise(day, 61) > 0.5 ? 'Hard' : 'Medium')];
+  }
+  if (p === 3 || p === 17) {
+    return [act('bike', 'mountain', '4210', '4735', String(22000 + Math.round(6000 * demoNoise(day, 62))), String(380 + Math.round(120 * demoNoise(day, 63))), 'Hard')];
+  }
+  if (p === ACTIVITY_PARTIAL) {
+    return [
+      act('hike', 'outdoor', '5400', '6120', '9812', '521', 'Medium'),
+      act('walk', 'outdoor', '', '1500', '', '', ''),
+    ];
+  }
+  if (p === ACTIVITY_ZERO_DISTANCE) return [act('walk', 'outdoor', '480', '600', '0', '0', 'Easy')];
+  if (p === ACTIVITY_INDOOR_ONLY) return [act('bike', 'indoor', '2700', '2760', '21000', '', 'Medium')];
+  if (p === 20) return [act('stretch', '', '', '1200', '', '', '')];
+  return [];
+}
+
+// The rollup below follows buildDaySummary in apps-script/src/daily-summary.js
+// rule for rule, so the demo tab reads the way the real one does.
+
+const DEMO_INDOOR_SUB_TYPES = ['indoor'];
+const DEMO_CARDIO_TYPES = ['bike', 'hike', 'run', 'walk'];
+const DEMO_EFFORTS = ['Easy', 'Medium', 'Hard'];
+
+/** A covered total as its cells: both blank with nothing to cover, the total blank when nothing contributed. */
+function coveredCells(ws: DemoActivity[], field: 'moving_seconds' | 'elapsed_seconds' | 'distance_m' | 'ascent_m') {
+  if (!ws.length) return { total: '', withData: '' };
+  let total = 0;
+  let withData = 0;
+  for (const w of ws) {
+    const n = parseInt(w[field], 10);
+    if (Number.isNaN(n)) continue;
+    total += n;
+    withData += 1;
+  }
+  return { total: withData ? String(total) : '', withData: String(withData) };
+}
+
+function summarizeDemoDay(
+  date: string,
+  ws: DemoActivity[],
+  health: DailyHealthRow | undefined,
+  body: BodyMeasurementRow[],
+  computedAt: string,
+): Omit<DailySummaryRow, 'sheetRow'> | null {
+  // A day with nothing to report has no row, never a row of zeros.
+  if (!ws.length && !health && !body.length) return null;
+  const outdoor = ws.filter((w) => DEMO_CARDIO_TYPES.includes(w.type) && !DEMO_INDOOR_SUB_TYPES.includes(w.sub_type));
+  const distance = coveredCells(outdoor, 'distance_m');
+  const ascent = coveredCells(outdoor, 'ascent_m');
+  const moving = coveredCells(ws, 'moving_seconds');
+  const elapsed = coveredCells(ws, 'elapsed_seconds');
+
+  const labels = [...new Set(ws.map((w) => (w.sub_type ? `${w.type}:${w.sub_type}` : w.type)))].sort();
+  const counts: Record<string, number> = {};
+  for (const w of ws) if (w.effort && DEMO_EFFORTS.includes(w.effort)) counts[w.effort] = (counts[w.effort] ?? 0) + 1;
+  const ranked = DEMO_EFFORTS.slice().reverse().filter((e) => counts[e]);
+
+  const firstWithWeight = body
+    .filter((m) => m.kind === 'scale' && m.weight_kg !== '')
+    .sort((a, b) => Date.parse(a.measured_at_utc) - Date.parse(b.measured_at_utc))[0];
+  const bp = body.filter((m) => m.kind === 'bp');
+  const meanHalfUp = (field: 'systolic_mmhg' | 'diastolic_mmhg') => {
+    const vals = bp.filter((m) => m[field] !== '').map((m) => Number(m[field]));
+    return vals.length ? String(Math.floor(vals.reduce((a, b) => a + b, 0) / vals.length + 0.5)) : '';
+  };
+
+  return {
+    date,
+    activity_count: ws.length ? String(ws.length) : '',
+    activity_types: labels.join(','),
+    total_moving_s: moving.total,
+    total_elapsed_s: elapsed.total,
+    total_distance_m: distance.total,
+    total_ascent_m: ascent.total,
+    cardio_activity_count: outdoor.length ? String(outdoor.length) : '',
+    distance_withdata: distance.withData,
+    ascent_withdata: ascent.withData,
+    max_effort: ranked[0] ?? '',
+    effort_counts: ranked.map((e) => `${e}:${counts[e]}`).join(','),
+    steps: health?.steps ?? '',
+    resting_hr: health?.resting_hr ?? '',
+    hrv: health?.hrv ?? '',
+    sleep_total_s: health?.sleep_total_s ?? '',
+    training_load: health?.training_load ?? '',
+    computed_at: computedAt,
+    moving_withdata: moving.withData,
+    elapsed_withdata: elapsed.withData,
+    weight_kg: firstWithWeight?.weight_kg ?? '',
+    fat_ratio_pct: firstWithWeight?.fat_ratio_pct ?? '',
+    systolic_mmhg: meanHalfUp('systolic_mmhg'),
+    diastolic_mmhg: meanHalfUp('diastolic_mmhg'),
+    bp_count: bp.length ? String(bp.length) : '',
+  };
+}
+
+function buildDemoDailySummary(now: Date): DailySummaryRow[] {
+  const days = demoHealthDays(now);
+  const todayNum = days[days.length - 1].day;
+  const health = new Map(buildDemoDailyHealth(now).map((h) => [h.date, h]));
+  const body = new Map<string, BodyMeasurementRow[]>();
+  for (const m of buildDemoBodyMeasurements(now)) {
+    if (!body.has(m.date)) body.set(m.date, []);
+    body.get(m.date)!.push(m);
+  }
+  const recent = new Map<string, DemoActivity[]>();
+  for (const w of shiftDemoWorkouts(now)) {
+    // A planned workout has not happened; it is not part of the rollup.
+    if (w.status === 'planned' || !w.date) continue;
+    if (!recent.has(w.date)) recent.set(w.date, []);
+    recent.get(w.date)!.push(w);
+  }
+  // One rebuild stamps one time.
+  const computedAt = new Date(now.getTime() - 20 * 60_000).toISOString();
+
+  const rows: Omit<DailySummaryRow, 'sheetRow'>[] = [];
+  for (const { date, day } of days) {
+    const ws = todayNum - day <= 6 ? recent.get(date) ?? [] : syntheticActivities(day);
+    const row = summarizeDemoDay(date, ws, health.get(date), body.get(date) ?? [], computedAt);
+    if (row) rows.push(row);
+  }
+  return asBackfilled<DailySummaryRow>(rows, days[0].date);
+}
+
+/** The demo DailyHealth tab as the sheet would hold it, in sheet order. */
+export function demoDailyHealth(now: Date, scenario: DemoHealthScenario = demoHealthScenario()): DailyHealthRow[] {
+  if (scenario === 'error') throw new Error('Demo: DailyHealth unreadable (health=error)');
+  return scenario === 'empty' ? [] : buildDemoDailyHealth(now);
+}
+
+/** The demo BodyMeasurements tab as the sheet would hold it, in sheet order. */
+export function demoBodyMeasurements(now: Date, scenario: DemoHealthScenario = demoHealthScenario()): BodyMeasurementRow[] {
+  if (scenario === 'error') throw new Error('Demo: BodyMeasurements unreadable (health=error)');
+  return scenario === 'empty' ? [] : buildDemoBodyMeasurements(now);
+}
+
+/** The demo DailySummary tab, rolled up from the other two by the tab's own rules, in sheet order. */
+export function demoDailySummary(now: Date, scenario: DemoHealthScenario = demoHealthScenario()): DailySummaryRow[] {
+  if (scenario === 'error') throw new Error('Demo: DailySummary unreadable (health=error)');
+  return scenario === 'empty' ? [] : buildDemoDailySummary(now);
 }

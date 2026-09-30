@@ -1,5 +1,7 @@
-import { exercises, labels, templates, workouts, sets, loading, activeWorkoutId, activeWorkoutSets, activeWarmupExercises, isEditMode, showToast, syncLog, withingsSyncLog } from './store';
+import { exercises, labels, templates, workouts, sets, loading, activeWorkoutId, activeWorkoutSets, activeWarmupExercises, isEditMode, showToast, syncLog, withingsSyncLog, dailyHealth, bodyMeasurements, dailySummary } from './store';
+import type { HealthTabState } from './store';
 import { fetchSyncLog, fetchWithingsSyncLog } from '../api/sync-log-api';
+import { fetchDailyHealth, fetchBodyMeasurements, fetchDailySummary } from '../api/health-api';
 import { SyncLogNotSetUpError } from '../api/sync-log-errors';
 import { enqueueSet, initPendingCount } from '../api/sync-queue';
 import { isDemo } from '../api/demo-data';
@@ -1203,4 +1205,39 @@ export async function loadWithingsSyncLog(token: string): Promise<void> {
     console.error('Failed to read WithingsSyncLog:', err);
     withingsSyncLog.value = { state: 'error' };
   }
+}
+
+// ── Health data (#236) ───────────────────────────────────────────────
+
+/** Loads one health tab into its signal, keeping loaded rows visible while it re-reads. */
+async function loadHealthTab<T>(
+  target: { value: HealthTabState<T> },
+  fetchTab: (token: string) => Promise<T[]>,
+  token: string,
+  name: string,
+): Promise<void> {
+  if (target.value.state !== 'loaded') target.value = { state: 'loading' };
+  try {
+    const rows = await fetchTab(token);
+    target.value = { state: 'loaded', rows };
+  } catch (err) {
+    if (isReauthFailure(err)) return; // auth-provider handles this
+    console.error(`Failed to read ${name}:`, err);
+    target.value = { state: 'error' };
+  }
+}
+
+/**
+ * Read DailyHealth, BodyMeasurements and DailySummary, each whole and in
+ * parallel. Each tab stands alone: a failure sets only that tab's signal to
+ * `error`, and a missing tab loads as empty. Ranges are then selected from
+ * these copies in memory, so moving between days or Trends ranges never
+ * re-reads the sheet. Consumers decide when to call it.
+ */
+export async function loadHealth(token: string): Promise<void> {
+  await Promise.all([
+    loadHealthTab(dailyHealth, fetchDailyHealth, token, 'DailyHealth'),
+    loadHealthTab(bodyMeasurements, fetchBodyMeasurements, token, 'BodyMeasurements'),
+    loadHealthTab(dailySummary, fetchDailySummary, token, 'DailySummary'),
+  ]);
 }

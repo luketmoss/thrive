@@ -15,6 +15,15 @@ export class SheetsApiError extends Error {
 }
 
 /**
+ * True for the 400 Sheets returns when a tab doesn't exist, e.g. before a
+ * migration has created it. Shared by every read that treats a missing tab as
+ * its own state rather than a failure (#210, #236).
+ */
+export function isMissingTabError(err: unknown): boolean {
+  return err instanceof SheetsApiError && err.status === 400 && /unable to parse range/i.test(err.message);
+}
+
+/**
  * Wrap a Sheets API call with 401 retry logic.
  * On 401: attempt silent re-auth, then retry once with the new token.
  * The `callFn` receives a token and performs the actual API call.

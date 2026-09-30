@@ -53,6 +53,7 @@ Google Sheet "Groundwork" with these tabs:
   Every value is nullable: blank means COROS did not say, never `0`. Sleep is
   filed under its wake-up day; `sleep_total_s` includes awake time; `vo2max` and
   `recovery` are current-state snapshots. There is no step goal: COROS sends none.
+  The SPA reads it, read-only, through `frontend/src/api/health-api.ts` (#236).
 - **BodyMeasurements** (A:T) — one row per Withings measure group (#198),
   keyed by `grpid`, written only by the Withings sync (`sync/withings-run.mjs`)
   through `upsertBodyMeasurements`, which rewrites a row whole. A reading
@@ -66,12 +67,15 @@ Google Sheet "Groundwork" with these tabs:
   consumers that display it, and `Sets!Weight` stays in lbs. Every measure is
   nullable: blank means the group had no such measure, never `0`. `date`/`time`
   are local `America/Denver`. Groups with an `attrib` other than 0, 2, 4, 5, 7
-  or 8 (1 is a guest or another user) are never written. No `frontend/` mirror:
-  the SPA does not read this tab. Later columns are only ever appended.
+  or 8 (1 is a guest or another user) are never written. The SPA reads it,
+  read-only and still in kg, through `frontend/src/api/health-api.ts` (#236).
+  Later columns are only ever appended.
 - **DailySummary** (A:Y) — **derived, never authoritative** (#131). One row per
   local calendar day, rebuildable at any time from `Workouts` + `DailyHealth` +
   `BodyMeasurements`. Nothing writes here by hand. If it disagrees with
-  `Workouts`, `Workouts` is right and this is stale.
+  `Workouts`, `Workouts` is right and this is stale. The SPA reads it,
+  read-only, through `frontend/src/api/health-api.ts` (#236), and never
+  rebuilds or corrects it.
   date, activity_count, activity_types, total_moving_s, total_elapsed_s,
   total_distance_m, total_ascent_m, cardio_activity_count, distance_withdata,
   ascent_withdata, max_effort, effort_counts, steps, resting_hr, hrv,
