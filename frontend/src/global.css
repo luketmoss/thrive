@@ -3246,24 +3246,6 @@ input, select, textarea {
   box-shadow: 0 1px 3px var(--color-shadow);
 }
 
-/* ===== Day placeholder (#235) ===== */
-.placeholder-date {
-  font-weight: 600;
-}
-
-.placeholder-copy {
-  color: var(--color-text-muted);
-}
-
-.placeholder-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  align-self: flex-start;
-  text-decoration: none;
-}
-
 /* ===== Trends (#242) ===== */
 .trends-controls {
   display: flex;
@@ -3432,4 +3414,227 @@ input, select, textarea {
 .trend-partial {
   color: var(--color-text-muted);
   font-size: var(--text-xs);
+}
+
+/* ===== Day screen (#237) =====
+   Header, week strip, panel shells. Panel issues (#238-#240) add their own
+   sections after this one rather than editing it. Tokens only, both themes.
+   The viewed day is never white on --color-primary (2.84:1) nor outlined in
+   it (2.53:1 on the light page): its marker is a --color-primary-text border. */
+.day-screen {
+  /* The FAB (56 px, 16 px above the nav) must not cover the last panel. */
+  padding-bottom: calc(56px + var(--space-md) * 2);
+  touch-action: pan-y;
+}
+
+.day-screen :focus-visible {
+  outline: 2px solid var(--color-primary-text);
+  outline-offset: 2px;
+}
+
+.day-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-sm) 0 var(--space-md);
+}
+
+.day-header-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.day-title {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* Arrows last, the group pushed right: Today appearing or going never moves them. */
+.day-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-left: auto;
+}
+
+.day-arrow {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-xl);
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.day-today-btn {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 var(--space-md);
+  border-radius: var(--radius-full);
+  background: var(--color-primary-light);
+  color: var(--color-primary-on-light);
+  font-weight: 600;
+}
+
+.day-date {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--color-text);
+}
+
+.day-pill {
+  display: inline-block;
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-full);
+  background: var(--color-border-light);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.day-pill-today {
+  background: var(--color-primary-light);
+  color: var(--color-primary-on-light);
+}
+
+/* Words, not icons; wraps only between its three items. */
+.day-sun {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.day-sun > span {
+  white-space: nowrap;
+}
+
+.week-strip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--space-xs);
+  margin-bottom: var(--space-md);
+  touch-action: pan-y;
+}
+
+/* Below 375 px the strip runs edge to edge with no gap, so each day stays >= 44 px. */
+@media (max-width: 374px) {
+  .week-strip {
+    gap: 0;
+    margin-left: calc(-1 * var(--space-md));
+    margin-right: calc(-1 * var(--space-md));
+  }
+}
+
+.week-day {
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--space-xs) 0;
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-text);
+}
+
+.week-day-letter {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.week-day-num {
+  font-size: var(--text-base);
+  font-variant-numeric: tabular-nums;
+}
+
+.week-day-today .week-day-num {
+  color: var(--color-primary-text);
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+/* The border carries the marker; the fill is decoration. */
+.week-day-viewed {
+  background: var(--color-primary-light);
+  border-color: var(--color-primary-text);
+}
+
+.week-day-viewed .week-day-num {
+  color: var(--color-primary-on-light);
+  font-weight: 700;
+}
+
+/* Keeps its height on a day with no marks, so the strip does not jitter. */
+.week-day-marks {
+  display: flex;
+  gap: 3px;
+  height: 6px;
+}
+
+.week-mark {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.week-mark-dot {
+  background: var(--color-text-muted);
+}
+
+.week-mark-ring {
+  box-shadow: inset 0 0 0 1.5px var(--color-text-muted);
+}
+
+.day-panels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.day-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.day-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.day-panel-title {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.day-panel-sub {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.panel-note {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
 }

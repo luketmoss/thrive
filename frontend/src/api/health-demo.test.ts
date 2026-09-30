@@ -3,11 +3,11 @@
 // switches, early and late in the day), because the history moves with today.
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { todayInDenver } from '../day/dates';
 import {
   demoDailyHealth,
   demoBodyMeasurements,
   demoDailySummary,
-  demoDenverDate,
   addDaysToDateStr,
   shiftDemoWorkouts,
   DEMO_HEALTH_DAYS,
@@ -25,7 +25,7 @@ const NOWS = [
 const n = (s: string) => (s === '' ? null : Number(s));
 
 function windowOf(now: Date) {
-  const today = demoDenverDate(now);
+  const today = todayInDenver(now);
   return { today, first: addDaysToDateStr(today, -(DEMO_HEALTH_DAYS - 1)) };
 }
 
@@ -142,7 +142,7 @@ describe.each(NOWS.map((now) => [now.toISOString(), now] as const))('demo health
       const t = Date.parse(m.measured_at_utc);
       expect(Number.isNaN(t)).toBe(false);
       expect(t).toBeLessThanOrEqual(now.getTime());
-      expect(demoDenverDate(new Date(t))).toBe(m.date);
+      expect(todayInDenver(new Date(t))).toBe(m.date);
       if (m.weight_kg !== '') expect(Number(m.weight_kg)).toBeGreaterThan(70);
       expect(['scale', 'bp']).toContain(m.kind);
     }

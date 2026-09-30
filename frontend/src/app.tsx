@@ -16,7 +16,7 @@ import { ExercisesScreen } from './components/exercises/exercises-screen';
 import { WorkoutFlow } from './components/workout/workout-flow';
 import { WorkoutDetail } from './components/activities/workout-detail';
 import { WorkoutEdit } from './components/activities/workout-edit';
-import { DayPlaceholder } from './components/day/day-placeholder';
+import { DayScreen } from './components/day/day-screen';
 import { TrendsScreen } from './components/trends/trends-screen';
 import { ManageLabelsScreen } from './components/settings/manage-labels-screen';
 
@@ -25,7 +25,7 @@ function Router() {
 
   switch (route.name) {
     case 'day':
-      return <DayPlaceholder />;
+      return <DayScreen />;
     case 'trends':
       return <TrendsScreen />;
     case 'activities':
@@ -50,7 +50,7 @@ function Router() {
     case 'settings':
       return <SettingsScreen />;
     default:
-      return <DayPlaceholder />;
+      return <DayScreen />;
   }
 }
 
