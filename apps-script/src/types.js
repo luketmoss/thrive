@@ -258,6 +258,9 @@ var DAILY_HEALTH_FIELDS = [
 ];
 
 var DAILY_HEALTH_COLUMN_COUNT = 18;
+// DAILY_HEALTH_FIELDS, BODY_MEASUREMENT_FIELDS and DAILY_SUMMARY_FIELDS are
+// mirrored, read-only, by frontend/src/api/health-api.ts (#236); change both
+// together. Its test fails if they drift.
 
 
 // --- SyncLog (A:N) — #156, #155 -------------------------------------
@@ -301,7 +304,7 @@ var SYNC_LOG_COUNT_FIELDS = ['n_seen', 'n_new', 'n_updated', 'n_enriched', 'n_fi
 // Body+ scale (`kind` = scale) and the BPM Connect cuff (`kind` = bp).
 //
 // SI units stored: masses in kg, never lb. The kg -> lb display boundary lives
-// with the consumers that display it (almanac, the MCP read in #201);
+// with the consumers that display it (the SPA, the MCP read in #201);
 // `Sets!Weight` stays in lbs. Every measure is nullable: blank means the group
 // carried no such measure, never 0. Later columns are only ever appended.
 var BODY_MEASUREMENT_FIELDS = [

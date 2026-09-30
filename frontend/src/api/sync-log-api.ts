@@ -5,7 +5,7 @@
 // Row mapping mirrors SYNC_LOG_FIELDS in apps-script/src/types.js; change both
 // together. The SPA never writes this tab.
 
-import { sheetsGet, withReauth, SheetsApiError } from './sheets';
+import { sheetsGet, withReauth, isMissingTabError } from './sheets';
 import { isDemo, demoSyncLog, demoWithingsSyncLog } from './demo-data';
 import { SyncLogNotSetUpError } from './sync-log-errors';
 
@@ -50,11 +50,6 @@ export async function fetchSyncLog(token: string): Promise<SyncLogEntryWithRow[]
       .map((row, i) => rowToSyncLog(row, i + 2))
       .filter((e) => e.run_id);
   });
-}
-
-/** True for the 400 Sheets returns when a tab doesn't exist, e.g. before #200's migration has run. */
-function isMissingTabError(err: unknown): boolean {
-  return err instanceof SheetsApiError && err.status === 400 && /unable to parse range/i.test(err.message);
 }
 
 /**

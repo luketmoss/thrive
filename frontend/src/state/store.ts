@@ -1,6 +1,7 @@
 import { signal, computed } from '@preact/signals';
 import type { ExerciseWithRow, LabelWithRow, Template, WorkoutWithRow, SetWithRow, WorkoutType } from '../api/types';
 import type { SyncLogEntryWithRow } from '../api/sync-log-api';
+import type { DailyHealthRow, BodyMeasurementRow, DailySummaryRow } from '../api/health-api';
 import { sortPlannedWorkouts } from '../components/activities/activities-helpers';
 
 // Core data signals
@@ -101,6 +102,21 @@ export type SyncLogState =
   | { state: 'loaded'; entries: SyncLogEntryWithRow[] };
 export const syncLog = signal<SyncLogState>({ state: 'idle' });
 export const withingsSyncLog = signal<SyncLogState>({ state: 'idle' });
+
+// Health data (#236): DailyHealth, BodyMeasurements and DailySummary, each
+// read whole by `loadHealth` and held here in sheet order; consumers select a
+// range with `selectDailyRange` / `selectBodyMeasurementRange`. Three signals,
+// not one, because each tab stands alone: one failing never hides the others.
+// `error` means "couldn't load", distinct from loaded with no rows. Not part
+// of `loadInitialData`: the screens that need it call `loadHealth`.
+export type HealthTabState<T> =
+  | { state: 'idle' }
+  | { state: 'loading' }
+  | { state: 'error' }
+  | { state: 'loaded'; rows: T[] };
+export const dailyHealth = signal<HealthTabState<DailyHealthRow>>({ state: 'idle' });
+export const bodyMeasurements = signal<HealthTabState<BodyMeasurementRow>>({ state: 'idle' });
+export const dailySummary = signal<HealthTabState<DailySummaryRow>>({ state: 'idle' });
 
 // Offline sync queue state
 export const pendingSyncCount = signal(0);
