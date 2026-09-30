@@ -13,16 +13,16 @@ import type { ComponentType } from 'preact';
 import type { DayState } from '../../day/dates';
 import type { DayPanelProps } from './panel';
 import { TrainingPanel } from './training-panel';
-import { HealthPlaceholder } from './placeholders';
-import { BodyPlaceholder } from './placeholders';
+import { HealthPanel } from './health-panel';
+import { BodyPanel } from './body-panel';
 import { NotePlaceholder } from './placeholders';
 
 export type SlotName = 'training' | 'health' | 'body' | 'note';
 
 export const SLOTS: Record<SlotName, ComponentType<DayPanelProps>> = {
   training: TrainingPanel,
-  health: HealthPlaceholder,
-  body: BodyPlaceholder,
+  health: HealthPanel,
+  body: BodyPanel,
   note: NotePlaceholder,
 };
 

@@ -86,3 +86,22 @@ describe('loadHealth', () => {
     expect(dailyHealth.value.state).not.toBe('error');
   });
 });
+
+// #239 AC5 — Try again calls loadHealth directly, so loadHealth itself never
+// starts a second load while one is in flight.
+describe('loadHealth in flight', () => {
+  it('joins a load already running rather than starting another, and runs again once it settles', async () => {
+    let resolveHealth!: (v: unknown) => void;
+    fetchDailyHealth.mockReturnValue(new Promise((r) => { resolveHealth = r; }));
+    fetchBodyMeasurements.mockResolvedValue([]);
+    fetchDailySummary.mockResolvedValue([]);
+    const first = loadHealth('tok');
+    const second = loadHealth('tok');
+    expect(fetchDailyHealth).toHaveBeenCalledTimes(1);
+    resolveHealth([]);
+    await Promise.all([first, second]);
+    fetchDailyHealth.mockResolvedValue([]);
+    await loadHealth('tok');
+    expect(fetchDailyHealth).toHaveBeenCalledTimes(2);
+  });
+});

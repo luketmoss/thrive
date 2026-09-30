@@ -3674,3 +3674,85 @@ a.training-card {
   align-self: flex-start;
   text-decoration: none;
 }
+
+/* ===== Day Health and Body panels (#239) =====
+   After the Training section and apart from it. Rows are a `dl`: label on the
+   left, value and its captions on the right. Only the unwelcome side of your
+   range is coloured, and it is bold too, so it never rests on hue alone.
+   PanelStatus (loading and error) lives here too: #240 reuses it. */
+.health-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin: 0;
+}
+
+.health-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-md);
+}
+
+.health-label {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.health-qualifier {
+  color: var(--color-text-muted);
+}
+
+.health-data {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  min-width: 0;
+}
+
+.health-value {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.health-value-blank {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.health-caption {
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.health-stage,
+.health-zone {
+  white-space: nowrap;
+}
+
+.health-attention {
+  font-weight: 700;
+  color: var(--color-warning);
+}
+
+.panel-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-sm);
+}
+
+.panel-status:focus {
+  outline: none;
+}
+
+.panel-retry {
+  min-width: 44px;
+  min-height: 44px;
+}
