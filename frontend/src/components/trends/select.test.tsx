@@ -75,6 +75,25 @@ describe('AC3: one tab stop', () => {
     expect(status(container).textContent).toContain(readoutDate(TODAY, TODAY));
   });
 
+  it('does not take a touch tap on a card header for Tab arrival, though focus lands after pointerup', () => {
+    const { container } = renderScreen();
+    const head = container.querySelector('.trend-card-title')!;
+    fireEvent.pointerDown(head, { pointerType: 'touch' });
+    fireEvent.pointerUp(head, { pointerType: 'touch' });
+    fireEvent.focus(wrapper(container));
+    fireEvent.click(head);
+    expect(selectedDay.value).toBeNull();
+    expect(status(container).textContent).toBe('');
+  });
+
+  it('a key press between a stray press and Tab restores Tab arrival', () => {
+    const { container } = renderScreen();
+    fireEvent.pointerDown(wrapper(container));
+    fireEvent.keyDown(document.body, { key: 'Tab' });
+    fireEvent.focus(wrapper(container));
+    expect(selectedDay.value).toBe(TODAY);
+  });
+
   it('does not take a mouse press for Tab arrival', () => {
     const { container } = renderScreen();
     fireEvent.pointerDown(wrapper(container));

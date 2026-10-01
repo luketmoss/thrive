@@ -3349,6 +3349,8 @@ input, select, textarea {
 
 .trend-plot {
   display: block;
+  /* A vertical swipe on a chart scrolls the page; a sideways drag selects a day (#247). */
+  touch-action: pan-y;
   width: 100%;
   height: auto;
   overflow: visible;
@@ -4239,9 +4241,4 @@ a.training-card {
 .trend-charts:focus-visible {
   outline: 2px solid var(--color-text);
   outline-offset: 2px;
-}
-
-/* A vertical swipe on a chart scrolls the page; a sideways drag selects a day. */
-.trend-plot {
-  touch-action: pan-y;
 }

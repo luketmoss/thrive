@@ -111,18 +111,23 @@ export function TrendsScreen() {
   const [groupId, setGroupId] = usePref<string>(GROUP_PREF);
   const charts = useRef<HTMLDivElement>(null);
   // Set by a pointer press so the focus it causes is not mistaken for Tab arrival.
+  // On touch the browser moves focus after pointerup, so it is cleared by the
+  // focus itself, a click, a cancel, or any key press (Tab arrives after a keydown).
   const pointerFocus = useRef(false);
 
   // A selection lives only as long as the view it was made in: leaving the
   // screen clears it, and so does a tap or click outside the charts.
   useEffect(() => {
     clearSelection();
+    const anyKey = () => { pointerFocus.current = false; };
+    document.addEventListener('keydown', anyKey, true);
     const outside = (e: Event) => {
       if (selectedDay.value !== null && !charts.current?.contains(e.target as Node)) clearSelection();
     };
     document.addEventListener('pointerdown', outside);
     return () => {
       document.removeEventListener('pointerdown', outside);
+      document.removeEventListener('keydown', anyKey, true);
       clearSelection();
     };
   }, []);
@@ -208,7 +213,8 @@ export function TrendsScreen() {
             aria-label={`${group.label} charts`}
             aria-describedby={HINT_ID}
             onPointerDown={() => { pointerFocus.current = true; }}
-            onPointerUp={() => { pointerFocus.current = false; }}
+            onClick={() => { pointerFocus.current = false; }}
+            onPointerCancel={() => { pointerFocus.current = false; }}
             onPointerLeave={(e) => { if (e.pointerType === 'mouse') clearSelection(); }}
             onFocus={() => {
               // Arriving by Tab selects today and says so; a press does not.
