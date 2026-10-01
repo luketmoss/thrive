@@ -1,6 +1,6 @@
 // #239 — the Health and Body panels and the shared PanelStatus.
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
-import { render, cleanup, fireEvent } from '@testing-library/preact';
+import { render, cleanup, fireEvent, act } from '@testing-library/preact';
 
 const loadHealth = vi.fn(async (_t: string) => {});
 vi.mock('../../state/actions', () => ({ loadHealth: (t: string) => loadHealth(t) }));
@@ -201,5 +201,128 @@ describe('AC4 — Body', () => {
     expect(shown.getAttribute('aria-hidden')).toBe('true');
     expect(dd.textContent).toContain('One reading, 7:04 AM');
     expect(container.querySelector('.health-attention')).toBeNull();
+  });
+});
+
+// #276 — a successful Try again hands focus to the panel's heading.
+describe('#276 — focus after a retry succeeds', () => {
+  type Sig = typeof dailyHealth | typeof bodyMeasurements;
+  const settle = () => act(async () => { await Promise.resolve(); await Promise.resolve(); });
+  const set = (sig: Sig, value: { state: 'loading' | 'error' } | { state: 'loaded'; rows: never[] }) => {
+    (sig as unknown as { value: unknown }).value = value;
+  };
+  const loaded = (sig: Sig) => set(sig, { state: 'loaded', rows: [] });
+  const cases: [string, typeof HealthPanel, Sig][] = [
+    ['Health', HealthPanel, dailyHealth],
+    ['Body', BodyPanel, bodyMeasurements],
+  ];
+  const pressRetry = (c: Element) => {
+    fireEvent.click(c.querySelector('.panel-retry')!);
+    return c.querySelector('[role="status"]')!;
+  };
+
+  it('the panel h2 is programmatically focusable', () => {
+    dailyHealth.value = { state: 'loaded', rows: [] };
+    const { container } = mount(HealthPanel);
+    expect(container.querySelector('h2.day-panel-title')!.getAttribute('tabindex')).toBe('-1');
+  });
+
+  for (const [title, Comp, sig] of cases) {
+    describe(title, () => {
+      beforeEach(() => { set(sig, { state: 'error' }); });
+
+      it('AC1: success puts focus on the h2, not body', async () => {
+        const { container } = mount(Comp);
+        const box = pressRetry(container);
+        expect(document.activeElement).toBe(box);
+        act(() => loaded(sig));
+        await settle();
+        const h2 = container.querySelector('h2.day-panel-title')!;
+        expect(h2.textContent).toBe(title);
+        expect(document.activeElement).toBe(h2);
+        expect(document.activeElement).not.toBe(document.body);
+      });
+
+      it('AC2: a retry that fails again keeps the same container and its focus', async () => {
+        const { container } = mount(Comp);
+        const box = pressRetry(container);
+        act(() => set(sig, { state: 'loading' }));
+        act(() => set(sig, { state: 'error' }));
+        await settle();
+        expect(container.querySelector('[role="status"]')).toBe(box);
+        expect(document.activeElement).toBe(box);
+      });
+
+      it('AC3: focus the user moved elsewhere is left alone', async () => {
+        const { container } = mount(Comp);
+        pressRetry(container);
+        const other = document.createElement('button');
+        document.body.appendChild(other);
+        other.focus();
+        act(() => loaded(sig));
+        await settle();
+        expect(document.activeElement).toBe(other);
+        other.remove();
+      });
+
+      it('AC3: a panel unmounted by a date change before success focuses nothing and throws nothing', async () => {
+        const first = mount(Comp);
+        pressRetry(first.container);
+        first.unmount();
+        const next = mount(Comp);
+        expect(() => act(() => loaded(sig))).not.toThrow();
+        await settle();
+        expect(document.activeElement).toBe(document.body);
+        next.unmount();
+      });
+
+      it('AC3: a load that succeeds with no retry never moves focus', async () => {
+        set(sig, { state: 'loading' });
+        const { container } = mount(Comp);
+        expect(document.activeElement).toBe(document.body);
+        act(() => loaded(sig));
+        await settle();
+        expect(document.activeElement).toBe(document.body);
+        expect(container.querySelector('[role="status"]')).toBeNull();
+      });
+    });
+  }
+
+  it('AC4: with Health and Body both failed, only the panel Try again was pressed in takes focus', async () => {
+    dailyHealth.value = { state: 'error' };
+    bodyMeasurements.value = { state: 'error' };
+    const { container } = render(
+      <AuthContext.Provider value={AUTH}>
+        <HealthPanel date={D} state="past" today="2026-09-30" />
+        <BodyPanel date={D} state="past" today="2026-09-30" />
+      </AuthContext.Provider>,
+    );
+    const [healthBtn] = [...container.querySelectorAll('.panel-retry')];
+    fireEvent.click(healthBtn);
+    act(() => {
+      dailyHealth.value = { state: 'loaded', rows: [] };
+      bodyMeasurements.value = { state: 'loaded', rows: [] };
+    });
+    await settle();
+    const [h, b] = [...container.querySelectorAll('h2.day-panel-title')];
+    expect(h.textContent).toBe('Health');
+    expect(b.textContent).toBe('Body');
+    expect(document.activeElement).toBe(h);
+  });
+
+  it('a returnFocusTo target is used instead of the heading, and a removed one is skipped', async () => {
+    const target = document.createElement('button');
+    document.body.appendChild(target);
+    const { container, rerender } = render(<PanelStatus status="error" what="x" onRetry={() => {}} returnFocusTo={() => target} />);
+    fireEvent.click(container.querySelector('.panel-retry')!);
+    rerender(<div />);
+    await settle();
+    expect(document.activeElement).toBe(target);
+    target.remove();
+    const again = render(<PanelStatus status="error" what="x" onRetry={() => {}} returnFocusTo={() => target} />);
+    fireEvent.click(again.container.querySelector('.panel-retry')!);
+    expect(() => again.rerender(<div />)).not.toThrow();
+    await settle();
+    expect(document.activeElement).toBe(document.body);
   });
 });

@@ -258,6 +258,49 @@ describe('AC3 — shading by one metric', () => {
     expect(loadHealth).toHaveBeenCalledWith('tok');
     expect(container.querySelector('.calendar-day-shade')).toBeNull();
   });
+
+  // #276 AC5 — focus goes to the pressed shading button, not body.
+  describe('#276 — focus after the shading error retry', () => {
+    const settle = () => act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    const open = () => {
+      dailyHealth.value = { state: 'error' };
+      const r = renderAt('#/calendar');
+      fireEvent.click(r.getByRole('button', { name: 'Sleep' }));
+      fireEvent.click(r.getByRole('button', { name: 'Try again' }));
+      return r;
+    };
+
+    it('success lands focus on the pressed Shade by button', async () => {
+      const { getByRole } = open();
+      expect(document.activeElement).toBe(document.querySelector('.panel-status'));
+      act(() => { dailyHealth.value = { state: 'loaded', rows: [hr('2026-09-10', { sleep_total_s: '25000' })] }; });
+      await settle();
+      expect(document.activeElement).toBe(getByRole('button', { name: 'Sleep' }));
+      expect(document.activeElement!.getAttribute('aria-pressed')).toBe('true');
+    });
+
+    // The Calendar shows the status only while health is in `error`, so a retry's
+    // `loading` unmounts it and focus goes to the pressed button, never to body.
+    it('a retry that fails again leaves focus on the pressed button, not body', async () => {
+      const { getByRole } = open();
+      act(() => { dailyHealth.value = { state: 'loading' }; });
+      await settle();
+      expect(document.activeElement).toBe(getByRole('button', { name: 'Sleep' }));
+      act(() => { dailyHealth.value = { state: 'error' }; });
+      await settle();
+      expect(document.querySelector('.panel-status')).not.toBeNull();
+      expect(document.activeElement).toBe(getByRole('button', { name: 'Sleep' }));
+    });
+
+    it('leaves focus alone when the user moved on', async () => {
+      const { getByRole } = open();
+      const back = getByRole('button', { name: 'Back to Day' });
+      back.focus();
+      act(() => { dailyHealth.value = { state: 'loaded', rows: [] }; });
+      await settle();
+      expect(document.activeElement).toBe(back);
+    });
+  });
 });
 
 describe('AC4 — the day summary', () => {
