@@ -50,11 +50,11 @@ describe('Light Sleep, Awake Sleep and Steps', () => {
 });
 
 describe('the custom group', () => {
-  const ORDER = ['resting_hr', 'hrv', 'sleep_total', 'sleep_deep', 'sleep_rem', 'sleep_light', 'sleep_awake', 'sleep_score',
+  const ORDER = ['resting_hr', 'hrv', 'stress_avg', 'sleep_total', 'sleep_deep', 'sleep_rem', 'sleep_light', 'sleep_awake', 'sleep_score',
     'vo2max', 'training_load', 'weight', 'body_fat', 'systolic', 'diastolic', 'bp_readings',
     'activity_count', 'moving_time', 'distance', 'ascent', 'steps'];
 
-  it('offers 20 metrics in the canonical order, under the six group headings', () => {
+  it('offers 21 metrics in the canonical order, under the six group headings', () => {
     expect(CUSTOM_PICKABLE.map((m) => m.id)).toEqual(ORDER);
     expect(CUSTOM_SECTIONS.map((s) => s.label))
       .toEqual(['Recovery', 'Sleep', 'Fitness', 'Body', 'Blood Pressure', 'Activity']);

@@ -118,7 +118,7 @@ export const RESTING_HR: TrendMetric = {
 };
 
 // ── Recovery (#243) ──────────────────────────────────────────────────
-// `stress_avg` (#231) joins here as one entry once #236's mirror carries it.
+// Resting HR, HRV and Average Stress (#248): completed daily values, banded.
 
 export const HRV: TrendMetric = {
   id: 'hrv',
@@ -129,7 +129,17 @@ export const HRV: TrendMetric = {
   band: true,
 };
 
-const RECOVERY_METRICS: TrendMetric[] = [RESTING_HR, HRV];
+// COROS's daily average stress (#231), unitless and whole, as the Day view shows it.
+export const STRESS_AVG: TrendMetric = {
+  id: 'stress_avg',
+  label: 'Average Stress',
+  unit: '',
+  points: () => dailyHealthPoints('stress_avg'),
+  format: formatWhole,
+  band: true,
+};
+
+const RECOVERY_METRICS: TrendMetric[] = [RESTING_HR, HRV, STRESS_AVG];
 
 // ── Sleep (#243) ─────────────────────────────────────────────────────
 // Durations chart in hours (see sleep-duration.ts). Sleep is filed under its

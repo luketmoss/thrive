@@ -25,6 +25,7 @@ function rows(n: number) {
       date: addDays(TODAY, -i),
       resting_hr: i === 2 ? '' : String(50 + (i % 5)),
       hrv: i === 1 ? '' : String(60 + (i % 7)),
+      stress_avg: String(25 + (i % 6)),
       sheetRow: i + 2,
     });
   }
