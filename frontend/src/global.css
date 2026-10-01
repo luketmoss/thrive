@@ -1176,8 +1176,8 @@ input, select, textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border: none;
   background: none;
   color: var(--color-text-muted);
@@ -1340,7 +1340,14 @@ input, select, textarea {
   gap: var(--space-md);
 }
 
+/* #280: the shared header Back is a 44 px target; the label never shrinks or wraps. */
 .template-editor-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  min-width: 44px;
+  white-space: nowrap;
+  flex-shrink: 0;
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--color-primary-text);
@@ -3824,14 +3831,9 @@ a.training-card {
   outline-offset: 2px;
 }
 
-/* The existing back control, held to the 44 px target it is used at here. */
+/* The back control's 44 px target comes from the shared .template-editor-back (#280). */
 .calendar-back-row {
   padding: var(--space-sm) 0;
-}
-
-.calendar-back {
-  min-height: 44px;
-  min-width: 44px;
 }
 
 .calendar-month-row {
