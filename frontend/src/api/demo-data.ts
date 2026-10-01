@@ -392,7 +392,7 @@ const SCALE_WEIGHT_ONLY = 24;                // a weight with no body compositio
 const ACTIVITY_PARTIAL = 11;                 // two outdoor sessions, one unmeasured
 const ACTIVITY_ZERO_DISTANCE = 26;           // a measured 0 distance
 const ACTIVITY_INDOOR_ONLY = 13;             // an indoor ride: no outdoor distance at all
-const ACTIVITY_MIXED_VENUE = 14;             // an indoor ride and an outdoor hike on one day (#266); after ACTIVITY_INDOOR_ONLY so a first-indoor-day lookup still lands on 13
+const ACTIVITY_MIXED_VENUE = 14;             // an indoor ride and an outdoor hike on one day (#266)
 const ACTIVITY_TWO_EFFORTS = 28;             // a hard ride and an easy walk: two effort levels (#266)
 // #239: one day a cycle outside your range the unwelcome way, so the Day view's
 // colouring can always be seen within the last 30 days.
