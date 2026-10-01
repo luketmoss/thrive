@@ -3357,7 +3357,7 @@ input, select, textarea {
 .trend-plot {
   display: block;
   /* A vertical swipe on a chart scrolls the page; a sideways drag selects a day (#247). */
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
   width: 100%;
   height: auto;
   overflow: visible;
@@ -3449,7 +3449,16 @@ input, select, textarea {
 .day-screen {
   /* The FAB (56 px, 16 px above the nav) must not cover the last panel. */
   padding-bottom: calc(56px + var(--space-md) * 2);
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
+}
+
+/* Zoomed in (#272): one finger pans the page, and is never a swipe. use-swipe.ts
+   sets data-zoomed on the root from visualViewport. Not .trend-plot: a chart
+   keeps its own sideways drag. */
+:root[data-zoomed] .day-screen,
+:root[data-zoomed] .week-strip,
+:root[data-zoomed] .calendar-grid {
+  touch-action: manipulation;
 }
 
 .day-screen :focus-visible {
@@ -3547,7 +3556,7 @@ input, select, textarea {
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: var(--space-xs);
   margin-bottom: var(--space-md);
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
 }
 
 /* Below 375 px the strip runs edge to edge with no gap, so each day stays >= 44 px. */
@@ -3891,7 +3900,7 @@ a.training-card {
   display: flex;
   flex-direction: column;
   margin: 0 calc(-1 * var(--space-md)) var(--space-md);
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
 }
 
 .calendar-row {
