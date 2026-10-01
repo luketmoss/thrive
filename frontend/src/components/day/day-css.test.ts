@@ -6,7 +6,10 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const raw = readFileSync(resolve(__dirname, '../../global.css'), 'utf-8').replace(/\r\n/g, '\n');
-const section = raw.slice(raw.indexOf('/* ===== Day screen (#237)'));
+const start = raw.indexOf('/* ===== Day screen (#237)');
+// Up to #243's section, appended after #237-#239, so it is not judged as Day CSS.
+const next = raw.indexOf('/* ===== Trends: metric groups (#243)', start);
+const section = raw.slice(start, next === -1 ? undefined : next);
 const css = section.replace(/\/\*[\s\S]*?\*\//g, '');
 
 function rule(selector: string): string {

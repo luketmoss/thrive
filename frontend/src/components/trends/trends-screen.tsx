@@ -8,12 +8,13 @@ import { useEffect, useState } from 'preact/hooks';
 import { useAuth } from '../../auth/auth-context';
 import { loadHealth } from '../../state/actions';
 import { dailyHealth, bodyMeasurements, dailySummary } from '../../state/store';
-import { TREND_GROUPS, type TrendGroup } from './metrics';
+import { TREND_GROUPS, type TrendGroup, type TrendMetric } from './metrics';
 import {
   RANGES, AVERAGES, VIEWS, type RangeKey, type AverageKey, type ViewKey,
   averageDays, earliestDate, localToday, metricSeries, rangeBounds,
 } from './series';
-import { RANGE_PREF, AVERAGE_PREF, VIEW_PREF, readPref, writePref, type Pref } from './prefs';
+import { RANGE_PREF, AVERAGE_PREF, VIEW_PREF, GROUP_PREF, readPref, writePref, type Pref } from './prefs';
+import { GroupSwitcher } from './group-switcher';
 import { TrendCharts } from './trend-chart';
 import { TrendTable } from './trend-table';
 
@@ -66,11 +67,29 @@ export function captionText(avgDays: number, hasBand: boolean): string {
   return `${clauses.join(' · ')}. Blank days stay blank.`;
 }
 
+/**
+ * Whether the caption keeps its band clause: only when some rendered metric of
+ * the group actually draws a band this range (`band: true` and enough data).
+ * One banded card is enough; the clause stays generic.
+ */
+export function groupHasBand(
+  metrics: readonly TrendMetric[],
+  pointSets: readonly (readonly { date: string; value: number }[])[],
+  from: string, to: string, avgDays: number, today: string,
+): boolean {
+  return metrics.some((m, i) => {
+    if (!m.band) return false;
+    const s = metricSeries(m, from, to, avgDays, today, pointSets[i] as never);
+    return s.band !== null && s.points.length > 0;
+  });
+}
+
 export function TrendsScreen() {
   const { token } = useAuth();
   const [range, setRange] = usePref<RangeKey>(RANGE_PREF);
   const [average, setAverage] = usePref<AverageKey>(AVERAGE_PREF);
   const [view, setView] = usePref<ViewKey>(VIEW_PREF);
+  const [groupId, setGroupId] = usePref<string>(GROUP_PREF);
 
   useEffect(() => {
     if (!token) return;
@@ -78,7 +97,7 @@ export function TrendsScreen() {
     if (idle) void loadHealth(token);
   }, [token]);
 
-  const group: TrendGroup = TREND_GROUPS[0];
+  const group: TrendGroup = TREND_GROUPS.find((g) => g.id === groupId) ?? TREND_GROUPS[0];
   const health = dailyHealth.value;
   const today = localToday();
   const avgDays = averageDays(average);
@@ -99,11 +118,7 @@ export function TrendsScreen() {
     const pointSets = group.metrics.map((m) => m.points());
     const { from, to } = rangeBounds(range, today, earliestDate(pointSets));
     // The band clause stays only while some card actually draws a band.
-    const hasBand = group.metrics.some((m, i) => {
-      if (!m.band) return false;
-      const s = metricSeries(m, from, to, avgDays, today, pointSets[i]);
-      return s.band !== null && s.points.length > 0;
-    });
+    const hasBand = groupHasBand(group.metrics, pointSets, from, to, avgDays, today);
     const nothingEver = pointSets.every((p) => p.length === 0);
     content = (
       <>
@@ -123,6 +138,7 @@ export function TrendsScreen() {
         <h1>Trends</h1>
       </header>
       <div class="screen-body">
+        <GroupSwitcher groups={TREND_GROUPS} value={group.id} onChange={setGroupId} />
         <div class="trends-controls">
           <Segmented label="Range" id="range" options={RANGES} value={range} onChange={setRange} tight />
           <Segmented label="Average" id="average" options={AVERAGES} value={average} onChange={setAverage} />

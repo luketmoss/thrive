@@ -153,6 +153,9 @@ export function niceTicks(min: number, max: number, count = 4): number[] {
   const step = niceStep(max - min, count);
   const lo = Math.floor(min / step + 1e-9) * step;
   const hi = Math.ceil(max / step - 1e-9) * step;
+  // A step too small to move the value (or an absurd tick count) would never
+  // finish: draw the two ends rather than hang the page.
+  if (!(step > 0) || lo + step === lo || (hi - lo) / step > 100) return [min, max];
   const ticks: number[] = [];
   for (let v = lo; v <= hi + step / 2; v += step) ticks.push(Number(v.toFixed(10)));
   return ticks;
@@ -172,7 +175,10 @@ export function yDomain(
   if (all.length === 0) return { min: 0, max: 1, ticks: [0, 1] };
   let min = Math.min(...all);
   let max = Math.max(...all);
-  const pad = (max - min) * 0.08 || Math.max(1, Math.abs(max) * 0.05);
+  // A spread that is only floating-point noise (a 7-day mean of a constant 45.3
+  // comes out 45.300000000000004) is no spread: pad it like a flat series.
+  const spread = max - min;
+  const pad = spread > Math.abs(max) * 1e-9 ? spread * 0.08 : Math.max(1, Math.abs(max) * 0.05);
   min -= pad;
   max += pad;
   if (zeroBased) min = 0;

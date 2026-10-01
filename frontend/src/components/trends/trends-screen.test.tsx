@@ -168,3 +168,57 @@ describe('AC5: loading, empty and failed', () => {
     expect(container.querySelector('svg')).toBeNull();
   });
 });
+
+// ── #243 ─────────────────────────────────────────────────────────────
+import { groupHasBand } from './trends-screen';
+import type { TrendMetric } from './metrics';
+
+describe('#243 AC5: mixed band flags', () => {
+  const pts = Array.from({ length: 60 }, (_, i) => ({ date: addDays(TODAY, -i), value: 50 + (i % 5) }));
+  const m = (id: string, band: boolean): TrendMetric => ({ id, label: id, unit: '', points: () => pts, format: String, band });
+  const args = [addDays(TODAY, -29), TODAY, 7, TODAY] as const;
+
+  it('keeps the clause when one metric has a band', () => {
+    expect(groupHasBand([m('a', false), m('b', true)], [pts, pts], ...args)).toBe(true);
+  });
+  it('drops it when none do, by flag or by lack of data', () => {
+    expect(groupHasBand([m('a', false), m('b', false)], [pts, pts], ...args)).toBe(false);
+    expect(groupHasBand([m('a', true)], [[]], ...args)).toBe(false);
+    expect(groupHasBand([m('a', true)], [pts.slice(0, 3)], ...args)).toBe(false);
+  });
+});
+
+describe('#243 AC4: switcher in the screen', () => {
+  const click = (c: Element, text: string) =>
+    fireEvent.click([...c.querySelectorAll<HTMLButtonElement>('.trends-group-btn')].find((b) => b.textContent === text)!);
+
+  it('shows the three groups above the controls, defaulting to Recovery', () => {
+    loaded(rows(100));
+    const { container } = renderScreen();
+    const region = container.querySelector('[role="region"][aria-label="Metric group"]')!;
+    expect(region.compareDocumentPosition(container.querySelector('.trends-controls')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect([...region.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Recovery', 'Sleep', 'Fitness']);
+    expect(container.querySelectorAll('.trend-card')).toHaveLength(2);
+  });
+
+  it('swaps the cards, stores the group, keeps other controls, and restores on reopen', () => {
+    loaded(rows(100));
+    const first = renderScreen();
+    fireEvent.click([...group(first.container, 'Range').querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === '1W')!);
+    click(first.container, 'Sleep');
+    expect(first.container.querySelectorAll('.trend-card')).toHaveLength(4);
+    expect(first.container.textContent).toContain('Nothing recorded yet.');
+    expect(pressed(group(first.container, 'Range'))).toEqual(['1W']);
+    expect(localStorage.getItem('thrive-trends-group')).toBe('sleep');
+    cleanup();
+    const again = renderScreen();
+    expect(again.container.querySelector('.trends-group-btn.active')!.textContent).toBe('Sleep');
+  });
+
+  it('falls back to Recovery for an unknown stored group', () => {
+    localStorage.setItem('thrive-trends-group', 'gone');
+    loaded(rows(100));
+    const { container } = renderScreen();
+    expect(container.querySelector('.trends-group-btn.active')!.textContent).toBe('Recovery');
+  });
+});
