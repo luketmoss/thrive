@@ -7,6 +7,10 @@
 //          'saving'   a save for that date is in flight
 //          'saved'    the last edit landed (text is null; the panel shows the entry)
 //          'failed'   the last save failed; the text is kept
+//          'idle'     (#278) held but nothing to send: only whitespace typed
+//                     while the box has focus. No sub line, no unload prompt;
+//                     blur, leaving the day or (for a stored note) the page
+//                     being hidden resolves it.
 // `text` is the held edit, or null once it has landed. At most one save per
 // date is ever in flight; a later edit waits for it and goes straight after.
 // Across dates, saves run one at a time too (`sequential`): `upsertJournalEntry`
@@ -19,7 +23,7 @@ import { isDemo } from '../../api/demo-data';
 import { applyJournalSave, journalEntries } from '../../state/store';
 import { onPageHidden } from '../../state/page-visible';
 
-export type NoteStatus = 'waiting' | 'saving' | 'saved' | 'failed';
+export type NoteStatus = 'waiting' | 'saving' | 'saved' | 'failed' | 'idle';
 export interface NoteDraft {
   text: string | null;
   status: NoteStatus;
@@ -79,7 +83,7 @@ function put(date: string, d: NoteDraft | null): void {
 }
 
 function unsaved(): boolean {
-  return Object.values(noteDrafts.value).some((d) => d.text != null);
+  return Object.values(noteDrafts.value).some((d) => d.text != null && d.status !== 'idle');
 }
 
 function onBeforeUnload(e: BeforeUnloadEvent): void {
@@ -111,8 +115,17 @@ function retryFailed(): void {
 /** Send every held edit now (the page is going away). */
 export function flushAllNotes(): void {
   for (const [date, d] of Object.entries(noteDrafts.value)) {
-    if (d.text != null && d.status !== 'saving') flushNote(date);
+    if (d.text == null || d.status === 'saving') continue;
+    // A pending delete of a stored note must not die with the tab, even
+    // while the box has focus; a day with no note has nothing to send.
+    const stored = committed(date);
+    flushNote(date, stored != null && stored !== '');
   }
+}
+
+/** Whitespace only (not empty) in the focused box: held, nothing to send (#278). */
+function isIdleText(date: string, text: string): boolean {
+  return focused === date && text !== '' && text.trim() === '';
 }
 
 /** The user typed: hold `text` for `date` and start the debounce. */
@@ -125,18 +138,29 @@ export function editNote(date: string, text: string): void {
     put(date, { text, status: 'saving' });
     return;
   }
+  if (isIdleText(date, text)) {
+    put(date, { text, status: 'idle' });
+    return;
+  }
   put(date, { text, status: 'waiting' });
   timers.set(date, setTimeout(() => flushNote(date), NOTE_DEBOUNCE_MS));
 }
 
-/** Send the held text for `date` at once. Safe to call with nothing held. */
-export function flushNote(date: string): void {
+/**
+ * Send the held text for `date` at once. Safe to call with nothing held.
+ * A whitespace-only draft in the focused box is left idle unless `force`.
+ */
+export function flushNote(date: string, force = false): void {
   clearTimeout(timers.get(date));
   timers.delete(date);
   const d = noteDrafts.value[date];
   if (!d || d.text == null) return;
   if (inFlight.has(date)) return; // goes out when the save in flight lands
   const text = d.text;
+  if (!force && isIdleText(date, text)) {
+    put(date, { text, status: 'idle' });
+    return;
+  }
   if (committed(date) === text) {
     // Same as what the panel already shows: nothing to send.
     put(date, everSaved.has(date) ? { text: null, status: 'saved' } : null);

@@ -123,17 +123,101 @@ describe('across dates', () => {
   });
 });
 
+const guardCalls = (spy: ReturnType<typeof vi.spyOn>, name: string) =>
+  spy.mock.calls.filter((c: unknown[]) => c[0] === name).length;
+
 describe('blank text for a day with no note', () => {
-  it('is not sent, and while the box has focus the draft is kept under the caret', async () => {
+  it('is not sent, and while the box has focus the draft is held idle with no unload prompt (#278 AC1, AC2)', async () => {
+    const add = vi.spyOn(window, 'addEventListener');
     setNoteFocus(E);
     editNote(E, '  ');
+    expect(noteDrafts.value[E]).toEqual({ text: '  ', status: 'idle' });
     await vi.advanceTimersByTimeAsync(NOTE_DEBOUNCE_MS);
     expect(upsert).not.toHaveBeenCalled();
-    expect(noteDrafts.value[E].text).toBe('  ');
+    expect(noteDrafts.value[E]).toEqual({ text: '  ', status: 'idle' });
+    expect(guardCalls(add, 'beforeunload')).toBe(0);
     setNoteFocus(null);
     flushNote(E);
     expect(upsert).not.toHaveBeenCalled();
-    expect(noteDrafts.value[E]).toBeUndefined();
+    expect(noteDrafts.value[E]).toBeUndefined(); // AC7
+  });
+
+  it('typing a real character resumes autosave and arms then clears the guard (AC2, AC4)', async () => {
+    const add = vi.spyOn(window, 'addEventListener');
+    const remove = vi.spyOn(window, 'removeEventListener');
+    setNoteFocus(E);
+    editNote(E, '  ');
+    editNote(E, '  x');
+    expect(noteDrafts.value[E].status).toBe('waiting');
+    expect(guardCalls(add, 'beforeunload')).toBe(1);
+    await vi.advanceTimersByTimeAsync(NOTE_DEBOUNCE_MS);
+    expect(upsert).toHaveBeenCalledWith(E, '  x', 'tok');
+    await flush();
+    expect(guardCalls(remove, 'beforeunload')).toBe(1);
+  });
+
+  it('page hidden still sends nothing (AC5)', () => {
+    setNoteFocus(E);
+    editNote(E, ' \n');
+    flushAllNotes();
+    expect(upsert).not.toHaveBeenCalled();
+    expect(noteDrafts.value[E].status).toBe('idle');
+  });
+
+  it('an idle draft is held against a refresh (AC6)', () => {
+    setNoteFocus(E);
+    editNote(E, ' ');
+    setNoteFocus(null);
+    expect(isNoteLocked(E)).toBe(true);
+  });
+});
+
+describe('whitespace over an existing note (#278 AC3, AC5)', () => {
+  it('is deferred while focused, then sent once on blur', async () => {
+    const add = vi.spyOn(window, 'addEventListener');
+    setNoteFocus(D);
+    editNote(D, ' ');
+    await vi.advanceTimersByTimeAsync(NOTE_DEBOUNCE_MS * 2);
+    expect(upsert).not.toHaveBeenCalled();
+    expect(noteDrafts.value[D]).toEqual({ text: ' ', status: 'idle' });
+    expect(guardCalls(add, 'beforeunload')).toBe(0);
+    const tab = journalEntries.value;
+    expect(tab.state === 'loaded' && tab.entries[0].note).toBe('old');
+    setNoteFocus(null);
+    flushNote(D);
+    expect(upsert).toHaveBeenCalledTimes(1);
+    expect(upsert).toHaveBeenCalledWith(D, ' ', 'tok');
+    expect(noteDrafts.value[D].status).toBe('saving');
+    await flush();
+    expect(noteDrafts.value[D]).toEqual({ text: null, status: 'saved' });
+  });
+
+  it('a fully empty box still saves after the debounce', async () => {
+    setNoteFocus(D);
+    editNote(D, '');
+    await vi.advanceTimersByTimeAsync(NOTE_DEBOUNCE_MS);
+    expect(upsert).toHaveBeenCalledWith(D, '', 'tok');
+  });
+
+  it('page hidden sends the pending delete even while focused', async () => {
+    setNoteFocus(D);
+    editNote(D, ' ');
+    flushAllNotes();
+    expect(upsert).toHaveBeenCalledWith(D, ' ', 'tok');
+  });
+
+  it('an edit during a save stays saving, then goes idle when it lands blank and focused', async () => {
+    const d = deferred<ReturnType<typeof entry>>();
+    upsert.mockReturnValueOnce(d.promise);
+    setNoteFocus(D);
+    editNote(D, 'new');
+    flushNote(D);
+    editNote(D, ' ');
+    expect(noteDrafts.value[D].status).toBe('saving');
+    d.resolve(entry(D, 'new'));
+    await flush();
+    expect(upsert).toHaveBeenCalledTimes(1);
+    expect(noteDrafts.value[D]).toEqual({ text: ' ', status: 'idle' });
   });
 });
 

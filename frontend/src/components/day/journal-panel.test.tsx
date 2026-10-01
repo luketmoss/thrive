@@ -12,7 +12,7 @@ import { AuthContext, type AuthState } from '../../auth/auth-context';
 import { JournalPanel } from './journal-panel';
 import { SLOTS } from './slots';
 import { journalEntries } from '../../state/store';
-import { resetNoteDrafts } from '../../panels/journal/drafts';
+import { resetNoteDrafts, isNoteLocked } from '../../panels/journal/drafts';
 import type { DayState } from '../../day/dates';
 
 const D = '2026-09-26';
@@ -129,6 +129,55 @@ describe('Note panel', () => {
     await settle();
     expect(box(container).value).toBe('');
     expect(container.querySelector('.day-panel-sub')!.textContent).toBe('Saved');
+  });
+
+  describe('whitespace-only typing (#278)', () => {
+    const sub = (c: Element) => c.querySelector('.day-panel-sub')?.textContent ?? '';
+    beforeEach(() => { vi.useFakeTimers(); });
+    afterEach(() => { vi.useRealTimers(); });
+
+    it('no note: sub stays empty past the debounce, box kept, nothing sent, dropped on blur', () => {
+      const { container } = mount('2026-09-27');
+      fireEvent.focus(box(container));
+      fireEvent.input(box(container), { target: { value: ' \n ' } });
+      expect(sub(container)).toBe('');
+      act(() => { vi.advanceTimersByTime(1500); });
+      expect(sub(container)).toBe('');
+      expect(box(container).value).toBe(' \n ');
+      expect(upsert).not.toHaveBeenCalled();
+      fireEvent.blur(box(container));
+      expect(upsert).not.toHaveBeenCalled();
+      expect(box(container).value).toBe('');
+    });
+
+    it('existing note: whitespace is kept and unsent until blur, then Saving… and Saved', async () => {
+      const { container } = mount();
+      fireEvent.focus(box(container));
+      fireEvent.input(box(container), { target: { value: ' ' } });
+      act(() => { vi.advanceTimersByTime(1500); });
+      expect(upsert).not.toHaveBeenCalled();
+      expect(sub(container)).toBe('');
+      expect(box(container).value).toBe(' ');
+      expect(isNoteLocked(D)).toBe(true);
+      const tab = journalEntries.value;
+      expect(tab.state === 'loaded' && tab.entries[0].note).toBe('hello');
+      fireEvent.blur(box(container));
+      expect(upsert).toHaveBeenCalledWith(D, ' ', 'tok');
+      expect(sub(container)).toBe('Saving…');
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      expect(sub(container)).toBe('Saved');
+      expect(box(container).value).toBe('');
+    });
+
+    it('typing a real character resumes Saving… and the debounced save', () => {
+      const { container } = mount();
+      fireEvent.focus(box(container));
+      fireEvent.input(box(container), { target: { value: ' ' } });
+      fireEvent.input(box(container), { target: { value: ' a' } });
+      expect(sub(container)).toBe('Saving…');
+      act(() => { vi.advanceTimersByTime(1000); });
+      expect(upsert).toHaveBeenCalledWith(D, ' a', 'tok');
+    });
   });
 
   it('shows no box while the journal is idle, loading or failed; Try again reloads', () => {
