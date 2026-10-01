@@ -5,6 +5,8 @@ export interface Route {
 
 export const routes: Route[] = [
   { pattern: '/', name: 'day' },
+  { pattern: '/calendar', name: 'calendar' },
+  { pattern: '/calendar/:month', name: 'calendar' },
   { pattern: '/trends', name: 'trends' },
   { pattern: '/activities', name: 'activities' },
   { pattern: '/history/:id', name: 'workout-detail' },

@@ -43,7 +43,7 @@ describe('BottomNav', () => {
   });
 
   const map: Record<string, string[]> = {
-    Day: ['day'],
+    Day: ['day', 'calendar'],
     Trends: ['trends'],
     Activities: ['activities', 'workout-detail', 'workout-edit', 'workout-new', 'workout-active'],
     Library: ['templates', 'template-new', 'template-detail', 'template-edit', 'exercises'],
