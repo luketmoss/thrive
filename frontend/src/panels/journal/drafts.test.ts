@@ -56,8 +56,8 @@ describe('triggers', () => {
     editNote(D, 'one');
     editNote(E, 'two');
     flushAllNotes();
-    expect(upsert).toHaveBeenCalledTimes(2);
     await flush();
+    expect(upsert).toHaveBeenCalledTimes(2);
   });
 
   it('sends nothing for text the panel already shows', () => {
@@ -90,6 +90,50 @@ describe('one save at a time', () => {
     expect(upsert).toHaveBeenLastCalledWith(D, 'ab', 'tok');
     await flush();
     expect(noteDrafts.value[D]).toEqual({ text: null, status: 'saved' });
+  });
+});
+
+describe('across dates', () => {
+  it('never has two saves in flight at once, so a delete cannot shift a row under another save', async () => {
+    const first = deferred<null>();
+    upsert.mockReturnValueOnce(first.promise);
+    editNote(D, ''); // clearing D deletes its row
+    editNote(E, 'second');
+    flushAllNotes();
+    expect(upsert).toHaveBeenCalledTimes(1);
+    expect(upsert).toHaveBeenLastCalledWith(D, '', 'tok');
+    first.resolve(null);
+    await flush();
+    expect(upsert).toHaveBeenCalledTimes(2);
+    expect(upsert).toHaveBeenLastCalledWith(E, 'second', 'tok');
+    await flush();
+    expect(noteDrafts.value[D].status).toBe('saved');
+    expect(noteDrafts.value[E].status).toBe('saved');
+  });
+
+  it('a failure of one does not stop the next', async () => {
+    upsert.mockRejectedValueOnce(new Error('500'));
+    editNote(D, 'a');
+    editNote(E, 'b');
+    flushAllNotes();
+    await flush();
+    expect(upsert).toHaveBeenCalledTimes(2);
+    expect(noteDrafts.value[D].status).toBe('failed');
+    expect(noteDrafts.value[E].status).toBe('saved');
+  });
+});
+
+describe('blank text for a day with no note', () => {
+  it('is not sent, and while the box has focus the draft is kept under the caret', async () => {
+    setNoteFocus(E);
+    editNote(E, '  ');
+    await vi.advanceTimersByTimeAsync(NOTE_DEBOUNCE_MS);
+    expect(upsert).not.toHaveBeenCalled();
+    expect(noteDrafts.value[E].text).toBe('  ');
+    setNoteFocus(null);
+    flushNote(E);
+    expect(upsert).not.toHaveBeenCalled();
+    expect(noteDrafts.value[E]).toBeUndefined();
   });
 });
 

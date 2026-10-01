@@ -85,6 +85,15 @@ describe('Note panel', () => {
     expect(box(again.container).value).toBe('draft');
   });
 
+  it('leaving the day sends the edit at once, to the date it was showing', () => {
+    const first = mount();
+    fireEvent.input(box(first.container), { target: { value: 'before swipe' } });
+    expect(upsert).not.toHaveBeenCalled();
+    first.unmount();
+    expect(upsert).toHaveBeenCalledTimes(1);
+    expect(upsert).toHaveBeenCalledWith(D, 'before swipe', 'tok');
+  });
+
   it('flushes on blur', () => {
     const { container } = mount();
     fireEvent.input(box(container), { target: { value: 'blur me' } });

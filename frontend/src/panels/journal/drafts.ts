@@ -9,6 +9,9 @@
 //          'failed'   the last save failed; the text is kept
 // `text` is the held edit, or null once it has landed. At most one save per
 // date is ever in flight; a later edit waits for it and goes straight after.
+// Across dates, saves run one at a time too (`sequential`): `upsertJournalEntry`
+// finds a row number and then writes to it, and a delete shifts every row below,
+// so two saves overlapping could write into another day's row.
 
 import { batch, signal } from '@preact/signals';
 import { upsertJournalEntry } from '../../api/journal-api';
@@ -31,6 +34,16 @@ const timers = new Map<string, ReturnType<typeof setTimeout>>();
 const inFlight = new Map<string, string>(); // date -> the text being sent
 const everSaved = new Set<string>();
 let token: string | null = null;
+let pending = 0;
+let tail: Promise<void> = Promise.resolve();
+
+/** Run saves one at a time, whatever their date. Starts at once when idle. */
+function sequential<T>(fn: () => Promise<T>): Promise<T> {
+  const p = pending === 0 ? fn() : tail.then(fn);
+  pending++;
+  tail = p.then(() => undefined, () => undefined).then(() => { pending--; });
+  return p;
+}
 let focused: string | null = null;
 let installed = false;
 let unloadGuard = false;
@@ -133,9 +146,17 @@ export function flushNote(date: string): void {
     put(date, { text, status: 'failed' });
     return;
   }
+  if (text.trim() === '' && committed(date) === '') {
+    // Only spaces or Enter in a note that does not exist: nothing to delete.
+    // While it is still being typed, dropping the draft would reset the box
+    // under the caret; blur or leaving the day flushes it, and then it goes.
+    if (focused === date) return;
+    put(date, everSaved.has(date) ? { text: null, status: 'saved' } : null);
+    return;
+  }
   inFlight.set(date, text);
   put(date, { text, status: 'saving' });
-  upsertJournalEntry(date, text, token).then(
+  sequential(() => upsertJournalEntry(date, text, token ?? '')).then(
     (entry) => {
       inFlight.delete(date);
       everSaved.add(date);
@@ -171,6 +192,8 @@ export function resetNoteDrafts(): void {
   for (const t of timers.values()) clearTimeout(t);
   timers.clear();
   inFlight.clear();
+  pending = 0;
+  tail = Promise.resolve();
   everSaved.clear();
   focused = null;
   token = null;
