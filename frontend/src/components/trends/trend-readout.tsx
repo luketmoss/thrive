@@ -36,12 +36,12 @@ export function TrendReadout({ metric, series, date, avgDays, today }: Props) {
     <div class="trend-readout" data-date={date}>
       <div class="trend-readout-head">
         <p class="trend-readout-date" aria-hidden="true">{readoutDate(date, today)}</p>
-        <a class="trend-open-day" href={openDayHref(date)} tabIndex={-1}
+        <a class="trend-open-day" href={openDayHref(date, today)} tabIndex={-1}
           onClick={(e) => {
             // A modified click keeps the browser's own behaviour (new tab).
             if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button !== 0) return;
             e.preventDefault();
-            openDay(date);
+            openDay(date, today);
           }}>
           Open day<span class="sr-only">{`, ${openDayName(date, today)}`}</span>{' '}
           <span aria-hidden="true">›</span>

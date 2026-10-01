@@ -6,7 +6,8 @@ import {
 } from './metrics';
 import { readCustom, writeCustom, CUSTOM_KEY, GROUP_PREF, readPref } from './prefs';
 import { dailyHealth } from '../../state/store';
-import { addDays, localToday } from './series';
+import { addDays } from './series';
+import { todayInDenver } from '../../day/dates';
 
 beforeEach(() => { localStorage.clear(); dailyHealth.value = { state: 'idle' }; });
 afterEach(() => vi.restoreAllMocks());
@@ -77,7 +78,7 @@ describe('the custom group', () => {
     expect([d.note, d.source, d.band]).toEqual(['Outdoor only', 'dailySummary', false]);
   });
   it('Steps in a custom set still leaves today out', () => {
-    const today = localToday();
+    const today = todayInDenver();
     dailyHealth.value = { state: 'loaded', rows: [{ date: addDays(today, -1), steps: '1', sheetRow: 2 }] as never[] };
     const m = customGroup(['steps']).metrics[0];
     expect([m.excludesToday, m.points()]).toEqual([true, [{ date: addDays(today, -1), value: 1 }]]);

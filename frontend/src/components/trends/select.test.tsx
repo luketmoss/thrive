@@ -10,11 +10,12 @@ import { TrendsScreen, selectedDay, announcement } from './trends-screen';
 import { TrendPlot } from './trend-chart';
 import { AuthContext } from '../../auth/auth-context';
 import { dailyHealth, bodyMeasurements, dailySummary } from '../../state/store';
-import { addDays, localToday, metricSeries, rangeBounds } from './series';
+import { addDays, metricSeries, rangeBounds } from './series';
+import { todayInDenver } from '../../day/dates';
 import { readoutDate } from './readout';
 import type { TrendMetric } from './metrics';
 
-const TODAY = localToday();
+const TODAY = todayInDenver();
 
 function rows(n: number) {
   const out = [];

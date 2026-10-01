@@ -12,7 +12,7 @@ import { dailyHealth, bodyMeasurements, dailySummary } from '../../state/store';
 import { TREND_GROUPS, CUSTOM_GROUP_ID, customGroup, type TrendGroup, type TrendMetric } from './metrics';
 import {
   RANGES, AVERAGES, VIEWS, type RangeKey, type AverageKey, type ViewKey,
-  averageDays, earliestDate, localToday, metricSeries, rangeBounds, datesBetween,
+  averageDays, earliestDate, metricSeries, rangeBounds, datesBetween,
 } from './series';
 import { announceText } from './readout';
 import { RANGE_PREF, AVERAGE_PREF, VIEW_PREF, GROUP_PREF, readPref, writePref, readCustom, writeCustom, type Pref } from './prefs';
@@ -21,6 +21,7 @@ import { GroupSwitcher } from './group-switcher';
 import { TrendCharts } from './trend-chart';
 import { TrendTable } from './trend-table';
 import { openDay } from './open-day';
+import { today as todaySignal, watchToday } from '../../day/today';
 
 interface SegmentedProps<T extends string> {
   label: string;
@@ -120,6 +121,14 @@ export function TrendsScreen() {
   // focus itself, a click, a cancel, or any key press (Tab arrives after a keydown).
   const pointerFocus = useRef(false);
 
+  // One clock (#286): America/Denver's date, as the Day view reads it. Read once
+  // per render, so the chart, table, link and Enter can never see two todays.
+  const today = todaySignal.value;
+  useEffect(() => watchToday(), []);
+  // A rollover changes what the days are, so it clears the selection like any
+  // control that does (#247 AC5). It does not re-fetch health.
+  useEffect(() => { clearSelection(); }, [today]);
+
   // A selection lives only as long as the view it was made in: leaving the
   // screen clears it, and so does a tap or click outside the charts.
   useEffect(() => {
@@ -166,7 +175,6 @@ export function TrendsScreen() {
   const sources = [...new Set(group.metrics.map((m) => m.source ?? 'dailyHealth'))];
   const tabs = { dailyHealth, bodyMeasurements, dailySummary };
   const states = sources.map((s) => tabs[s].value.state);
-  const today = localToday();
   const avgDays = averageDays(average);
 
   let content;
@@ -214,7 +222,7 @@ export function TrendsScreen() {
         // Opens the selected day, as the readout's link does. Nothing selected: nothing.
         if (selectedDay.value === null) return;
         e.preventDefault();
-        openDay(selectedDay.value);
+        openDay(selectedDay.value, today);
         return;
       } else if (e.key === 'Escape') {
         e.preventDefault();
