@@ -307,13 +307,14 @@ const RANGE_SHAPE = {
 
 tool(
   'thrive_daily_health',
-  'Daily health from the watch, one line per day: resting HR, HRV, steps, calories, sleep (total and ' +
+  'Daily health from the watch, one line per day: resting HR, HRV, average stress, steps, calories, sleep (total and ' +
     'stages), sleep score, bed and wake time, VO2max, recovery and training load. Use it for recovery, ' +
     'sleep and readiness questions. Default range: the 7 days ending today. ' +
     'Every field is nullable: "—" means COROS did not report it and is unknown, never zero, and a day ' +
     'with no row is listed as having none. Sleep is filed under the day you woke up, and sleep total ' +
     'INCLUDES awake time. VO2max and recovery are current-state snapshots written only on the day each ' +
-    'sync ran, so they are blank on most days by design. Steps include steps taken during indoor walks ' +
+    'sync ran, so they are blank on most days by design. Stress is COROS\'s daily average stress ' +
+    'score, a plain number with no unit. Steps include steps taken during indoor walks ' +
     'and runs: treat them as context and never add them to activity distance or calorie totals.',
   RANGE_SHAPE,
   async (args) => {

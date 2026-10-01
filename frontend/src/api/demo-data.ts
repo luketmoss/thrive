@@ -500,6 +500,8 @@ function buildDemoDailyHealth(now: Date, presync = false): DailyHealthRow[] {
       wake_time: sleep(hhmm(bedMin + sleepMin)),
       raw_ref: `demo/health/${date}.json`,
       synced_at: notAfter(Date.parse(`${addDaysToDateStr(date, isToday ? 0 : 1)}T12:17:04.000Z`), now),
+      // #231 added the column; #253 owns generating demo values for it.
+      stress_avg: '',
     });
   }
   return asBackfilled<DailyHealthRow>(rows, days[0].date);

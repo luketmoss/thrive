@@ -9,13 +9,13 @@ import { gridRange, monthOf } from './dates';
 beforeEach(() => localStorage.clear());
 
 describe('shadeChoices', () => {
-  it('is Nothing, Sleep, Resting HR, HRV, Steps today', () => {
-    expect(shadeChoices().map((c) => c.label)).toEqual(['Nothing', 'Sleep', 'Resting HR', 'HRV', 'Steps']);
-    expect(shadeChoices().map((c) => c.metric?.field ?? null)).toEqual([null, 'sleep_total_s', 'resting_hr', 'hrv', 'steps']);
+  it('is Nothing, Sleep, Resting HR, HRV, Steps, Average stress now the field list has stress_avg (#231)', () => {
+    expect(shadeChoices().map((c) => c.label)).toEqual(['Nothing', 'Sleep', 'Resting HR', 'HRV', 'Steps', 'Average stress']);
+    expect(shadeChoices().map((c) => c.metric?.field ?? null)).toEqual([null, 'sleep_total_s', 'resting_hr', 'hrv', 'steps', 'stress_avg']);
   });
-  it('adds Average stress sixth once the field list has stress_avg', () => {
-    const labels = shadeChoices([...DAILY_HEALTH_FIELDS, 'stress_avg']).map((c) => c.label);
-    expect(labels).toEqual(['Nothing', 'Sleep', 'Resting HR', 'HRV', 'Steps', 'Average stress']);
+  it('leaves Average stress out of a field list without stress_avg', () => {
+    const labels = shadeChoices(DAILY_HEALTH_FIELDS.filter((f) => f !== 'stress_avg')).map((c) => c.label);
+    expect(labels).toEqual(['Nothing', 'Sleep', 'Resting HR', 'HRV', 'Steps']);
   });
 });
 
@@ -27,8 +27,9 @@ describe('readShade / writeShade', () => {
     expect(readShade()).toBe('hrv');
   });
   it('treats an unrecognised value as none', () => {
-    localStorage.setItem(SHADE_STORAGE_KEY, 'stress'); // not offered yet
-    expect(readShade()).toBe('none');
+    localStorage.setItem(SHADE_STORAGE_KEY, 'stress'); // offered since #231
+    expect(readShade()).toBe('stress');
+    expect(readShade(shadeChoices(DAILY_HEALTH_FIELDS.filter((f) => f !== 'stress_avg')))).toBe('none');
     localStorage.setItem(SHADE_STORAGE_KEY, 'bogus');
     expect(readShade()).toBe('none');
   });

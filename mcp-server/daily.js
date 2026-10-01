@@ -105,6 +105,8 @@ export function describeHealthDay(h) {
     `- ${h.date}:`,
     `resting HR ${withUnit(h.resting_hr, ' bpm')}`,
     `· HRV ${withUnit(h.hrv, ' ms')}`,
+    // COROS's daily average stress (#231): a plain score, no unit, no stated range.
+    `· stress ${withUnit(h.stress_avg, '')}`,
     `· steps ${fmtCount(h.steps)}`,
     `· calories ${isBlank(h.calories) ? BLANK : `${fmtCount(h.calories)} kcal`}`,
     `· sleep ${fmtHours(h.sleep_total_s)} [${stages}]`,

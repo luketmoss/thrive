@@ -139,6 +139,11 @@ D − 10 to D:
 | `sleep_score`, `bed_time`, `wake_time` | `querySleepOverview`, main sleep window |
 | `training_load` | `queryTrainingLoadAssessment`'s short-term load |
 | `vo2max`, `recovery` | `queryFitnessAssessmentOverview`, `queryRecoveryStatus`: the run date's row only |
+| `stress_avg` | `queryDailyHealthData`'s `Stress: Avg 31` line (#231): the whole number, no range enforced. Any other shape (`Stress: High`, a decimal, a `%`) fails the date; no `Stress` line is blank |
+
+Rows written before #231 got their `stress_avg` from
+`scripts/backfill-231-daily-health-stress.mjs`, which re-parses each row's
+`raw_ref` bundle with this parser and writes that one field (see its header).
 
 - **Blank, never 0.** A value the text does not carry is sent as `''`. A date
   every tool was silent about gets no row.

@@ -34,27 +34,35 @@ const day = (date: string, extra: Record<string, string> = {}) => ({
 });
 
 describe('AC1: DAILY_HEALTH_FIELDS is the one layout', () => {
-  it('lists the 18 fields in sync plan §5 order, plus bed and wake time at O and P', () => {
+  it('lists the 19 fields in sync plan §5 order, bed and wake time at O and P, stress_avg appended at S', () => {
     const { sandbox } = loadApi();
     expect([...sandbox.DAILY_HEALTH_FIELDS]).toEqual([
       'date', 'resting_hr', 'hrv', 'steps', 'calories', 'sleep_total_s', 'sleep_deep_s',
       'sleep_rem_s', 'sleep_light_s', 'sleep_awake_s', 'sleep_score', 'vo2max', 'recovery',
-      'training_load', 'bed_time', 'wake_time', 'raw_ref', 'synced_at',
+      'training_load', 'bed_time', 'wake_time', 'raw_ref', 'synced_at', 'stress_avg',
     ]);
-    expect(sandbox.DAILY_HEALTH_COLUMN_COUNT).toBe(18);
+    expect(sandbox.DAILY_HEALTH_COLUMN_COUNT).toBe(19);
   });
 
-  // The migration writes the header the API then writes rows under. Two
-  // copies of one list, so they are held together here.
-  it('matches the headers the migration script creates', () => {
+  // The migrations write the header the API then writes rows under. Copies of
+  // one list, so they are held together here: #165 created A:R, and #231
+  // appended S without moving any of them.
+  const headersIn = (file: string) => {
     const here = path.dirname(fileURLToPath(import.meta.url));
-    const script = readFileSync(
-      path.resolve(here, '..', '..', 'scripts', 'migrate-165-daily-health-tab.mjs'), 'utf8');
+    const script = readFileSync(path.resolve(here, '..', '..', 'scripts', file), 'utf8');
     const list = script.match(/const HEADERS = \[([\s\S]*?)\];/);
-    expect(list, 'HEADERS array in the migration').not.toBeNull();
-    const headers = [...list![1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+    expect(list, `HEADERS array in ${file}`).not.toBeNull();
+    return [...list![1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  };
+
+  it('keeps A:R exactly as migrate-165 created them', () => {
     const { sandbox } = loadApi();
-    expect(headers).toEqual([...sandbox.DAILY_HEALTH_FIELDS]);
+    expect(headersIn('migrate-165-daily-health-tab.mjs')).toEqual([...sandbox.DAILY_HEALTH_FIELDS].slice(0, 18));
+  });
+
+  it('matches the A:S header migrate-231 leaves', () => {
+    const { sandbox } = loadApi();
+    expect(headersIn('migrate-231-daily-health-stress.mjs')).toEqual([...sandbox.DAILY_HEALTH_FIELDS]);
   });
 });
 
@@ -134,7 +142,7 @@ describe('AC4: upsert by date', () => {
     let drifted = false;
     // After the date index is read, another writer inserts a row at the top.
     sheet.getRange = (r: number, c: number, n: number, w: number) => {
-      if (!drifted && w === 18) {
+      if (!drifted && w === 19) {
         drifted = true;
         existing.unshift(healthRow({ date: '2026-09-01' }));
       }
@@ -159,6 +167,44 @@ describe('AC4: upsert by date', () => {
     const { health } = upsert([], [{ date: '2026-09-23', raw_ref: '=HYPERLINK("x")' }]);
     expect(health[0][COL.raw_ref]).toBe('=HYPERLINK("x")');
   });
+});
+
+describe('#231: stress_avg', () => {
+  it('writes stress_avg alone, leaving every other field on the row as it was', () => {
+    const existing = [healthRow({ date: '2026-09-23', steps: '2617', hrv: '41', raw_ref: 'drive-1', synced_at: T1 })];
+    const { res, health } = upsert(existing, [{ date: '2026-09-23', stress_avg: '26' }], T1);
+    expect(res.data).toMatchObject({ appended: 0, updated: 1 });
+    expect(health[0]).toEqual(healthRow({
+      date: '2026-09-23', steps: '2617', hrv: '41', raw_ref: 'drive-1', synced_at: T1, stress_avg: '26',
+    }));
+  });
+
+  it('updates a row written before column S existed (18 cells) to 19', () => {
+    const legacy = healthRow({ date: '2026-09-23', steps: '2617' }).slice(0, 18);
+    const { health } = upsert([legacy], [{ date: '2026-09-23', stress_avg: '31' }]);
+    expect(health[0]).toHaveLength(19);
+    expect(health[0][COL.stress_avg]).toBe('31');
+    expect(health[0][COL.steps]).toBe('2617');
+  });
+
+  it('writes an absent stress_avg blank on a new row, never 0', () => {
+    const { health } = upsert([], [day('2026-09-23')]);
+    expect(health[0][COL.stress_avg]).toBe('');
+  });
+
+  it('stores a value as text', () => {
+    const { health } = upsert([], [day('2026-09-23', { stress_avg: '31' })]);
+    expect(health[0][COL.stress_avg]).toBe('31');
+  });
+
+  for (const bad of ['High', '26%', '-3', 'Avg 26']) {
+    it(`refuses a stress_avg of "${bad}", writing nothing`, () => {
+      const { res, health } = upsert([], [day('2026-09-23', { stress_avg: bad })]);
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch(/stress_avg must be a number or blank/);
+      expect(health).toHaveLength(0);
+    });
+  }
 });
 
 describe('AC4: validation rejects the batch before any write', () => {

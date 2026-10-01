@@ -53,6 +53,7 @@ test('a full night parses to SI values from the tools the spec names', () => {
     training_load: '7',      // short-term load
     bed_time: '22:51',       // main sleep window, filed under the wake-up day
     wake_time: '06:06',
+    stress_avg: '26',        // "Stress: Avg 26" (#231)
     raw_ref: RAW,
   });
 });
@@ -183,6 +184,33 @@ test('a resting HR in an unknown unit fails that date', () => {
 test('an HRV average in an unknown unit fails that date', () => {
   const b = replace('querySleepHrv', 'HRV Avg: 41 ms', 'HRV Avg: 0.041 s');
   assertOnlyDateFails(b, '2026-09-23', 'querySleepHrv', 'HRV Avg: 0.041 s');
+});
+
+// --- #231: the day's average stress ----------------------------------------
+
+test('stress_avg is the whole number after "Stress: Avg", and blank on a date with no Stress line', () => {
+  const { rows, failures } = parse();
+  assert.deepEqual(failures, []);
+  const d = byDate(rows);
+  assert.equal(d['2026-09-22'].stress_avg, '31');
+  assert.equal(d['2026-09-23'].stress_avg, '26');
+  // 2026-09-24's block carries no Stress line at all: blank, not 0, and not a failure.
+  assert.equal(d['2026-09-24'].stress_avg, '');
+});
+
+test('a Stress line in any other shape fails that date alone', () => {
+  for (const bad of ['Stress: High', 'Stress: Avg 26.5', 'Stress: Avg 26%', 'Stress: 26', 'Stress: Avg']) {
+    const b = replace('queryDailyHealthData', 'Stress: Avg 26', bad);
+    const dates = assertOnlyDateFails(b, '2026-09-23', 'queryDailyHealthData', bad);
+    assert.deepEqual(dates, ['2026-09-22', '2026-09-24'], bad);
+  }
+});
+
+test('a date whose only reading is its stress average still gets a row', () => {
+  const b = replace('queryDailyHealthData', '--- 20260922 ---', '--- 20260921 ---\nStress: Avg 40\n\n--- 20260922 ---');
+  const d = byDate(parse(b).rows)['2026-09-21'];
+  assert.equal(d.stress_avg, '40');
+  assert.equal(d.steps, '');
 });
 
 // --- #258: HRV Avg with COROS's status -------------------------------------

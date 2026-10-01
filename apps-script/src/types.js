@@ -225,7 +225,7 @@ var DAILY_SUMMARY_FIELDS = [
 
 var DAILY_SUMMARY_COLUMN_COUNT = 25;
 
-// --- DailyHealth (A:R) — #165 ---------------------------------------
+// --- DailyHealth (A:S) — #165, #231 ---------------------------------
 //
 // One row per local calendar day, written only by the COROS sync through
 // upsertDailyHealth. Layout is sync plan §5, checked against a real payload in
@@ -255,9 +255,11 @@ var DAILY_HEALTH_FIELDS = [
   'wake_time',     // P  local HH:mm, end of the main sleep window (#148)
   'raw_ref',       // Q  Drive file ID of the health bundle it was parsed from
   'synced_at',     // R  the sync run's single timestamp
+  'stress_avg',    // S  queryDailyHealthData's "Stress: Avg <n>" (#231). Appended
+                   //    after R, never moved: later columns are only ever appended
 ];
 
-var DAILY_HEALTH_COLUMN_COUNT = 18;
+var DAILY_HEALTH_COLUMN_COUNT = 19;
 // DAILY_HEALTH_FIELDS, BODY_MEASUREMENT_FIELDS and DAILY_SUMMARY_FIELDS are
 // mirrored, read-only, by frontend/src/api/health-api.ts (#236); change both
 // together. Its test fails if they drift.

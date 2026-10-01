@@ -586,15 +586,15 @@ export function setRow(overrides: Record<string, CellValue> = {}): CellValue[] {
     'set_number', 'planned_reps', 'weight', 'reps', 'effort'].map((k) => f[k] ?? '');
 }
 
-/** DailyHealth's A:R order (#165). Mirrors DAILY_HEALTH_FIELDS in types.js. */
+/** DailyHealth's A:S order (#165, #231). Mirrors DAILY_HEALTH_FIELDS in types.js. */
 export const DAILY_HEALTH_ORDER = [
   'date', 'resting_hr', 'hrv', 'steps', 'calories',
   'sleep_total_s', 'sleep_deep_s', 'sleep_rem_s', 'sleep_light_s', 'sleep_awake_s',
   'sleep_score', 'vo2max', 'recovery', 'training_load',
-  'bed_time', 'wake_time', 'raw_ref', 'synced_at',
+  'bed_time', 'wake_time', 'raw_ref', 'synced_at', 'stress_avg',
 ];
 
-/** A DailyHealth row (A:R), with only the named fields set. */
+/** A DailyHealth row (A:S), with only the named fields set. */
 export function healthRow(overrides: Record<string, CellValue> = {}): CellValue[] {
   return DAILY_HEALTH_ORDER.map((k) => overrides[k] ?? '');
 }

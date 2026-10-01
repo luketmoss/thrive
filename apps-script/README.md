@@ -243,14 +243,15 @@ them. A day with no scale or no BP reading leaves that half blank, never `0`;
 a day with only body readings still gets a row, with every other column blank
 as usual. A missing `BodyMeasurements` tab leaves U:Y blank everywhere.
 
-### DailyHealth (#165, #158)
+### DailyHealth (#165, #158, #231)
 
 | Action | Parameters / payload |
 |---|---|
 | `getDailyHealth` | `from`, `to` (optional, inclusive) — oldest first |
 | `upsertDailyHealth` | `{"rows":[{"date":"2026-09-23","steps":"2617",...}],"synced_at":"..."}` |
 
-`getDailyHealth` returns every one of the 18 fields on every row, a blank cell as
+`getDailyHealth` returns every one of the 19 fields on every row (A:S; `stress_avg`,
+COROS's daily average stress, is S, appended by #231), a blank cell as
 `''` and never `0`, and no `sheetRow`. It reads the tab once. With no `DailyHealth`
 tab it answers `[]`: no tab means no health data, not a tab of zeros. It is a read,
 so it joins #144's token allow-list when that lands.

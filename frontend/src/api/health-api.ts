@@ -36,6 +36,7 @@ export const DAILY_HEALTH_FIELDS = [
   'wake_time',     // P  local HH:mm
   'raw_ref',       // Q
   'synced_at',     // R
+  'stress_avg',    // S  COROS daily average stress (#231), appended after R
 ] as const;
 
 export const BODY_MEASUREMENT_FIELDS = [
