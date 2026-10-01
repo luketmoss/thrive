@@ -11,9 +11,11 @@ export function formatSleep(hours: number): string {
   return h === 0 ? `${m}m` : `${h}h ${m}m`;
 }
 
-/** A gridline: whole hours ("6h"); a half-hour step keeps its decimal ("6.5h") so two lines never read the same. */
+/**
+ * A gridline in hours: "6h" on whole hours, "6.5h" on half hours. Finer steps
+ * (a narrow range gives 0.05 h) keep up to two decimals, so neighbouring
+ * gridlines never share a label.
+ */
 export function axisSleep(hours: number): string {
-  const r = Math.round(hours * 10) / 10;
-  return `${r}h`;
+  return `${Number(hours.toFixed(2))}h`;
 }
-

@@ -7,8 +7,8 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const raw = readFileSync(resolve(__dirname, '../../global.css'), 'utf-8').replace(/\r\n/g, '\n');
 const start = raw.indexOf('/* ===== Day screen (#237)');
-// Up to the next section banner, so sections appended after it (#243...) are not judged as Day CSS.
-const next = raw.indexOf('/* ===== ', start + 10);
+// Up to #243's section, appended after #237-#239, so it is not judged as Day CSS.
+const next = raw.indexOf('/* ===== Trends: metric groups (#243)', start);
 const section = raw.slice(start, next === -1 ? undefined : next);
 const css = section.replace(/\/\*[\s\S]*?\*\//g, '');
 
@@ -69,5 +69,22 @@ describe('Day screen CSS (#237)', () => {
     expect(rule('.day-arrow')).toMatch(/width:\s*44px/);
     expect(rule('.day-sun > span')).toMatch(/white-space:\s*nowrap/);
     expect(rule('.day-title')).toMatch(/font-size:\s*var\(--text-2xl\)/);
+  });
+});
+
+describe('Day Health and Body panels CSS (#239)', () => {
+  it('bolds and colours the unwelcome direction; everything else stays plain caption text', () => {
+    expect(rule('.health-attention')).toMatch(/font-weight:\s*700/);
+    expect(rule('.health-attention')).toMatch(/color:\s*var\(--color-warning\)/);
+    expect(rule('.health-caption')).toMatch(/font-weight:\s*400/);
+    expect(rule('.health-caption')).toMatch(/color:\s*var\(--color-text-secondary\)/);
+    expect(rule('.health-value-blank')).toMatch(/color:\s*var\(--color-text-muted\)/);
+  });
+
+  it('wraps sleep stages only between items, and keeps Try again 44 px', () => {
+    expect(rule('.health-zone')).toMatch(/white-space:\s*nowrap/);
+    expect(css).toMatch(/\.health-stage,\s*\.health-zone\s*\{/);
+    expect(rule('.panel-retry')).toMatch(/min-height:\s*44px/);
+    expect(rule('.panel-retry')).toMatch(/min-width:\s*44px/);
   });
 });

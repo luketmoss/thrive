@@ -2,11 +2,11 @@
 //
 // A slot component (see `slots.ts`) is a `ComponentType<DayPanelProps>` that
 // draws its own card with `Panel` and says one-line things with `PanelNote`.
-// Loading and error presentation for panels that read is added here by the
-// first panel that needs it (#239), so every panel says it the same way.
+// Panels that read a store signal say loading and failure with `PanelStatus`
+// (#239), so every panel says it the same way.
 
 import type { ComponentChildren } from 'preact';
-import { useId } from 'preact/hooks';
+import { useId, useRef } from 'preact/hooks';
 import type { DayState } from '../../day/dates';
 
 /** What the Day screen passes every slot. Dates are `YYYY-MM-DD` in Denver. */
@@ -46,4 +46,44 @@ export function Panel({ title, sub, action, children }: PanelProps) {
 /** A one-line message inside a panel, at `--text-sm` in `--color-text-muted`. */
 export function PanelNote({ children }: { children: ComponentChildren }) {
   return <p class="panel-note">{children}</p>;
+}
+
+export interface PanelStatusProps {
+  /** A store signal's state short of `loaded`. A panel with loaded rows renders them instead. */
+  status: 'idle' | 'loading' | 'error';
+  /** What failed to load, in words: "your health data". */
+  what: string;
+  /** Load again. Called by Try again, as a user's request (no throttle). */
+  onRetry: () => void;
+}
+
+/**
+ * Loading and failure for a panel that reads (#239 AC5). One persistent
+ * `role="status"` container, so the change from loading to error is announced
+ * once, politely. Try again moves focus to that container before the button
+ * goes, so focus never falls to `body`.
+ */
+export function PanelStatus({ status, what, onRetry }: PanelStatusProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  return (
+    <div class="panel-status" role="status" tabIndex={-1} ref={ref}>
+      {status === 'error' ? (
+        <>
+          <PanelNote>{`Couldn't load ${what}.`}</PanelNote>
+          <button
+            type="button"
+            class="btn btn-secondary panel-retry"
+            onClick={() => {
+              ref.current?.focus();
+              onRetry();
+            }}
+          >
+            Try again
+          </button>
+        </>
+      ) : (
+        <PanelNote>Loading…</PanelNote>
+      )}
+    </div>
+  );
 }

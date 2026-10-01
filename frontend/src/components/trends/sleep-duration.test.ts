@@ -1,6 +1,7 @@
 // #243 AC2 — the sleep duration formatter.
 import { describe, it, expect } from 'vitest';
 import { formatSleep, axisSleep } from './sleep-duration';
+import { yDomain } from './series';
 
 describe('formatSleep', () => {
   it('prints hours and minutes, dropping the hour under one', () => {
@@ -23,5 +24,13 @@ describe('axisSleep', () => {
   });
   it('keeps a half-hour step distinct', () => {
     expect(axisSleep(6.5)).toBe('6.5h');
+  });
+});
+
+describe('axisSleep on narrow ranges', () => {
+  it.each([[[1.2, 1.25]], [[0.9, 1.05]], [[1.5, 1.52]]])('gives every gridline its own label for %j', (values) => {
+    const { ticks } = yDomain(values, null);
+    const labels = ticks.map(axisSleep);
+    expect(new Set(labels).size).toBe(labels.length);
   });
 });

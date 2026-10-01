@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   milesToMeters, metersToMiles, feetToMeters, metersToFeet,
   metersToMilesInput, metersToFeetInput, bpmToStored,
-  formatDistance, formatElevation, formatHeartRate,
+  formatDistance, formatElevation, formatHeartRate, kgToLb, formatWeight,
 } from './units';
 
 // Issue #103 — entered in miles and feet, stored as integer meters.
@@ -121,5 +121,22 @@ describe('display', () => {
   it('still renders a deliberate zero', () => {
     expect(formatDistance('0')).toBe('0 mi');
     expect(formatHeartRate('0')).toBe('0 bpm');
+  });
+});
+
+// #239 AC4 — kg as stored, lb as shown.
+describe('body weight', () => {
+  it('converts kg to lb, rounded to 0.1', () => {
+    expect(kgToLb('80.9')).toBe(178.4);
+    expect(kgToLb('100')).toBe(220.5);
+  });
+  it('keeps blank as null and a measured 0 as 0', () => {
+    expect(kgToLb('')).toBeNull();
+    expect(kgToLb('0')).toBe(0);
+  });
+  it('formats with one decimal and the unit, or nothing', () => {
+    expect(formatWeight('80.9')).toBe('178.4 lb');
+    expect(formatWeight('81.64')).toBe('180.0 lb');
+    expect(formatWeight('')).toBe('');
   });
 });

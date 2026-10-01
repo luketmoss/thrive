@@ -41,7 +41,7 @@ function visible() {
 }
 
 const h1 = (c: Element) => c.querySelector('h1')!;
-const status = (c: Element) => c.querySelector('[role="status"]')!.textContent;
+const status = (c: Element) => c.querySelector('p.sr-only[role="status"]')!.textContent;
 const strip = (c: Element) => [...c.querySelectorAll<HTMLButtonElement>('.week-strip button')];
 const panelTitles = (c: Element) => [...c.querySelectorAll('section.day-panel h2')].map((e) => e.textContent);
 
@@ -289,7 +289,7 @@ describe('AC4 — moving between days', () => {
 
   it('announces a move, politely, and not the first load', () => {
     const { container, getByLabelText } = renderAt('#/day/2026-09-22');
-    const live = container.querySelector('[role="status"]')!;
+    const live = container.querySelector('p.sr-only[role="status"]')!;
     expect(live.getAttribute('aria-live')).toBe('polite');
     expect(live.classList.contains('sr-only')).toBe(true);
     expect(live.textContent).toBe('');

@@ -49,8 +49,8 @@ describe('layout contract (css)', () => {
     expect(css).toMatch(/\.trends-group-scroll\s*{[^}]*overflow-x:\s*auto/);
     expect(css).toMatch(/\.trends-group-scroll\s*{[^}]*max-width:\s*100%/);
     expect(css).toMatch(/\.trends-group-row\s*{[^}]*flex-wrap:\s*nowrap/);
-    expect(css).toMatch(/\.sub-type-btn\.trends-group-btn\s*{[^}]*white-space:\s*nowrap/);
-    expect(css).toMatch(/\.sub-type-btn\.trends-group-btn\s*{[^}]*min-height:\s*44px/);
+    expect(css).toMatch(/\.trends-group-btn\s*{[^}]*white-space:\s*nowrap/);
+    expect(css).toMatch(/\.trends-group-btn\s*{[^}]*min-height:\s*44px/);
   });
 });
 

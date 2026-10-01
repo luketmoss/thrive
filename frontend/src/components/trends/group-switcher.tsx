@@ -23,7 +23,7 @@ export function GroupSwitcher({ groups, value, onChange }: Props) {
           <button
             key={g.id}
             type="button"
-            class={`sub-type-btn trends-group-btn${g.id === value ? ' active' : ''}`}
+            class={`trends-group-btn${g.id === value ? ' active' : ''}`}
             aria-pressed={g.id === value ? 'true' : 'false'}
             onClick={() => onChange(g.id)}
           >
