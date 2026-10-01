@@ -25,7 +25,7 @@ export interface TrendMetric {
   /** A value as the chart and table print it, without the unit. */
   format(v: number): string;
   /** Y-axis labels, when they want a different precision from `format`. */
-  axisFormat?(v: number): string;
+  axisFormat?(v: number, ticks: readonly number[]): string;
   /** Draws yourRange as of today. */
   band: boolean;
   /** The y-axis starts at 0 (steps, activity). */

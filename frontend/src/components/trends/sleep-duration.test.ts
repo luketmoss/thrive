@@ -28,9 +28,15 @@ describe('axisSleep', () => {
 });
 
 describe('axisSleep on narrow ranges', () => {
-  it.each([[[1.2, 1.25]], [[0.9, 1.05]], [[1.5, 1.52]]])('gives every gridline its own label for %j', (values) => {
+  const spreads = [[1.2, 1.25], [0.9, 1.05], [1.5, 1.52], [7, 7 + 1 / 60], [0, 1 / 60], [5 / 60, 6 / 60], [7.5, 7.5 + 20 / 3600]];
+  it.each(spreads.map((v) => [v]))('gives every gridline its own label for %j', (values) => {
     const { ticks } = yDomain(values, null);
-    const labels = ticks.map(axisSleep);
+    const labels = ticks.map((t) => axisSleep(t, ticks));
     expect(new Set(labels).size).toBe(labels.length);
+  });
+  it('uses whole hours for hour steps and minutes for fine steps', () => {
+    expect(axisSleep(7, [6, 7, 8, 9])).toBe('7h');
+    expect(axisSleep(6.5, [6, 6.5, 7])).toBe('6.5h');
+    expect(axisSleep(7.25, [7, 7.25, 7.5])).toBe('7h 15m');
   });
 });
