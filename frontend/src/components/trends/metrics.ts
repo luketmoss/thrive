@@ -164,6 +164,11 @@ export const SLEEP_SCORE: TrendMetric = {
   band: true,
 };
 
+// Light and awake time (#246) are not in the Sleep group (#243 deferred them);
+// they are only pickable in the custom set.
+export const SLEEP_LIGHT = sleepDuration('sleep_light', 'Light Sleep', 'sleep_light_s', false);
+export const SLEEP_AWAKE = sleepDuration('sleep_awake', 'Awake Sleep', 'sleep_awake_s', false);
+
 const SLEEP_METRICS: TrendMetric[] = [SLEEP_TOTAL, SLEEP_DEEP, SLEEP_REM, SLEEP_SCORE];
 
 // ── Fitness (#243) ───────────────────────────────────────────────────
@@ -363,9 +368,60 @@ export const ASCENT: TrendMetric = {
 
 const ACTIVITY_METRICS: TrendMetric[] = [ACTIVITY_COUNT, MOVING_TIME, DISTANCE, ASCENT];
 
+// ── Steps and the custom set (#246) ──────────────────────────────────
+// Steps reads DailyHealth (the sync-written primary), not DailySummary's copy.
+// Today is a partial day, so it is not plotted.
+
+export const STEPS: TrendMetric = {
+  id: 'steps',
+  label: 'Steps',
+  unit: 'steps',
+  points: () => dailyHealthPoints('steps'),
+  format: formatWhole,
+  band: true,
+  zeroBased: true,
+  excludesToday: true,
+};
+
+/** The most metrics a custom set holds. */
+export const CUSTOM_MAX = 4;
+export const CUSTOM_GROUP_ID = 'custom';
+
+/**
+ * Every pickable metric, in the one canonical order a custom set renders in
+ * (whichever combination includes a metric, it sits in the same relative
+ * position), under the heading the picker shows it beneath.
+ */
+export const CUSTOM_SECTIONS: { label: string; metrics: TrendMetric[] }[] = [
+  { label: 'Recovery', metrics: RECOVERY_METRICS },
+  { label: 'Sleep', metrics: [SLEEP_TOTAL, SLEEP_DEEP, SLEEP_REM, SLEEP_LIGHT, SLEEP_AWAKE, SLEEP_SCORE] },
+  { label: 'Fitness', metrics: FITNESS_METRICS },
+  { label: 'Body', metrics: BODY_METRICS },
+  { label: 'Blood Pressure', metrics: BLOOD_PRESSURE_METRICS },
+  { label: 'Activity', metrics: [...ACTIVITY_METRICS, STEPS] },
+];
+export const CUSTOM_PICKABLE: TrendMetric[] = CUSTOM_SECTIONS.flatMap((s) => s.metrics);
+
+/**
+ * Whatever was stored, as a valid selection: ids that are not registered
+ * metrics are dropped, duplicates collapse, the rest come back in canonical
+ * order and, when over the cap, only the first four. Never throws.
+ */
+export function normaliseCustom(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const wanted = new Set(raw.filter((x): x is string => typeof x === 'string'));
+  return CUSTOM_PICKABLE.filter((m) => wanted.has(m.id)).slice(0, CUSTOM_MAX).map((m) => m.id);
+}
+
+/** The custom group for a selection: 0-4 metrics, the one group that may be empty. */
+export function customGroup(ids: readonly string[]): TrendGroup {
+  const keep = new Set(normaliseCustom(ids));
+  return { id: CUSTOM_GROUP_ID, label: 'Custom', metrics: CUSTOM_PICKABLE.filter((m) => keep.has(m.id)) };
+}
+
 /**
  * The groups, in switcher order. One entry per line: #244 and #245 append
- * their own (each with its own const above this array).
+ * their own (each with its own const above this array). `custom` is last.
  */
 export const TREND_GROUPS: TrendGroup[] = [
   { id: 'recovery', label: 'Recovery', metrics: RECOVERY_METRICS },
@@ -374,4 +430,6 @@ export const TREND_GROUPS: TrendGroup[] = [
   { id: 'body', label: 'Body', metrics: BODY_METRICS },
   { id: 'blood_pressure', label: 'Blood Pressure', metrics: BLOOD_PRESSURE_METRICS },
   { id: 'activity', label: 'Activity', metrics: ACTIVITY_METRICS },
+  // A placeholder: its metrics come from the stored selection (customGroup).
+  { id: CUSTOM_GROUP_ID, label: 'Custom', metrics: [] },
 ];

@@ -3,7 +3,7 @@
 // break the screen. A missing, unknown or unreadable value gives the default;
 // a failed write is ignored, and the choice still applies for this visit.
 
-import { TREND_GROUPS, type TrendGroup } from './metrics';
+import { TREND_GROUPS, normaliseCustom, type TrendGroup } from './metrics';
 import { RANGES, AVERAGES, VIEWS, type RangeKey, type AverageKey, type ViewKey } from './series';
 
 export interface Pref<T extends string> {
@@ -36,6 +36,28 @@ export function readPref<T extends string>(pref: Pref<T>): T {
 export function writePref<T extends string>(pref: Pref<T>, value: T): void {
   try {
     localStorage.setItem(pref.key, value);
+  } catch {
+    // Storage unavailable: the choice holds for this visit only.
+  }
+}
+
+/** The custom set (#246): a JSON array of metric ids. */
+export const CUSTOM_KEY = 'thrive-trends-custom';
+
+/** The stored custom selection, valid: `[]` when missing, unparseable or not an array of strings; stale ids dropped, over four cut. */
+export function readCustom(): string[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_KEY);
+    return raw === null ? [] : normaliseCustom(JSON.parse(raw));
+  } catch {
+    return [];
+  }
+}
+
+/** Store a custom selection. Never throws. */
+export function writeCustom(ids: readonly string[]): void {
+  try {
+    localStorage.setItem(CUSTOM_KEY, JSON.stringify(ids));
   } catch {
     // Storage unavailable: the choice holds for this visit only.
   }
