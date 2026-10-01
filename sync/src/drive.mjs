@@ -152,6 +152,17 @@ export function createDrive({ getToken, fetchImpl = fetch }) {
     return created.id;
   }
 
+  /**
+   * Replaces a binary file's content in place (#257): the file ID, its tags,
+   * and anything pointing at it are unchanged. A `files.update` media upload.
+   */
+  async function updateBinary(fileId, bytes, { mimeType = 'application/octet-stream' } = {}) {
+    await request('PATCH', `${UPLOAD}/${encodeURIComponent(fileId)}?uploadType=media&fields=id`, {
+      body: bytes,
+      headers: { 'Content-Type': mimeType },
+    });
+  }
+
   async function readJson(fileId) {
     return JSON.parse(await request('GET', `${API}/${encodeURIComponent(fileId)}?alt=media`));
   }
@@ -164,5 +175,5 @@ export function createDrive({ getToken, fetchImpl = fetch }) {
     });
   }
 
-  return { findFiles, findAll, findOne, ensureFolder, createJson, createBinary, readJson, updateJson };
+  return { findFiles, findAll, findOne, ensureFolder, createJson, createBinary, updateBinary, readJson, updateJson };
 }
