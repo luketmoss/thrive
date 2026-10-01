@@ -128,7 +128,8 @@ export async function syncActivities({ archive, api, activityIds, syncedAt, fit 
       // one write, and every later run re-sends what the archive records.
       const fitFields = fit
         ? await fit.ensure({
-          activityId: id, fileId: file.fileId, record: file.data.fit, args: file.data.args, localDate: incoming.date,
+          activityId: id, fileId: file.fileId, record: file.data.fit, payloadHash: file.data.payload_hash, args: file.data.args,
+          localDate: incoming.date,
         })
         : {};
 

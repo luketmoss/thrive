@@ -39,6 +39,13 @@ export const SYNC_LOG_READ_LIMIT = 100;
  */
 export const FIT_MAX_ATTEMPTS = 3;
 
+/**
+ * Re-fetches of one activity's FIT after its payload changed (#257), failed
+ * ones included. Each spends allowance, so a payload that changed every run
+ * would otherwise cost a request a run for as long as it is in the window.
+ */
+export const FIT_MAX_REFETCHES = 3;
+
 /** A result that is not one whole FIT file for the activity asked about. */
 export class FitFormatError extends Error {
   constructor(reason) {
@@ -161,13 +168,26 @@ export function fitSheetFields(record) {
   return { fit_ref: '', fit_fetched_at: '' };
 }
 
-const settled = (record) => record?.status === 'stored' || record?.status === 'unavailable';
+/**
+ * Whether the record needs no request this run. `unavailable` is given up on
+ * for good. A `stored` FIT is final only while the activity's payload is the
+ * one it was fetched against (#257), or once it is marked `stale`. A record
+ * with no `payload_hash` (every one written before #257) counts as changed.
+ */
+const settled = (record, payloadHash) => {
+  if (record?.status === 'unavailable') return true;
+  if (record?.status !== 'stored') return false;
+  return record.stale === true || payloadHash === undefined || record.payload_hash === payloadHash;
+};
 
 /**
  * The run's FIT step. `ensure` is called once per activity that gets a row,
  * oldest first, and answers the row's `fit_ref` / `fit_fetched_at`.
  *
- * - A FIT on record (or given up on) costs nothing and is re-sent as is.
+ * - A FIT on record (or given up on) costs nothing and is re-sent as is,
+ *   unless the activity's payload changed since it was fetched (#257): then
+ *   one request replaces the stored file in place, at most
+ *   FIT_MAX_REFETCHES times, after which the record is marked `stale`.
  * - A FIT in Drive that the archive does not record (a run that died between
  *   the upload and the record) is adopted without a request.
  * - Otherwise, with budget left, one request, no retry. It counts against the
@@ -184,8 +204,9 @@ const settled = (record) => record?.status === 'stored' || record?.status === 'u
  *   lower the budget, never raise it.
  */
 export function createFitStep({ client, archive, api, startedAt, log = console.log, budgetOverride }) {
-  const counts = { requested: 0, stored: 0, adopted: 0, failed: 0, gaveUp: 0, waiting: 0 };
+  const counts = { requested: 0, stored: 0, adopted: 0, refetched: 0, failed: 0, gaveUp: 0, waiting: 0 };
   const failures = [];
+  const notes = [];
   let budget = null;
 
   const fail = (message) => {
@@ -215,17 +236,20 @@ export function createFitStep({ client, archive, api, startedAt, log = console.l
 
   /**
    * @param {{ activityId: string, fileId: string, record: object | undefined,
+   *   payloadHash?: string,
    *   args: { labelId: string, sportType: number }, localDate: string }} activity
    * @returns {Promise<{ fit_ref: string, fit_fetched_at: string }>}
    */
-  async function ensure({ activityId, fileId, record, args, localDate }) {
-    if (settled(record)) return fitSheetFields(record);
+  async function ensure({ activityId, fileId, record, payloadHash, args, localDate }) {
+    if (settled(record, payloadHash)) return fitSheetFields(record);
+    if (record?.status === 'stored') return refetch({ activityId, fileId, record, payloadHash, args });
 
     const existing = await archive.findFit(activityId);
     if (existing) {
       const adopted = {
         status: 'stored', file_id: existing.id, fetched_at: existing.modifiedTime ?? startedAt,
         attempts: record?.attempts ?? 0,
+        ...(payloadHash ? { payload_hash: payloadHash } : {}),
       };
       await archive.writeFit(fileId, adopted);
       counts.adopted += 1;
@@ -271,7 +295,9 @@ export function createFitStep({ client, archive, api, startedAt, log = console.l
     // does not use up an attempt; the request still counted.
     try {
       const fitId = await archive.storeFit({ activityId, localDate, bytes });
-      const stored = { status: 'stored', file_id: fitId, fetched_at: startedAt, attempts, bytes: bytes.length };
+      const stored = { status: 'stored', file_id: fitId, fetched_at: startedAt, attempts, bytes: bytes.length,
+        ...(payloadHash ? { payload_hash: payloadHash } : {}),
+      };
       await archive.writeFit(fileId, stored);
       counts.stored += 1;
       log(`  activity ${activityId}: FIT stored (${bytes.length} bytes) as ${fitId}`);
@@ -283,10 +309,78 @@ export function createFitStep({ client, archive, api, startedAt, log = console.l
     }
   }
 
+  /**
+   * #257: a stored FIT whose activity changed. The request goes through the
+   * same budget as a first fetch, and a failure of any kind leaves the FIT
+   * the row already points at exactly as it was.
+   */
+  async function refetch({ activityId, fileId, record, payloadHash, args }) {
+    const refetches = record.refetches ?? 0;
+    if (refetches >= FIT_MAX_REFETCHES) {
+      // Marked once, so the note is too: a stale record is settled.
+      try {
+        await archive.writeFit(fileId, { ...record, stale: true });
+      } catch (err) {
+        if (err instanceof DriveAuthError) throw err;
+        fail(`activity ${activityId}: FIT marked stale but not recorded: ${redact(err.message || String(err))}`);
+        return fitSheetFields(record);
+      }
+      notes.push(`FIT ${activityId}: changed again after ${FIT_MAX_REFETCHES} re-fetches; the sync keeps the FIT it has and stops re-fetching`);
+      log(`  activity ${activityId}: FIT is stale (${FIT_MAX_REFETCHES} re-fetches used), keeping the stored file`);
+      return fitSheetFields(record);
+    }
+
+    const b = await loadBudget();
+    if (!b.known || b.remaining <= 0) {
+      counts.waiting += 1;
+      return fitSheetFields(record);
+    }
+
+    b.remaining -= 1;
+    counts.requested += 1;
+    let bytes;
+    try {
+      bytes = fitFromResult(await client.callTool({ name: FIT_TOOL, arguments: args }), activityId);
+    } catch (err) {
+      // The request was made, so it counts toward the cap; the old FIT stays.
+      counts.failed += 1;
+      const reason = redact(err.message || String(err));
+      try {
+        await archive.writeFit(fileId, {
+          ...record, refetches: refetches + 1, last_refetch_error: reason, last_refetch_at: startedAt,
+        });
+      } catch (writeErr) {
+        if (writeErr instanceof DriveAuthError) throw writeErr;
+        fail(`activity ${activityId}: FIT re-fetch attempt not recorded: ${redact(writeErr.message || String(writeErr))}`);
+        return fitSheetFields(record);
+      }
+      fail(`activity ${activityId}: FIT re-fetch ${refetches + 1} of ${FIT_MAX_REFETCHES} failed, keeping the stored FIT; the next run tries again: ${reason}`);
+      return fitSheetFields(record);
+    }
+
+    try {
+      await archive.replaceFit(record.file_id, bytes);
+      const stored = {
+        status: 'stored', file_id: record.file_id, fetched_at: startedAt, attempts: record.attempts ?? 0,
+        bytes: bytes.length, payload_hash: payloadHash, refetches: refetches + 1,
+      };
+      await archive.writeFit(fileId, stored);
+      counts.refetched += 1;
+      log(`  activity ${activityId}: FIT replaced in place (${bytes.length} bytes) as ${record.file_id}`);
+      return fitSheetFields(stored);
+    } catch (err) {
+      if (err instanceof DriveAuthError) throw err;
+      // Not COROS's failure, so no attempt is used up; the old file is intact.
+      fail(`activity ${activityId}: FIT re-downloaded but not replaced in Drive: ${redact(err.message || String(err))}`);
+      return fitSheetFields(record);
+    }
+  }
+
   return {
     ensure,
     counts,
     failures,
+    notes,
     /** What is left: a number, 'unread' (nothing needed a request) or 'unknown'. */
     get remaining() {
       if (!budget) return 'unread';

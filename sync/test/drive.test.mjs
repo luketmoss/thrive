@@ -121,3 +121,16 @@ test('#154: a FIT is uploaded as binary, byte for byte, tagged and foldered', as
   assert.deepEqual(body.subarray(start, start + bytes.length), bytes);
   assert.ok(text.endsWith(`\r\n--${boundary}--`));
 });
+
+test('#257: a FIT is replaced in place, byte for byte, by a media PATCH on the same file ID', async () => {
+  const { fetchImpl, calls } = scriptedFetch([{ body: { id: 'fit-file-1' } }]);
+  const bytes = Buffer.from([0x0e, 0x20, 0x00, 0xff, 0x2e, 0x46, 0x49, 0x54, 0x0d, 0x0a]);
+  await createDrive({ getToken, fetchImpl }).updateBinary('fit-file-1', bytes);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].init.method, 'PATCH');
+  const url = new URL(calls[0].url);
+  assert.equal(url.pathname, '/upload/drive/v3/files/fit-file-1');
+  assert.equal(url.searchParams.get('uploadType'), 'media');
+  assert.equal(calls[0].init.headers['Content-Type'], 'application/octet-stream');
+  assert.deepEqual(calls[0].init.body, bytes);
+});

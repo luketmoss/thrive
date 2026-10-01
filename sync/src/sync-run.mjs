@@ -52,7 +52,7 @@ export function fitSummary(fit) {
     : r === 'unknown' ? 'budget unknown'
       : `${r} of ${FIT_ALLOWANCE} left in the rolling 24 h`;
   return (
-    `FIT: ${c.requested} requested, ${c.stored} stored, ${c.adopted} already in Drive, ${c.failed} failed` +
+    `FIT: ${c.requested} requested, ${c.stored} stored, ${c.adopted} already in Drive, ${c.refetched ?? 0} refetched, ${c.failed} failed` +
     `${c.gaveUp ? ` (${c.gaveUp} given up)` : ''}; ${c.waiting} waiting for budget; ${left}.`
   );
 }
@@ -154,6 +154,7 @@ export async function syncRun({ env = process.env, force = false, now = () => ne
   if (fit) {
     counts.fitFetched = fit.counts.requested;
     failures.push(...fit.failures);
+    notes.push(...(fit.notes ?? []));
     out.info(fitSummary(fit));
   }
 

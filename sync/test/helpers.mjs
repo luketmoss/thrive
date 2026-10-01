@@ -117,6 +117,11 @@ export function memoryDrive() {
       writes.push({ op: 'create', id, name });
       return id;
     },
+    async updateBinary(id, bytes) {
+      if (drive.failUpdateBinary) throw drive.failUpdateBinary;
+      files.get(id).bytes = Buffer.from(bytes);
+      writes.push({ op: 'updateBinary', id });
+    },
     async readJson(id) {
       calls.readJson += 1;
       return JSON.parse(JSON.stringify(files.get(id).data));
