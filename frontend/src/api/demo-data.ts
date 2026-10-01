@@ -398,6 +398,10 @@ const ACTIVITY_TWO_EFFORTS = 28;             // a hard ride and an easy walk: tw
 // colouring can always be seen within the last 30 days.
 const HEALTH_RHR_HIGH = 4;                   // resting HR well above its range
 const HEALTH_HRV_LOW = 15;                   // HRV well below its range
+// #253: stress_avg has its own gaps, independent of the other metrics (a row
+// can exist without it; 10-12 is a run of 3), and one high-stress day a cycle.
+const HEALTH_STRESS_BLANK = [10, 11, 12, 23]; // a row, but COROS gave no stress average
+const HEALTH_STRESS_HIGH = 8;                // average stress well above its range
 
 function cyclePos(day: number): number {
   return ((day % 30) + 30) % 30;
@@ -476,6 +480,12 @@ function buildDemoDailyHealth(now: Date, presync = false): DailyHealthRow[] {
     const remMin = Math.round(sleepMin * (0.19 + 0.05 * demoNoise(day, 8)));
     const lightMin = sleepMin - awakeMin - deepMin - remMin;
     const bedMin = 21 * 60 + 45 + Math.round(75 * demoNoise(day, 9));
+    // Average stress: low is better, whole numbers, 19-35 on an ordinary day. Today's is
+    // the average so far, still a value. The high day is pinned, not noise-dependent.
+    const stressBlank = !isToday && HEALTH_STRESS_BLANK.includes(p);
+    const stress = p === HEALTH_STRESS_HIGH && !isToday
+      ? 41 + Math.round(4 * demoNoise(day, 14))
+      : Math.round(27 + 4 * wave(day, 19) + 8 * (demoNoise(day, 14) - 0.5));
     // A night on the charger is blank, never zero sleep.
     const sleep = (v: number | string) => (charger ? '' : String(v));
 
@@ -500,8 +510,7 @@ function buildDemoDailyHealth(now: Date, presync = false): DailyHealthRow[] {
       wake_time: sleep(hhmm(bedMin + sleepMin)),
       raw_ref: `demo/health/${date}.json`,
       synced_at: notAfter(Date.parse(`${addDaysToDateStr(date, isToday ? 0 : 1)}T12:17:04.000Z`), now),
-      // #231 added the column; #253 owns generating demo values for it.
-      stress_avg: '',
+      stress_avg: stressBlank ? '' : String(stress),
     });
   }
   return asBackfilled<DailyHealthRow>(rows, days[0].date);

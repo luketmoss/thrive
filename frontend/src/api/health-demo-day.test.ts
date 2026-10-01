@@ -18,7 +18,7 @@ describe.each(NOWS.map((now) => [now.toISOString(), now] as const))('demo at %s'
 
   it('has, within the last 30 days, a resting HR above its range and an HRV below its range', () => {
     const rows = demoDailyHealth(now, 'ok');
-    const found = (key: 'resting_hr' | 'hrv', zone: 'above' | 'below') => {
+    const found = (key: 'resting_hr' | 'hrv' | 'stress', zone: 'above' | 'below') => {
       const metric = HEALTH_METRICS.find((m) => m.key === key)!;
       const series = seriesOf(rows, metric.field);
       for (let i = 0; i < 30; i++) {
@@ -32,6 +32,21 @@ describe.each(NOWS.map((now) => [now.toISOString(), now] as const))('demo at %s'
     };
     expect(found('resting_hr', 'above')).toBe(true);
     expect(found('hrv', 'below')).toBe(true);
+  });
+
+  it('has, within the last 30 days, an average stress above its range (the unwelcome way)', () => {
+    const rows = demoDailyHealth(now, 'ok');
+    const metric = HEALTH_METRICS.find((m) => m.key === 'stress')!;
+    const series = seriesOf(rows, metric.field);
+    let found = false;
+    for (let i = 0; i < 30; i++) {
+      const date = addDaysToDateStr(today, -i);
+      const v = series.get(date);
+      if (v === undefined) continue;
+      const c = rangeCaption(metric, v, series, date);
+      if (c.kind === 'range' && c.zone === 'above' && c.attention) found = true;
+    }
+    expect(found).toBe(true);
   });
 
   it('agrees with the demo DailySummary U:Y on every day (bodyDayOf mirrors the rebuild)', () => {

@@ -98,10 +98,29 @@ describe.each(NOWS.map((now) => [now.toISOString(), now] as const))('demo health
     }
   });
 
-  it('gives resting_hr, hrv, sleep and steps 14+ values in every 30-day window ending in the last 30 days', () => {
+  it('has plausible whole-number stress_avg, with its own gaps and a run of 3 blank days in rows', () => {
+    const vals = health.filter((h) => h.stress_avg !== '');
+    expect(vals.length).toBeGreaterThan(0);
+    for (const h of vals) {
+      expect(/^\d+$/.test(h.stress_avg), `${h.date} whole`).toBe(true);
+      expect(Number(h.stress_avg), h.date).toBeGreaterThanOrEqual(15);
+      expect(Number(h.stress_avg), h.date).toBeLessThanOrEqual(50);
+    }
+    // A day with a row and its other metrics, but no stress; and today's so-far value is present.
+    expect(health.some((h) => h.stress_avg === '' && h.steps !== '' && h.resting_hr !== '')).toBe(true);
+    expect(healthByDate.get(today)!.stress_avg).not.toBe('');
+    let run = 0, longest = 0;
+    for (let d = first; d <= today; d = addDaysToDateStr(d, 1)) {
+      run = (healthByDate.get(d)?.stress_avg ?? '') === '' ? run + 1 : 0;
+      longest = Math.max(longest, run);
+    }
+    expect(longest).toBeGreaterThanOrEqual(3);
+  });
+
+  it('gives resting_hr, hrv, sleep, steps and stress 14+ values in every 30-day window ending in the last 30 days', () => {
     for (let end = addDaysToDateStr(today, -29); end <= today; end = addDaysToDateStr(end, 1)) {
       const win = selectDailyRange(health, addDaysToDateStr(end, -29), end);
-      for (const f of ['resting_hr', 'hrv', 'sleep_total_s', 'steps'] as const) {
+      for (const f of ['resting_hr', 'hrv', 'sleep_total_s', 'steps', 'stress_avg'] as const) {
         expect(win.filter((h) => h[f] !== '').length, `${f} in window ending ${end}`).toBeGreaterThanOrEqual(14);
       }
     }
