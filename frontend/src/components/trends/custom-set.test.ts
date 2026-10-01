@@ -6,7 +6,7 @@ import {
 } from './metrics';
 import { readCustom, writeCustom, CUSTOM_KEY, GROUP_PREF, readPref } from './prefs';
 import { dailyHealth } from '../../state/store';
-import { addDays } from './series';
+import { addDays } from '../../day/dates';
 import { todayInDenver } from '../../day/dates';
 
 beforeEach(() => { localStorage.clear(); dailyHealth.value = { state: 'idle' }; });

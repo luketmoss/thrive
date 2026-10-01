@@ -11,7 +11,7 @@ vi.mock('../../state/actions', () => ({ loadHealth: (t: string) => loadHealth(t)
 import { TrendsScreen, captionText } from './trends-screen';
 import { AuthContext } from '../../auth/auth-context';
 import { dailyHealth, bodyMeasurements, dailySummary } from '../../state/store';
-import { addDays } from './series';
+import { addDays } from '../../day/dates';
 import { todayInDenver } from '../../day/dates';
 
 const TODAY = todayInDenver();
@@ -172,20 +172,22 @@ describe('AC5: loading, empty and failed', () => {
 
 // ── #243 ─────────────────────────────────────────────────────────────
 import { groupHasBand } from './trends-screen';
+import { metricSeries } from './series';
 import type { TrendMetric } from './metrics';
 
 describe('#243 AC5: mixed band flags', () => {
   const pts = Array.from({ length: 60 }, (_, i) => ({ date: addDays(TODAY, -i), value: 50 + (i % 5) }));
   const m = (id: string, band: boolean): TrendMetric => ({ id, label: id, unit: '', points: () => pts, format: String, band });
-  const args = [addDays(TODAY, -29), TODAY, 7, TODAY] as const;
+  const built = (metrics: TrendMetric[], sets: typeof pts[]) =>
+    metrics.map((x, i) => metricSeries(x, addDays(TODAY, -29), TODAY, 7, TODAY, sets[i]));
 
   it('keeps the clause when one metric has a band', () => {
-    expect(groupHasBand([m('a', false), m('b', true)], [pts, pts], ...args)).toBe(true);
+    expect(groupHasBand([m('a', false), m('b', true)], built([m('a', false), m('b', true)], [pts, pts]))).toBe(true);
   });
   it('drops it when none do, by flag or by lack of data', () => {
-    expect(groupHasBand([m('a', false), m('b', false)], [pts, pts], ...args)).toBe(false);
-    expect(groupHasBand([m('a', true)], [[]], ...args)).toBe(false);
-    expect(groupHasBand([m('a', true)], [pts.slice(0, 3)], ...args)).toBe(false);
+    expect(groupHasBand([m('a', false), m('b', false)], built([m('a', false), m('b', false)], [pts, pts]))).toBe(false);
+    expect(groupHasBand([m('a', true)], built([m('a', true)], [[]]))).toBe(false);
+    expect(groupHasBand([m('a', true)], built([m('a', true)], [pts.slice(0, 3)]))).toBe(false);
   });
 });
 

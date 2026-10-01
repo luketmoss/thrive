@@ -12,7 +12,7 @@ vi.mock('../../state/actions', () => ({ loadHealth: (t: string) => loadHealth(t)
 import { TrendsScreen } from './trends-screen';
 import { AuthContext } from '../../auth/auth-context';
 import { dailyHealth, bodyMeasurements, dailySummary } from '../../state/store';
-import { addDays } from './series';
+import { addDays } from '../../day/dates';
 import { todayInDenver } from '../../day/dates';
 
 const TODAY = todayInDenver();

@@ -4,20 +4,11 @@
 
 import type { TrendMetric, TrendPoint } from './metrics';
 import { yourRange, type YourRange } from '../../api/your-range';
+import { addDays, dayNumber } from '../../day/dates';
 
 // ── Dates ────────────────────────────────────────────────────────────
 
 const MS_PER_DAY = 86_400_000;
-
-/** YYYY-MM-DD → whole UTC days since the epoch. */
-export function dayNumber(ymd: string): number {
-  return Math.round(Date.parse(`${ymd}T00:00:00Z`) / MS_PER_DAY);
-}
-
-/** Shift a YYYY-MM-DD by whole days. */
-export function addDays(ymd: string, days: number): string {
-  return new Date((dayNumber(ymd) + days) * MS_PER_DAY).toISOString().slice(0, 10);
-}
 
 /** Every date from..to inclusive, oldest first. */
 export function datesBetween(from: string, to: string): string[] {
@@ -84,20 +75,38 @@ export function earliestDate(pointSets: readonly (readonly TrendPoint[])[]): str
  */
 export function rolling(values: ReadonlyMap<string, number>, dates: readonly string[], n: number): Map<string, number> {
   const out = new Map<string, number>();
-  if (n <= 0) return out;
+  if (n <= 0 || dates.length === 0) return out;
   const need = Math.ceil(n / 2);
-  for (const d of dates) {
-    if (!values.has(d)) continue;
+  // Day numbers, once per date and once per value: the window loop below then
+  // reads a dense array and creates no Date and no string (#270). The array
+  // spans only the days a window can reach: n − 1 before the earliest date.
+  const dayNums = dates.map(dayNumber);
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const dn of dayNums) {
+    if (dn < lo) lo = dn;
+    if (dn > hi) hi = dn;
+  }
+  lo -= n - 1;
+  const dense: (number | undefined)[] = new Array(hi - lo + 1);
+  for (const [key, v] of values) {
+    const dn = dayNumber(key);
+    if (dn >= lo && dn <= hi) dense[dn - lo] = v;
+  }
+  for (let k = 0; k < dates.length; k++) {
+    const at = dayNums[k] - lo;
+    if (dense[at] === undefined) continue;
     let sum = 0;
     let count = 0;
+    // Newest to oldest, as ever: float sums come out in the same order.
     for (let i = 0; i < n; i++) {
-      const v = values.get(addDays(d, -i));
+      const v = dense[at - i];
       if (v !== undefined) {
         sum += v;
         count++;
       }
     }
-    if (count >= need) out.set(d, sum / count);
+    if (count >= need) out.set(dates[k], sum / count);
   }
   return out;
 }
@@ -285,6 +294,15 @@ export interface MetricSeries {
   band: YourRange | null;
 }
 
+/**
+ * The points a metric draws from: all of them, less today's when the metric
+ * `excludesToday` (a day still being counted). One rule for `metricSeries` and
+ * for where All begins (#270 AC6).
+ */
+export function usablePoints(metric: TrendMetric, pts: readonly TrendPoint[], today: string): readonly TrendPoint[] {
+  return metric.excludesToday ? pts.filter((p) => p.date !== today) : pts;
+}
+
 /** Everything a card or table column needs for `metric` over from..to. */
 export function metricSeries(
   metric: TrendMetric,
@@ -294,7 +312,7 @@ export function metricSeries(
   today: string,
   pts: readonly TrendPoint[] = metric.points(),
 ): MetricSeries {
-  const usable = metric.excludesToday ? pts.filter((p) => p.date !== today) : pts;
+  const usable = usablePoints(metric, pts, today);
   const all = new Map(usable.map((p) => [p.date, p.value]));
   const dates = datesBetween(from, to);
   const points = usable

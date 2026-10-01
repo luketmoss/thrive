@@ -10,14 +10,14 @@
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { openDayClick, openDayHref } from './open-day';
 import type { TrendGroup } from './metrics';
-import { RANGE_PHRASE, type RangeKey, metricSeries, rowDate } from './series';
+import { RANGE_PHRASE, type RangeKey, type MetricSeries, rowDate } from './series';
 import { dayCells, pointsByDate } from './readout';
 import { rangeText } from './trend-chart';
 
 interface Props {
   group: TrendGroup;
-  from: string;
-  to: string;
+  /** One per metric of `group`, in order, built once by the screen (#270). */
+  series: readonly MetricSeries[];
   range: RangeKey;
   avgDays: number;
   today: string;
@@ -41,7 +41,7 @@ const WEEK = 7;
 /** "Last 3 months" from "last 3 months". */
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-export function TrendTable({ group, from, to, range, avgDays, today }: Props) {
+export function TrendTable({ group, series: built, range, avgDays, today }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const [scrolls, setScrolls] = useState(false);
   const [stop, setStop] = useState<string | null>(rememberedStop);
@@ -63,8 +63,8 @@ export function TrendTable({ group, from, to, range, avgDays, today }: Props) {
     return () => ro.disconnect();
   });
 
-  const columns = group.metrics.map((metric) => {
-    const series = metricSeries(metric, from, to, avgDays, today);
+  const columns = group.metrics.map((metric, i) => {
+    const series = built[i];
     const byDate = pointsByDate(series);
     return { metric, series, byDate };
   });
