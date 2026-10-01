@@ -4328,3 +4328,38 @@ a.training-card {
 .trend-open-day:active {
   text-decoration: underline;
 }
+
+/* ===== Trends table: a row's date opens its day (#255) =====
+   The date cell is the link: padding moves from the th into the link so the
+   whole cell is a 44 px target. Tokens only. */
+.trend-table tbody th[scope="row"] {
+  padding: 0;
+}
+
+.trend-row-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: var(--space-sm);
+  color: var(--color-primary-text);
+  font-weight: 500;
+  text-decoration: none;
+  /* A focused row clears the stuck header (measured, set by trend-table.tsx)
+     and the fixed bottom nav. */
+  scroll-margin-top: var(--trend-head-h, 0px);
+  scroll-margin-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
+}
+
+.trend-row-link:hover,
+.trend-row-link:active {
+  text-decoration: underline;
+}
+
+/* Inside the cell, so the region's overflow-x never clips it. */
+.trend-row-link:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
