@@ -113,6 +113,12 @@ Google Sheet "Groundwork" with these tabs:
   through `appendSyncLog` with `log: 'withings'`; `withings-sync-watchdog.yml`
   fails when the newest row is over 14 h old. A separate tab because `SyncLog`
   has no source column: nothing that reads `SyncLog` may ever see a Withings run.
+- **Journal** (A:D) — one note per local date (#233): date, note, created,
+  updated. Written by the SPA through `frontend/src/api/journal-api.ts`; saving a
+  blank note deletes the day's row. Row mapping mirrors `JOURNAL_FIELDS` in
+  `apps-script/src/types.js` — change both together. Created by
+  `scripts/migrate-233-journal-tab.mjs`. There is no Apps Script action for it
+  yet (#234).
 
 `Created` on `Exercises`/`Workouts`/`Labels` is written but never read — a
 deliberate forensic trail, not dead weight to be removed.
@@ -148,7 +154,7 @@ Comma-separated, multiple per exercise. Common tags: Push, Pull, Legs, Chest, Ba
 ## UX Design Decisions
 These decisions were made with the user and must be respected by all agents:
 
-- **Landing screen**: the Day view (#228, decided 27 Sep 2026; #235 records the navigation). Until #237 replaces the placeholder, Day shows a short note and a link to Activities.
+- **Landing screen**: the Day view (#228, decided 27 Sep 2026; #235 records the navigation; #237 built the screen).
 - **Set logging**: Logbook-style — record sets when convenient, not real-time per-set
 - **Rest timers**: None in-app — rest times are planning data only (user uses watch)
 - **Supersets**: Flat list with section labels/colors (not grouped flow)
