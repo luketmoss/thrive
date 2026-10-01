@@ -4323,3 +4323,36 @@ a.training-card {
   min-height: 44px;
   margin-top: var(--space-md);
 }
+
+/* ===== Trends: open a day (#254) ===== */
+/* The cell is the link's target: its ::after covers the cell, and the cell is
+   44px tall with or without a selection, so selecting never grows the card. */
+.trend-readout-cell {
+  position: relative;
+  min-height: max(2lh, 44px);
+}
+
+.trend-readout-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-sm);
+}
+
+.trend-open-day {
+  color: var(--color-primary-text);
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.trend-open-day::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.trend-open-day:hover,
+.trend-open-day:active {
+  text-decoration: underline;
+}

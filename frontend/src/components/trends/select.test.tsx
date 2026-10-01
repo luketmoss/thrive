@@ -62,7 +62,7 @@ describe('AC3: one tab stop', () => {
     expect(w.getAttribute('role')).toBe('group');
     expect(w.getAttribute('aria-label')).toMatch(/ charts$/);
     const hint = container.querySelector(`#${w.getAttribute('aria-describedby')}`)!;
-    expect(hint.textContent).toBe('Left and right arrows read one day at a time. The table view lists every day.');
+    expect(hint.textContent).toBe('Left and right arrows read one day at a time. Enter opens it in the Day view. The table view lists every day.');
     expect(hint.classList.contains('sr-only')).toBe(true);
     expect(w.querySelectorAll('[tabindex]')).toHaveLength(0);
     expect(w.querySelector('svg')!.getAttribute('role')).toBe('img');

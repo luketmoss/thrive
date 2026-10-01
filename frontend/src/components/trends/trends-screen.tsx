@@ -20,6 +20,7 @@ import { CustomMetricsPicker } from './custom-metrics-picker';
 import { GroupSwitcher } from './group-switcher';
 import { TrendCharts } from './trend-chart';
 import { TrendTable } from './trend-table';
+import { openDay } from './open-day';
 
 interface SegmentedProps<T extends string> {
   label: string;
@@ -63,7 +64,7 @@ export const selectedDay = signal<string | null>(null);
 export const announcement = signal('');
 
 const HINT_ID = 'trends-charts-hint';
-const HINT = 'Left and right arrows read one day at a time. The table view lists every day.';
+const HINT = 'Left and right arrows read one day at a time. Enter opens it in the Day view. The table view lists every day.';
 
 function clearSelection() {
   selectedDay.value = null;
@@ -209,7 +210,13 @@ export function TrendsScreen() {
       else if (e.key === 'ArrowRight') next = at < 0 ? dates.length - 1 : Math.min(dates.length - 1, at + 1);
       else if (e.key === 'Home') next = 0;
       else if (e.key === 'End') next = dates.length - 1;
-      else if (e.key === 'Escape') {
+      else if (e.key === 'Enter') {
+        // Opens the selected day, as the readout's link does. Nothing selected: nothing.
+        if (selectedDay.value === null) return;
+        e.preventDefault();
+        openDay(selectedDay.value);
+        return;
+      } else if (e.key === 'Escape') {
         e.preventDefault();
         clearSelection();
         return;
@@ -240,7 +247,11 @@ export function TrendsScreen() {
               pointerFocus.current = false;
               if (!press && selectedDay.value === null) moveTo(to);
             }}
-            onBlur={clearSelection}
+            onBlur={(e) => {
+              // Pressing "Open day" moves focus to the link inside; the day must outlast that.
+              if (charts.current?.contains((e as FocusEvent).relatedTarget as Node | null)) return;
+              clearSelection();
+            }}
             onKeyDown={onKeyDown}
           >
             <p class="sr-only" id={HINT_ID}>{HINT}</p>
