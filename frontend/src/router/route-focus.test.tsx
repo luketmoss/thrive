@@ -2,6 +2,8 @@
 // restores the control that opened the screen, replace moves leave focus alone.
 
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
+// First, so every router this file loads is recorded (#264).
+import { freshRouter } from './history.test-utils';
 import { render, cleanup, waitFor } from '@testing-library/preact';
 import { h, type ComponentChildren } from 'preact';
 import { readFileSync } from 'node:fs';
@@ -15,9 +17,7 @@ type Focus = typeof import('./route-focus');
 let screens: Record<string, () => ComponentChildren> = {};
 
 async function boot(hash: string) {
-  vi.resetModules();
-  window.history.replaceState(null, '', hash);
-  const router: Router = await import('./router');
+  const router: Router = await freshRouter(hash);
   const focus: Focus = await import('./route-focus');
   function Stub() {
     const route = router.currentRoute.value;
@@ -263,12 +263,35 @@ describe('AC3: Back restores the opener', () => {
     expect(active().id).toBe('opener');
   });
 
-  it('a browser Back (unannounced hashchange to the previous entry) restores too', async () => {
+  it('a browser Back (history.back(), not through goBack) restores too', async () => {
+    const { router } = await boot('#/activities');
+    byText('W1').focus();
+    await go(router, () => router.navigate('/history/w1'), 'workout-detail');
+    await go(router, () => window.history.back(), 'activities');
+    expect(active().textContent).toBe('W1');
+  });
+
+  // #264 AC4: the depth stamp makes Forward a push and each Back a pop.
+  it('browser Back, Forward, Back: restores the opener, then focuses the heading at the top, then restores again', async () => {
+    const { router } = await boot('#/activities');
+    byText('W2').focus();
+    await go(router, () => router.navigate('/history/w2'), 'workout-detail');
+    await go(router, () => window.history.back(), 'activities');
+    expect(active().textContent).toBe('W2');
+    scrollTo.mockClear();
+    await go(router, () => window.history.forward(), 'workout-detail');
+    expect(active().textContent).toBe('Detail');
+    expect(scrollTo).toHaveBeenCalledWith(0, 0);
+    await go(router, () => window.history.back(), 'activities');
+    expect(active().textContent).toBe('W2');
+  });
+
+  it('assigning the previous hash is a new entry (a push), so it focuses the heading', async () => {
     const { router } = await boot('#/activities');
     byText('W1').focus();
     await go(router, () => router.navigate('/history/w1'), 'workout-detail');
     await go(router, () => { window.location.hash = '#/activities'; }, 'activities');
-    expect(active().textContent).toBe('W1');
+    expect(active().textContent).toBe('Activities');
   });
 
   it('focus from the tab bar is not remembered: Back lands on the heading', async () => {

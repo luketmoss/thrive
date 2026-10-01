@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+// First, so every router this file loads is recorded (#264).
+import { freshRouter, nextHashchange, stampNow } from './history.test-utils';
 
 // We cannot directly test parseHash since it's not exported,
 // but we can test the router behavior by manipulating window.location.hash
@@ -179,18 +181,14 @@ describe('router', () => {
   // #235 AC3: Back uses history.back() only when an earlier in-app screen exists.
   describe('goBack (#235 AC3)', () => {
     it('falls back to the given route when there is no earlier in-app screen', async () => {
-      vi.resetModules();
-      window.location.hash = '/workout/new';
-      const r = await import('./router');
+      const r = await freshRouter('#/workout/new');
       expect(r.canGoBack()).toBe(false);
       r.goBack();
       expect(window.location.hash).toBe('#/activities');
     });
 
     it('calls history.back() once the user has navigated in-app', async () => {
-      vi.resetModules();
-      window.location.hash = '/';
-      const r = await import('./router');
+      const r = await freshRouter('#/');
       window.location.hash = '/workout/new';
       window.dispatchEvent(new Event('hashchange'));
       expect(r.canGoBack()).toBe(true);
@@ -201,9 +199,7 @@ describe('router', () => {
     });
 
     it('never returns to the edit form after editing (A -> D -> E -> D, then Back)', async () => {
-      vi.resetModules();
-      window.location.hash = '/activities';
-      const r = await import('./router');
+      const r = await freshRouter('#/activities');
       r.navigate('/history/w1');
       window.dispatchEvent(new Event('hashchange'));
       r.navigate('/history/w1/edit');
@@ -218,9 +214,7 @@ describe('router', () => {
     });
 
     it('does not use Back to reach a workout tracker', async () => {
-      vi.resetModules();
-      window.location.hash = '/activities';
-      const r = await import('./router');
+      const r = await freshRouter('#/activities');
       r.navigate('/workout/w1');
       window.dispatchEvent(new Event('hashchange'));
       r.navigate('/history/w1');
@@ -229,13 +223,10 @@ describe('router', () => {
     });
 
     it('treats a browser back to the previous entry as a pop', async () => {
-      vi.resetModules();
-      window.location.hash = '/activities';
-      const r = await import('./router');
-      r.navigate('/history/w1');
-      window.dispatchEvent(new Event('hashchange'));
-      window.location.hash = '/activities';
-      window.dispatchEvent(new Event('hashchange'));
+      const r = await freshRouter('#/activities');
+      await nextHashchange(() => r.navigate('/history/w1'));
+      await nextHashchange(() => window.history.back());
+      expect(window.location.hash).toBe('#/activities');
       expect(r.canGoBack()).toBe(false);
     });
   });
@@ -243,11 +234,7 @@ describe('router', () => {
 
 // #237 AC1 — Day is addressed by date.
 describe('day route (#237 AC1)', () => {
-  async function fresh(hash: string) {
-    vi.resetModules();
-    window.history.replaceState(null, '', hash === '' ? window.location.pathname : hash);
-    return import('./router');
-  }
+  const fresh = (hash: string) => freshRouter(hash);
 
   it('parses #/day/YYYY-MM-DD for a real date and leaves the URL alone', async () => {
     const r = await fresh('#/day/2028-02-29');
@@ -267,12 +254,16 @@ describe('day route (#237 AC1)', () => {
 
   it('replaces a bad day hash reached by a hashchange too', async () => {
     const r = await fresh('#/activities');
+    // A new entry first, so no forward entries an earlier test left behind are
+    // dropped by the push measured below (#264's traversal tests leave some).
+    await nextHashchange(() => r.navigate('/activities?fresh'));
     const before = window.history.length;
     window.location.hash = '/day/2026-13-01';
     window.dispatchEvent(new Event('hashchange'));
     expect(r.currentRoute.value.params).toEqual({});
     expect(window.location.hash).toBe('#/');
     expect(window.history.length).toBe(before + 1); // the push itself, and nothing more
+    expect(stampNow()).toEqual({ depth: 2, prev: '#/activities?fresh' });
     // Back from there still reaches Activities
     expect(r.canGoBack()).toBe(true);
   });
@@ -309,11 +300,7 @@ describe('day route (#237 AC1)', () => {
 });
 
 describe('calendar route (#241 AC1)', () => {
-  async function fresh(hash: string) {
-    vi.resetModules();
-    window.history.replaceState(null, '', hash === '' ? window.location.pathname : hash);
-    return import('./router');
-  }
+  const fresh = (hash: string) => freshRouter(hash);
 
   it("parses #/calendar as today's month and #/calendar/YYYY-MM as that month, URLs unchanged", async () => {
     let r = await fresh('#/calendar');
@@ -345,5 +332,239 @@ describe('calendar route (#241 AC1)', () => {
     expect(window.history.length).toBe(before + 1);
     expect(r.currentRoute.value.params).toEqual({ month: '2025-03' });
     expect(r.canGoBack()).toBe(true);
+  });
+});
+
+// #264 — every history entry carries its depth, so Back survives browser Forward.
+describe('history depth (#264)', () => {
+  type Router = Awaited<ReturnType<typeof freshRouter>>;
+  const go = (r: Router, path: string) => nextHashchange(() => r.navigate(path));
+  const back = () => nextHashchange(() => window.history.back());
+  const forward = () => nextHashchange(() => window.history.forward());
+
+  function kinds(r: Router): string[] {
+    const seen: string[] = [];
+    r.onRouteChange((c) => seen.push(c.kind));
+    return seen;
+  }
+
+  describe('AC1: Back after browser Forward never reopens the edit form', () => {
+    it('A -> D -> E -> D, Back, Back, Forward, Forward, then the Back arrow goes to #/activities', async () => {
+      const r = await freshRouter('#/activities');
+      const seen = kinds(r);
+      await go(r, '/history/w1');
+      await go(r, '/history/w1/edit');
+      await go(r, '/history/w1'); // what Save does
+      await back();
+      await back();
+      expect(window.location.hash).toBe('#/history/w1');
+      expect(r.canGoBack()).toBe(true); // below is Activities
+      await forward();
+      await forward();
+      expect(window.location.hash).toBe('#/history/w1');
+      expect(stampNow()).toEqual({ depth: 3, prev: '#/history/w1/edit' });
+      expect(seen).toEqual(['push', 'push', 'push', 'pop', 'pop', 'push', 'push']);
+
+      expect(r.canGoBack()).toBe(false);
+      const historyBack = vi.spyOn(window.history, 'back');
+      r.goBack();
+      expect(historyBack).not.toHaveBeenCalled();
+      expect(window.location.hash).toBe('#/activities');
+      historyBack.mockRestore();
+    });
+
+    it('canGoBack is false after Forward onto a detail whose entry below is the tracker', async () => {
+      const r = await freshRouter('#/activities');
+      await go(r, '/workout/w1');
+      await go(r, '/history/w1');
+      await back();
+      await forward();
+      expect(window.location.hash).toBe('#/history/w1');
+      expect(r.canGoBack()).toBe(false);
+    });
+
+    it('canGoBack is true after Forward onto a detail whose entry below is an ordinary screen', async () => {
+      const r = await freshRouter('#/activities');
+      await go(r, '/history/w1');
+      await back();
+      expect(r.canGoBack()).toBe(false);
+      await forward();
+      expect(r.canGoBack()).toBe(true);
+      const historyBack = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+      r.goBack();
+      expect(historyBack).toHaveBeenCalledOnce();
+      historyBack.mockRestore();
+    });
+  });
+
+  describe('AC2: every entry carries its depth, and moves are classified from it', () => {
+    it('stamps the loaded entry depth 0, URL untouched, keeping the existing state', async () => {
+      await freshRouter('#/trends', { other: 'kept' });
+      expect(window.history.state).toEqual({ other: 'kept', thrive: { depth: 0, prev: null } });
+      expect(window.location.hash).toBe('#/trends');
+    });
+
+    it.each([null, undefined, 'text', 7])('a %s state becomes { thrive }', async (state) => {
+      await freshRouter('#/trends', state);
+      expect(window.history.state).toEqual({ thrive: { depth: 0, prev: null } });
+    });
+
+    it.each([
+      { depth: -1, prev: null },
+      { depth: 1.5, prev: '#/' },
+      { depth: '2', prev: '#/' },
+      { prev: '#/' },
+      'stamp',
+      null,
+    ])('a thrive value of %j is no stamp', async (thrive) => {
+      const r = await freshRouter('#/history/w1', { thrive });
+      expect(stampNow()).toEqual({ depth: 0, prev: null });
+      expect(r.canGoBack()).toBe(false);
+    });
+
+    it('stamps a new entry depth + 1 with the hash below as prev (navigate, a link, a typed hash)', async () => {
+      const r = await freshRouter('');
+      await go(r, '/activities');
+      expect(stampNow()).toEqual({ depth: 1, prev: '#/' });
+      await nextHashchange(() => { window.location.hash = '/settings'; });
+      expect(stampNow()).toEqual({ depth: 2, prev: '#/activities' });
+      const a = document.createElement('a');
+      a.href = '#/trends';
+      document.body.appendChild(a);
+      await nextHashchange(() => a.click());
+      a.remove();
+      expect(stampNow()).toEqual({ depth: 3, prev: '#/settings' });
+    });
+
+    it('classifies Back and go(-n) as pop, Forward and go(+n) as push, keeping the entries above', async () => {
+      const r = await freshRouter('#/activities');
+      await go(r, '/trends');
+      await go(r, '/settings');
+      await go(r, '/settings/labels');
+      const changes: Array<[string, string, string]> = [];
+      r.onRouteChange((c) => changes.push([c.kind, c.fromHash, c.toHash]));
+      await nextHashchange(() => window.history.go(-2));
+      expect(stampNow()?.depth).toBe(1);
+      await nextHashchange(() => window.history.go(2));
+      expect(stampNow()?.depth).toBe(3);
+      expect(r.canGoBack()).toBe(true);
+      expect(changes).toEqual([
+        ['pop', '#/settings/labels', '#/trends'],
+        ['push', '#/trends', '#/settings/labels'],
+      ]);
+    });
+
+    it('a new entry after Back forgets the entries above, as the browser does', async () => {
+      const r = await freshRouter('#/activities');
+      await go(r, '/history/w1');
+      await go(r, '/history/w1/edit');
+      await back();
+      await back();
+      const seen = kinds(r);
+      await go(r, '/trends');
+      expect(seen).toEqual(['push']);
+      expect(stampNow()).toEqual({ depth: 1, prev: '#/activities' });
+      expect(r.canGoBack()).toBe(true);
+    });
+
+    it('a duplicate hashchange for the same entry is no event and no currentRoute write', async () => {
+      const r = await freshRouter('#/activities');
+      await go(r, '/trends');
+      const seen = kinds(r);
+      let writes = 0;
+      const stop = r.currentRoute.subscribe(() => { writes += 1; });
+      writes = 0; // subscribe calls once with the current value
+      window.dispatchEvent(new Event('hashchange'));
+      window.dispatchEvent(new Event('hashchange'));
+      stop();
+      expect(seen).toEqual([]);
+      expect(writes).toBe(0);
+      expect(stampNow()).toEqual({ depth: 1, prev: '#/activities' });
+    });
+
+    it('a hashchange to the same depth with a different hash is a replace', async () => {
+      const r = await freshRouter('#/activities');
+      await go(r, '/trends');
+      const changes: Array<[string, string, string]> = [];
+      r.onRouteChange((c) => changes.push([c.kind, c.fromHash, c.toHash]));
+      window.history.replaceState(window.history.state, '', '#/settings');
+      window.dispatchEvent(new Event('hashchange'));
+      expect(changes).toEqual([['replace', '#/trends', '#/settings']]);
+      expect(r.currentRoute.value.name).toBe('settings');
+      expect(stampNow()).toEqual({ depth: 1, prev: '#/activities' });
+    });
+
+    it('replaceRoute keeps the stamp and the depth, and is a replace', async () => {
+      const r = await freshRouter('#/activities');
+      await go(r, '/');
+      const seen = kinds(r);
+      r.replaceRoute('/day/2026-09-01');
+      r.replaceRoute('/day/2026-09-02');
+      expect(seen).toEqual(['replace', 'replace']);
+      expect(stampNow()).toEqual({ depth: 1, prev: '#/activities' });
+    });
+
+    it('the entry below is read from the trail, so a replaceRoute there since is seen', async () => {
+      const r = await freshRouter('#/activities');
+      await go(r, '/');
+      await go(r, '/history/w1');
+      await back();
+      r.replaceRoute('/day/2026-09-03');
+      await forward();
+      // The stamp still names the hash the entry below had when this one was made
+      expect(stampNow()).toEqual({ depth: 2, prev: '#/' });
+      const seen: string[] = [];
+      r.onRouteChange((c) => seen.push(c.toHash));
+      await back();
+      expect(seen).toEqual(['#/day/2026-09-03']);
+      expect(r.canGoBack()).toBe(true);
+    });
+
+    it('listeners still run before currentRoute changes', async () => {
+      const r = await freshRouter('#/activities');
+      await go(r, '/trends');
+      let during = '';
+      r.onRouteChange(() => { during = r.currentRoute.value.name; });
+      await back();
+      expect(during).toBe('trends');
+      expect(r.currentRoute.value.name).toBe('activities');
+    });
+  });
+
+  describe('AC3: reload and deep links', () => {
+    it('a reload keeps the stamped depth, and Back steps to the real previous screen', async () => {
+      const r = await freshRouter('#/history/w1', { thrive: { depth: 3, prev: '#/activities' } });
+      expect(stampNow()).toEqual({ depth: 3, prev: '#/activities' });
+      expect(r.canGoBack()).toBe(true);
+      const historyBack = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+      r.goBack();
+      expect(historyBack).toHaveBeenCalledOnce();
+      historyBack.mockRestore();
+      // and the next new entry is a step deeper
+      await go(r, '/history/w1/edit');
+      expect(stampNow()).toEqual({ depth: 4, prev: '#/history/w1' });
+    });
+
+    it.each([
+      ['the edit form', { depth: 2, prev: '#/history/w1/edit' }],
+      ['the tracker', { depth: 2, prev: '#/workout/w1' }],
+      ['nothing', { depth: 2 }],
+    ])('after a reload whose entry below is %s, Back goes to the fallback', async (_, thrive) => {
+      const r = await freshRouter('#/history/w1', { thrive });
+      expect(r.canGoBack()).toBe(false);
+      const historyBack = vi.spyOn(window.history, 'back');
+      r.goBack();
+      expect(historyBack).not.toHaveBeenCalled();
+      expect(window.location.hash).toBe('#/activities');
+      historyBack.mockRestore();
+    });
+
+    it("a deep link opened fresh is depth 0, and Back goes to its fallback (Calendar's today)", async () => {
+      const r = await freshRouter('#/calendar/2026-09');
+      expect(stampNow()).toEqual({ depth: 0, prev: null });
+      expect(r.canGoBack()).toBe(false);
+      r.goBack('/day/2026-10-01');
+      expect(window.location.hash).toBe('#/day/2026-10-01');
+    });
   });
 });
