@@ -392,6 +392,8 @@ const SCALE_WEIGHT_ONLY = 24;                // a weight with no body compositio
 const ACTIVITY_PARTIAL = 11;                 // two outdoor sessions, one unmeasured
 const ACTIVITY_ZERO_DISTANCE = 26;           // a measured 0 distance
 const ACTIVITY_INDOOR_ONLY = 13;             // an indoor ride: no outdoor distance at all
+const ACTIVITY_MIXED_VENUE = 14;             // an indoor ride and an outdoor hike on one day (#266); after ACTIVITY_INDOOR_ONLY so a first-indoor-day lookup still lands on 13
+const ACTIVITY_TWO_EFFORTS = 28;             // a hard ride and an easy walk: two effort levels (#266)
 // #239: one day a cycle outside your range the unwelcome way, so the Day view's
 // colouring can always be seen within the last 30 days.
 const HEALTH_RHR_HIGH = 4;                   // resting HR well above its range
@@ -606,7 +608,7 @@ function buildDemoBodyMeasurements(now: Date, presync = false): BodyMeasurementR
 // summary agrees with its activity list; older days follow the cycle and
 // exist only in the summary.
 
-type DemoActivity = Pick<Workout, 'type' | 'sub_type' | 'moving_seconds' | 'elapsed_seconds' | 'distance_m' | 'ascent_m' | 'effort'>;
+export type DemoActivity = Pick<Workout, 'type' | 'sub_type' | 'moving_seconds' | 'elapsed_seconds' | 'distance_m' | 'ascent_m' | 'effort'>;
 
 function act(
   type: Workout['type'], sub_type: string, moving: string, elapsed: string,
@@ -631,6 +633,18 @@ function syntheticActivities(day: number): DemoActivity[] {
   }
   if (p === ACTIVITY_ZERO_DISTANCE) return [act('walk', 'outdoor', '480', '600', '0', '0', 'Easy')];
   if (p === ACTIVITY_INDOOR_ONLY) return [act('bike', 'indoor', '2700', '2760', '21000', '', 'Medium')];
+  if (p === ACTIVITY_MIXED_VENUE) {
+    return [
+      act('bike', 'indoor', '1800', '1860', '15000', '', 'Easy'),
+      act('hike', 'outdoor', '3600', '3900', '6400', '310', 'Medium'),
+    ];
+  }
+  if (p === ACTIVITY_TWO_EFFORTS) {
+    return [
+      act('bike', 'road', '3300', '3420', '27500', '240', 'Hard'),
+      act('walk', 'outdoor', '900', '960', '1800', '12', 'Easy'),
+    ];
+  }
   if (p === 20) return [act('stretch', '', '', '1200', '', '', '')];
   return [];
 }
@@ -714,15 +728,16 @@ function summarizeDemoDay(
   };
 }
 
-function buildDemoDailySummary(now: Date, presync = false): DailySummaryRow[] {
+/**
+ * The activities each demo day's summary row is rolled up from, one entry per
+ * day of the window: the last seven days are the shifted demo Workouts
+ * (planned ones excluded, as the rebuild skips them), older days the synthetic
+ * cycle. Exported so the parity test (#266) feeds the real rollup exactly what
+ * the demo's own rollup saw.
+ */
+export function demoActivitiesByDate(now: Date): Map<string, DemoActivity[]> {
   const days = demoHealthDays(now);
   const todayNum = days[days.length - 1].day;
-  const health = new Map(buildDemoDailyHealth(now, presync).map((h) => [h.date, h]));
-  const body = new Map<string, BodyMeasurementRow[]>();
-  for (const m of buildDemoBodyMeasurements(now, presync)) {
-    if (!body.has(m.date)) body.set(m.date, []);
-    body.get(m.date)!.push(m);
-  }
   const recent = new Map<string, DemoActivity[]>();
   for (const w of shiftDemoWorkouts(now)) {
     // A planned workout has not happened; it is not part of the rollup.
@@ -730,13 +745,28 @@ function buildDemoDailySummary(now: Date, presync = false): DailySummaryRow[] {
     if (!recent.has(w.date)) recent.set(w.date, []);
     recent.get(w.date)!.push(w);
   }
+  const byDate = new Map<string, DemoActivity[]>();
+  for (const { date, day } of days) {
+    byDate.set(date, todayNum - day <= 6 ? recent.get(date) ?? [] : syntheticActivities(day));
+  }
+  return byDate;
+}
+
+function buildDemoDailySummary(now: Date, presync = false): DailySummaryRow[] {
+  const days = demoHealthDays(now);
+  const health = new Map(buildDemoDailyHealth(now, presync).map((h) => [h.date, h]));
+  const body = new Map<string, BodyMeasurementRow[]>();
+  for (const m of buildDemoBodyMeasurements(now, presync)) {
+    if (!body.has(m.date)) body.set(m.date, []);
+    body.get(m.date)!.push(m);
+  }
+  const activities = demoActivitiesByDate(now);
   // One rebuild stamps one time.
   const computedAt = new Date(now.getTime() - 20 * 60_000).toISOString();
 
   const rows: Omit<DailySummaryRow, 'sheetRow'>[] = [];
-  for (const { date, day } of days) {
-    const ws = todayNum - day <= 6 ? recent.get(date) ?? [] : syntheticActivities(day);
-    const row = summarizeDemoDay(date, ws, health.get(date), body.get(date) ?? [], computedAt);
+  for (const { date } of days) {
+    const row = summarizeDemoDay(date, activities.get(date) ?? [], health.get(date), body.get(date) ?? [], computedAt);
     if (row) rows.push(row);
   }
   return asBackfilled<DailySummaryRow>(rows, days[0].date);
