@@ -85,19 +85,19 @@ export function TrendTable({ group, from, to, range, avgDays, today }: Props) {
     if (!link) return;
     const at = rows.indexOf(link.getAttribute('data-date') ?? '');
     if (at < 0) return;
-    let to: number;
+    let target: number;
     switch (e.key) {
-      case 'ArrowDown': to = at + 1; break;
-      case 'ArrowUp': to = at - 1; break;
-      case 'PageDown': to = at + WEEK; break;
-      case 'PageUp': to = at - WEEK; break;
-      case 'Home': to = 0; break;
-      case 'End': to = rows.length - 1; break;
+      case 'ArrowDown': target = at + 1; break;
+      case 'ArrowUp': target = at - 1; break;
+      case 'PageDown': target = at + WEEK; break;
+      case 'PageUp': target = at - WEEK; break;
+      case 'Home': target = 0; break;
+      case 'End': target = rows.length - 1; break;
       default: return;
     }
     e.preventDefault();
-    to = Math.min(rows.length - 1, Math.max(0, to));
-    const next = wrap.current?.querySelector<HTMLElement>(`a.trend-row-link[data-date="${rows[to]}"]`);
+    target = Math.min(rows.length - 1, Math.max(0, target));
+    const next = wrap.current?.querySelector<HTMLElement>(`a.trend-row-link[data-date="${rows[target]}"]`);
     next?.focus();
   };
 
@@ -136,7 +136,11 @@ export function TrendTable({ group, from, to, range, avgDays, today }: Props) {
             <tr key={date}>
               <th scope="row">
                 <a class="trend-row-link" href={openDayHref(date, today)} data-date={date}
-                  tabIndex={date === active ? 0 : -1} onClick={openDayClick(date, today)}>
+                  tabIndex={date === active ? 0 : -1} onClick={(e) => {
+                    // Safari and Firefox on macOS do not focus a clicked link: remember the row here too.
+                    rememberedStop = date;
+                    openDayClick(date, today)(e);
+                  }}>
                   {rowDate(date, today)}<span aria-hidden="true">›</span>
                 </a>
               </th>

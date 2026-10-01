@@ -24,7 +24,7 @@ export function openDay(date: string, today: string): void {
  * non-primary click keeps the browser's own behaviour (new tab or window), is
  * not prevented and registers no scroll reset; any other opens the day.
  */
-export function openDayClick(date: string, today: string) {
+export function openDayClick(date: string, today: string): (e: MouseEvent) => void {
   return (e: MouseEvent): void => {
     if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button !== 0) return;
     e.preventDefault();

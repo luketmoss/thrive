@@ -228,4 +228,17 @@ describe('#255 AC3/AC4: one tab stop and the keys', () => {
     r = renderTable(metric(pts));
     expect(stops(r.container)).toEqual([links(r.container)[0]]);
   });
+
+  it('remembers a clicked row even where a click does not focus the link', () => {
+    let r = renderTable(metric(pts));
+    fireEvent.click(links(r.container)[2]);
+    cleanup();
+    r = renderTable(metric(pts));
+    expect(links(r.container)[2].getAttribute('tabindex')).toBe('0');
+  });
+
+  it('sets the measured header height on the wrapper for scroll-margin', () => {
+    const { container } = renderTable(metric(pts));
+    expect(container.querySelector<HTMLElement>('.trend-table-wrap')!.style.getPropertyValue('--trend-head-h')).toMatch(/px$/);
+  });
 });
