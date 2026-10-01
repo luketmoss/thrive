@@ -28,7 +28,7 @@ beforeEach(() => {
   localStorage.clear();
   localStorage.setItem('thrive-trends-range', '1W');
   const rows = [];
-  for (let i = 0; i < 30; i++) rows.push({ date: addDays(TODAY, -i), resting_hr: String(50 + (i % 5)), hrv: '60', sheetRow: i + 2 });
+  for (let i = 0; i < 30; i++) rows.push({ date: addDays(TODAY, -i), resting_hr: String(50 + (i % 5)), hrv: '60', stress_avg: '30', sheetRow: i + 2 });
   dailyHealth.value = { state: 'loaded', rows: rows as never[] };
   bodyMeasurements.value = { state: 'loaded', rows: [] };
   dailySummary.value = { state: 'loaded', rows: [] };

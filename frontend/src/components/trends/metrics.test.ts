@@ -1,6 +1,6 @@
 // #243 AC1-AC3 — the Recovery, Sleep and Fitness registry entries.
 import { describe, it, expect, beforeEach } from 'vitest';
-import { TREND_GROUPS, SLEEP_TOTAL, SLEEP_DEEP, VO2MAX, TRAINING_LOAD, HRV } from './metrics';
+import { TREND_GROUPS, SLEEP_TOTAL, SLEEP_DEEP, VO2MAX, TRAINING_LOAD, HRV, STRESS_AVG } from './metrics';
 import { dailyHealth, bodyMeasurements, dailySummary } from '../../state/store';
 import { ACTIVITY_COUNT, MOVING_TIME, DISTANCE, ASCENT } from './metrics';
 import { WEIGHT, BODY_FAT, SYSTOLIC, DIASTOLIC, BP_READINGS } from './metrics';
@@ -15,11 +15,27 @@ describe('registry', () => {
     expect(TREND_GROUPS.map((g) => g.label)).toEqual(['Recovery', 'Sleep', 'Fitness', 'Body', 'Blood Pressure', 'Activity', 'Custom']);
     expect(TREND_GROUPS.filter((g) => g.id !== 'custom').every((g) => g.metrics.length >= 1 && g.metrics.length <= 4)).toBe(true);
   });
-  it('Recovery: resting HR then HRV, both banded', () => {
+  it('Recovery: resting HR, HRV, then Average Stress, all banded (#248)', () => {
     expect(group('recovery').metrics.map((m) => [m.id, m.unit, m.band])).toEqual([
-      ['resting_hr', 'bpm', true], ['hrv', 'ms', true],
+      ['resting_hr', 'bpm', true], ['hrv', 'ms', true], ['stress_avg', '', true],
     ]);
     expect(HRV.format(54.6)).toBe('55');
+    expect(group('recovery').metrics[2]).toBe(STRESS_AVG);
+    expect(STRESS_AVG.label).toBe('Average Stress');
+    expect(STRESS_AVG.format(30.6)).toBe('31');
+    expect(STRESS_AVG.axisFormat).toBeUndefined();
+    expect(STRESS_AVG.zeroBased).toBeUndefined();
+    expect(STRESS_AVG.excludesToday).toBeUndefined();
+    expect(STRESS_AVG.note).toBeUndefined();
+    expect(STRESS_AVG.source ?? 'dailyHealth').toBe('dailyHealth');
+  });
+  it('Average Stress points: numeric kept, blank omitted, stored 0 a real point (#248)', () => {
+    dailyHealth.value = { state: 'loaded', rows: [
+      { date: '2026-09-01', stress_avg: '31', sheetRow: 2 },
+      { date: '2026-09-02', stress_avg: '', sheetRow: 3 },
+      { date: '2026-09-03', stress_avg: '0', sheetRow: 4 },
+    ] as never[] };
+    expect(STRESS_AVG.points()).toEqual([{ date: '2026-09-01', value: 31 }, { date: '2026-09-03', value: 0 }]);
   });
   it('Sleep: total, deep, REM, score with the specified bands', () => {
     expect(group('sleep').metrics.map((m) => [m.id, m.band])).toEqual([
