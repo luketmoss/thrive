@@ -4208,6 +4208,10 @@ a.training-card {
    the chart's aria-describedby still resolves. */
 .trend-readout-cell {
   display: grid;
+  /* Two lines, the readout's height (date, then value), so a one-line summary
+     does not make the card grow when a day is selected. */
+  font-size: var(--text-sm);
+  min-height: 2lh;
 }
 
 .trend-readout-cell > .trend-summary,
