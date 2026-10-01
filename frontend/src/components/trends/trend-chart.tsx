@@ -10,9 +10,11 @@
 import { useLayoutEffect, useState } from 'preact/hooks';
 import type { TrendGroup, TrendMetric } from './metrics';
 import {
-  RANGE_PHRASE, type RangeKey, dateTicks, metricSeries, segments, tickLabel, windowText, yDomain,
+  RANGE_PHRASE, type RangeKey, dateTicks, dayAtX, metricSeries, segments, tickLabel, windowText, yDomain,
   type MetricSeries,
 } from './series';
+import { withUnit } from './readout';
+import { TrendReadout } from './trend-readout';
 
 /** Width drawn before the card has been measured (and in jsdom). */
 export const DEFAULT_CHART_WIDTH = 300;
@@ -23,13 +25,13 @@ const PAD_TOP = 8;
 const PAD_RIGHT = 6;
 const PAD_BOTTOM = 22;
 const MIN_DOT_R = 1.5;
+/** Centre-line radius of the selected day's marker: 4 px of fill inside a 2 px ring. */
+const MARKER_R = 5;
 
 /** "resting HR" from "Resting HR": the label mid-sentence. */
 export function midSentence(label: string): string {
   return /^[A-Z][a-z]/.test(label) ? label[0].toLowerCase() + label.slice(1) : label;
 }
-
-const withUnit = (text: string, unit: string) => (unit ? `${text} ${unit}` : text);
 
 /** "Your range 48–56 bpm (Aug 28 – Sep 26)". */
 export function rangeText(metric: TrendMetric, s: MetricSeries, today: string): string | null {
@@ -73,10 +75,14 @@ interface PlotProps {
   width: number;
   label: string;
   describedBy: string;
+  /** The day the group has selected (#247), if any. */
+  selectedDate?: string | null;
+  /** A pointer chose a day. The screen decides what that means. */
+  onSelect?: (date: string) => void;
 }
 
 /** The SVG itself. Exported for tests; cards use it through TrendCard. */
-export function TrendPlot({ metric, series, width, label, describedBy }: PlotProps) {
+export function TrendPlot({ metric, series, width, label, describedBy, selectedDate, onSelect }: PlotProps) {
   const values = series.points.map((p) => p.value);
   for (const v of series.average.values()) values.push(v);
   const dom = yDomain(values, series.band, metric.zeroBased);
@@ -92,6 +98,17 @@ export function TrendPlot({ metric, series, width, label, describedBy }: PlotPro
   const r = Math.min(3.5, Math.max(MIN_DOT_R, slot * 0.35));
   const avgPoints = [...series.average].map(([date, value]) => ({ date, value }));
   const xTicks = dateTicks(series.dates[0], series.dates[n - 1], plotW);
+  const selected = selectedDate && index.has(selectedDate) ? selectedDate : null;
+  const selectedPoint = selected ? series.points.find((p) => p.date === selected) : undefined;
+
+  // Pointer x → plot x, through the svg's own scale (it is width:100%), → a day.
+  const pick = (e: PointerEvent) => {
+    if (!onSelect) return;
+    const svg = e.currentTarget as SVGSVGElement;
+    const rect = svg.getBoundingClientRect();
+    const scale = rect.width > 0 ? width / rect.width : 1;
+    onSelect(dayAtX(series.dates, (e.clientX - rect.left) * scale, padLeft, plotW));
+  };
 
   return (
     <svg
@@ -102,6 +119,8 @@ export function TrendPlot({ metric, series, width, label, describedBy }: PlotPro
       viewBox={`0 0 ${width} ${CHART_HEIGHT}`}
       width={width}
       height={CHART_HEIGHT}
+      onPointerDown={pick}
+      onPointerMove={pick}
     >
       {series.band && (() => {
         const top = y(series.band.hi);
@@ -147,6 +166,19 @@ export function TrendPlot({ metric, series, width, label, describedBy }: PlotPro
           ))}
         </g>
       )}
+      {selected && (
+        <g class="trend-selection" pointer-events="none">
+          <line class="trend-hairline" x1={x(selected)} x2={x(selected)} y1={PAD_TOP} y2={PAD_TOP + plotH}
+            stroke="var(--color-text-secondary)" stroke-width={1} />
+          {selectedPoint && (selectedPoint.partial !== undefined ? (
+            <circle class="trend-marker trend-marker-partial" cx={x(selected)} cy={y(selectedPoint.value)} r={MARKER_R}
+              fill="var(--color-surface)" stroke="var(--color-text)" stroke-width={2} />
+          ) : (
+            <circle class="trend-marker" cx={x(selected)} cy={y(selectedPoint.value)} r={MARKER_R}
+              fill="var(--color-text)" stroke="var(--color-surface)" stroke-width={2} />
+          ))}
+        </g>
+      )}
     </svg>
   );
 }
@@ -158,10 +190,12 @@ interface CardProps {
   range: RangeKey;
   avgDays: number;
   today: string;
+  selectedDate?: string | null;
+  onSelect?: (date: string) => void;
 }
 
 /** One metric's card: header, summary line and the plot, or its empty state. */
-export function TrendCard({ metric, from, to, range, avgDays, today }: CardProps) {
+export function TrendCard({ metric, from, to, range, avgDays, today, selectedDate, onSelect }: CardProps) {
   const [measure, width] = useWidth();
   const all = metric.points();
   const series = metricSeries(metric, from, to, avgDays, today, all);
@@ -178,10 +212,18 @@ export function TrendCard({ metric, from, to, range, avgDays, today }: CardProps
   } else {
     body = (
       <>
-        <p class="trend-summary" id={summaryId}>{summaryText(metric, series, today)}</p>
+        {/* Summary and readout share one grid cell, so a selection never moves the card.
+            The summary stays in the DOM, only hidden, for the chart's aria-describedby. */}
+        <div class={`trend-readout-cell${selectedDate ? ' has-readout' : ''}`}>
+          <p class="trend-summary" id={summaryId}>{summaryText(metric, series, today)}</p>
+          {selectedDate && series.dates.includes(selectedDate) && (
+            <TrendReadout metric={metric} series={series} date={selectedDate} avgDays={avgDays} today={today} />
+          )}
+        </div>
         <div class="trend-plot-wrap" ref={measure}>
           <TrendPlot metric={metric} series={series} width={width}
-            label={`${metric.label}, ${RANGE_PHRASE[range]}`} describedBy={describedBy} />
+            label={`${metric.label}, ${RANGE_PHRASE[range]}`} describedBy={describedBy}
+            selectedDate={selectedDate} onSelect={onSelect} />
         </div>
       </>
     );
@@ -205,14 +247,17 @@ interface ChartsProps {
   range: RangeKey;
   avgDays: number;
   today: string;
+  selectedDate?: string | null;
+  onSelect?: (date: string) => void;
 }
 
 /** A group as stacked cards, all on the same from..to and so the same x positions. */
-export function TrendCharts({ group, from, to, range, avgDays, today }: ChartsProps) {
+export function TrendCharts({ group, from, to, range, avgDays, today, selectedDate, onSelect }: ChartsProps) {
   return (
     <div class="trend-cards">
       {group.metrics.map((m) => (
-        <TrendCard key={m.id} metric={m} from={from} to={to} range={range} avgDays={avgDays} today={today} />
+        <TrendCard key={m.id} metric={m} from={from} to={to} range={range} avgDays={avgDays} today={today}
+          selectedDate={selectedDate} onSelect={onSelect} />
       ))}
     </div>
   );
