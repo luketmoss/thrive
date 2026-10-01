@@ -59,8 +59,8 @@ afterEach(() => {
 });
 
 const dots = (c: Element) => [...c.querySelectorAll<SVGElement>('.trend-card:first-of-type .trend-dot')].map((d) => d.getAttribute('data-date')!);
-const lastTableRow = (c: Element) => [...c.querySelectorAll('tbody tr th')].pop()!.textContent;
-const firstTableRow = (c: Element) => c.querySelector('tbody tr th')!.textContent;
+const lastTableRow = (c: Element) => [...c.querySelectorAll('tbody tr th a')].pop()!.firstChild!.textContent;
+const firstTableRow = (c: Element) => c.querySelector('tbody tr th a')!.firstChild!.textContent;
 
 describe.each([
   // Denver (MDT, UTC-6) is 2026-10-01 11:10 here; the device is on 10-02 (05:10).

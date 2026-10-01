@@ -18,3 +18,16 @@ export function openDay(date: string, today: string): void {
   window.addEventListener('hashchange', () => window.scrollTo(0, 0), { once: true });
   navigate(href.replace(/^#/, ''));
 }
+
+/**
+ * The click handler of every link that opens a day (#254, #255): a modified or
+ * non-primary click keeps the browser's own behaviour (new tab or window), is
+ * not prevented and registers no scroll reset; any other opens the day.
+ */
+export function openDayClick(date: string, today: string) {
+  return (e: MouseEvent): void => {
+    if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button !== 0) return;
+    e.preventDefault();
+    openDay(date, today);
+  };
+}

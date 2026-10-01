@@ -68,7 +68,7 @@ describe('the table and the readout agree', () => {
     const rows = [...table.container.querySelectorAll('tbody tr')];
     expect(rows).toHaveLength(7);
     for (const row of rows) {
-      const rowHead = row.querySelector('th')!.textContent!;
+      const rowHead = row.querySelector('th a')!.firstChild!.textContent!;
       const date = datesBetween(from, to).find((d) => readoutDate(d, TODAY) === rowHead)!;
       const cells = [...row.querySelectorAll('td')].map((td) => td.textContent!.trim());
       const card = render(h(TrendCard, { metric: m, from, to, range: '1W', avgDays, today: TODAY, selectedDate: date }));
