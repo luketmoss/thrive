@@ -6,15 +6,15 @@
 // for Back when the entry changes, and scrolling before that would lose it.
 
 import { navigate } from '../../router/router';
-import { dayHref, todayInDenver } from '../../day/dates';
+import { dayHref } from '../../day/dates';
 
 /** The href of a day's link: `#/` for today, `#/day/YYYY-MM-DD` otherwise. */
-export function openDayHref(date: string): string {
-  return dayHref(date, todayInDenver());
+export function openDayHref(date: string, today: string): string {
+  return dayHref(date, today);
 }
 
-export function openDay(date: string): void {
-  const href = openDayHref(date);
+export function openDay(date: string, today: string): void {
+  const href = openDayHref(date, today);
   window.addEventListener('hashchange', () => window.scrollTo(0, 0), { once: true });
   navigate(href.replace(/^#/, ''));
 }

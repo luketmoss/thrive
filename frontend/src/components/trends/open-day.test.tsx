@@ -9,7 +9,7 @@ vi.mock('../../state/actions', () => ({ loadHealth: async () => {} }));
 import { TrendsScreen, selectedDay, announcement } from './trends-screen';
 import { AuthContext } from '../../auth/auth-context';
 import { dailyHealth, bodyMeasurements, dailySummary } from '../../state/store';
-import { addDays, localToday } from './series';
+import { addDays } from './series';
 import { todayInDenver } from '../../day/dates';
 import { openDayName } from './trend-readout';
 
@@ -28,7 +28,7 @@ beforeEach(() => {
   localStorage.clear();
   localStorage.setItem('thrive-trends-range', '1W');
   const rows = [];
-  for (let i = 0; i < 30; i++) rows.push({ date: addDays(localToday(), -i), resting_hr: String(50 + (i % 5)), hrv: '60', sheetRow: i + 2 });
+  for (let i = 0; i < 30; i++) rows.push({ date: addDays(TODAY, -i), resting_hr: String(50 + (i % 5)), hrv: '60', sheetRow: i + 2 });
   dailyHealth.value = { state: 'loaded', rows: rows as never[] };
   bodyMeasurements.value = { state: 'loaded', rows: [] };
   dailySummary.value = { state: 'loaded', rows: [] };

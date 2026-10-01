@@ -19,14 +19,6 @@ export function addDays(ymd: string, days: number): string {
   return new Date((dayNumber(ymd) + days) * MS_PER_DAY).toISOString().slice(0, 10);
 }
 
-/** The device's local calendar date. */
-export function localToday(now: Date = new Date()): string {
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
 /** Every date from..to inclusive, oldest first. */
 export function datesBetween(from: string, to: string): string[] {
   const out: string[] = [];

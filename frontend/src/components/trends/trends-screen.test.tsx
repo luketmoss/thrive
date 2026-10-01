@@ -11,9 +11,10 @@ vi.mock('../../state/actions', () => ({ loadHealth: (t: string) => loadHealth(t)
 import { TrendsScreen, captionText } from './trends-screen';
 import { AuthContext } from '../../auth/auth-context';
 import { dailyHealth, bodyMeasurements, dailySummary } from '../../state/store';
-import { addDays, localToday } from './series';
+import { addDays } from './series';
+import { todayInDenver } from '../../day/dates';
 
-const TODAY = localToday();
+const TODAY = todayInDenver();
 
 function rows(n: number, skip: number[] = []) {
   const out = [];
