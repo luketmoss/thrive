@@ -101,7 +101,8 @@ export function TrendsScreen() {
   // Only the tabs this group reads count: a Body group is neither held up by
   // DailyHealth nor spared by a BodyMeasurements failure.
   const sources = [...new Set(group.metrics.map((m) => m.source ?? 'dailyHealth'))];
-  const states = sources.map((s) => (s === 'bodyMeasurements' ? bodyMeasurements : dailyHealth).value.state);
+  const tabs = { dailyHealth, bodyMeasurements, dailySummary };
+  const states = sources.map((s) => tabs[s].value.state);
   const today = localToday();
   const avgDays = averageDays(average);
 

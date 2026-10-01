@@ -142,6 +142,23 @@ describe('card', () => {
     const { container } = renderCard(metric('a', daily(5, () => 1), { note: 'Outdoor only' }));
     expect(container.querySelector('.trend-note')?.textContent).toBe('Outdoor only');
   });
+
+  it('describes the chart by the note as well as the summary line', () => {
+    const { container } = renderCard(metric('a', daily(5, () => 1), { note: 'Outdoor only' }));
+    const ids = container.querySelector('svg')!.getAttribute('aria-describedby')!.split(' ');
+    const text = ids.map((id) => container.querySelector(`#${id}`)!.textContent).join(' ');
+    expect(text).toContain('Outdoor only');
+    expect(text).toContain('Average');
+  });
+  it('shows a partial day as a hollow dot', () => {
+    const pts = daily(5, () => 1).map((p, i) => (i === 2 ? { ...p, partial: '1 of 2 outdoor activities recorded distance' } : p));
+    const { container } = renderCard(metric('a', pts));
+    expect(container.querySelectorAll('.trend-dot-partial')).toHaveLength(1);
+  });
+  it('without a note the summary alone describes the chart', () => {
+    const { container } = renderCard(metric('a', daily(5, () => 1)));
+    expect(container.querySelector('svg')!.getAttribute('aria-describedby')).toBe('trend-a-summary');
+  });
 });
 
 describe('a group', () => {

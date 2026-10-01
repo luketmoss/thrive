@@ -4,9 +4,10 @@
 // chart, the table, the averages and "your range" are the same for every one.
 // Adding a metric is one entry in TREND_GROUPS, with no chart change.
 
-import { dailyHealth, bodyMeasurements } from '../../state/store';
-import type { DailyHealthField, BodyMeasurementRow } from '../../api/health-api';
-import { parse, kgToLb } from '../../api/units';
+import { dailyHealth, bodyMeasurements, dailySummary } from '../../state/store';
+import type { DailyHealthField, BodyMeasurementRow, DailySummaryField } from '../../api/health-api';
+import { parse, kgToLb, metersToMiles, metersToFeet } from '../../api/units';
+import { secondsToMinutes } from '../../api/duration';
 import { bodyDayOf, type BodyDay } from '../../api/body-day';
 import { formatSleep, axisSleep } from './sleep-duration';
 
@@ -18,7 +19,7 @@ export interface TrendPoint {
 }
 
 /** The health tab a metric's `points()` reads; Trends waits on, and reports errors from, exactly these. */
-export type TrendSource = 'dailyHealth' | 'bodyMeasurements';
+export type TrendSource = 'dailyHealth' | 'bodyMeasurements' | 'dailySummary';
 
 export interface TrendMetric {
   id: string;
@@ -266,6 +267,102 @@ export const BP_READINGS: TrendMetric = {
 
 const BLOOD_PRESSURE_METRICS: TrendMetric[] = [SYSTOLIC, DIASTOLIC, BP_READINGS];
 
+// ── Activity (#245) ──────────────────────────────────────────────────
+// Read from DailySummary only, never re-summed from Workouts. Moving time,
+// distance and ascent are totals a day's activities may under-report, so a
+// point carries `partial` ("N of M ...", the Activities screen's coverage
+// phrasing) when fewer contributed. Distance and ascent are outdoor only.
+
+type SummaryField = DailySummaryField;
+
+/**
+ * One DailySummary column as points, `convert` turning the stored string into
+ * the plotted number (null omits the day). `coverage` names the withdata
+ * column, the column it is counted out of, and the noun: `partial` is set
+ * when the former is less than the latter. `requireOf` drops days whose
+ * denominator is 0 (an indoor-only day has nothing to plot, and no "0 of 0").
+ * `''` is omitted and `'0'` kept, never defaulted into each other.
+ */
+export function dailySummaryPoints(
+  field: SummaryField,
+  convert: (v: string) => number | null = parse,
+  coverage?: { withdata: SummaryField; of: SummaryField; what: string },
+  requireOf?: SummaryField,
+): TrendPoint[] {
+  const s = dailySummary.value;
+  if (s.state !== 'loaded') return [];
+  const out: TrendPoint[] = [];
+  for (const row of s.rows) {
+    if (!row.date) continue;
+    if (requireOf && parse(row[requireOf] ?? '') === 0) continue;
+    const v = convert(row[field] ?? '');
+    if (v === null) continue;
+    const point: TrendPoint = { date: row.date, value: v };
+    if (coverage) {
+      const n = parse(row[coverage.withdata] ?? '');
+      const m = parse(row[coverage.of] ?? '');
+      if (n !== null && m !== null && m > 0 && n < m) point.partial = `${n} of ${m} ${coverage.what}`;
+    }
+    out.push(point);
+  }
+  return out;
+}
+
+export const ACTIVITY_COUNT: TrendMetric = {
+  id: 'activity_count',
+  source: 'dailySummary',
+  label: 'Activities',
+  unit: '',
+  points: () => dailySummaryPoints('activity_count'),
+  format: (v) => (Number.isInteger(v) ? String(v) : v.toFixed(1)),
+  axisFormat: axisDecimal,
+  band: false,
+  zeroBased: true,
+};
+
+export const MOVING_TIME: TrendMetric = {
+  id: 'moving_time',
+  source: 'dailySummary',
+  label: 'Moving Time',
+  unit: 'min',
+  points: () => dailySummaryPoints('total_moving_s', secondsToMinutes,
+    { withdata: 'moving_withdata', of: 'activity_count', what: 'activities recorded moving time' }),
+  format: formatWhole,
+  band: false,
+  zeroBased: true,
+};
+
+export const DISTANCE: TrendMetric = {
+  id: 'distance',
+  source: 'dailySummary',
+  label: 'Distance',
+  unit: 'mi',
+  note: 'Outdoor only',
+  points: () => dailySummaryPoints('total_distance_m', metersToMiles,
+    { withdata: 'distance_withdata', of: 'cardio_activity_count', what: 'outdoor activities recorded distance' },
+    'cardio_activity_count'),
+  format: (v) => v.toFixed(1),
+  axisFormat: axisDecimal,
+  band: false,
+  zeroBased: true,
+};
+
+export const ASCENT: TrendMetric = {
+  id: 'ascent',
+  source: 'dailySummary',
+  label: 'Ascent',
+  unit: 'ft',
+  note: 'Outdoor only',
+  points: () => dailySummaryPoints('total_ascent_m', metersToFeet,
+    { withdata: 'ascent_withdata', of: 'cardio_activity_count', what: 'outdoor activities recorded ascent' },
+    'cardio_activity_count'),
+  format: formatWhole,
+  band: false,
+  zeroBased: true,
+};
+
+const ACTIVITY_METRICS: TrendMetric[] = [ACTIVITY_COUNT, MOVING_TIME, DISTANCE, ASCENT];
+
 /**
  * The groups, in switcher order. One entry per line: #244 and #245 append
  * their own (each with its own const above this array).
@@ -276,4 +373,5 @@ export const TREND_GROUPS: TrendGroup[] = [
   { id: 'fitness', label: 'Fitness', metrics: FITNESS_METRICS },
   { id: 'body', label: 'Body', metrics: BODY_METRICS },
   { id: 'blood_pressure', label: 'Blood Pressure', metrics: BLOOD_PRESSURE_METRICS },
+  { id: 'activity', label: 'Activity', metrics: ACTIVITY_METRICS },
 ];

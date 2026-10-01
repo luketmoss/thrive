@@ -197,7 +197,7 @@ describe('#243 AC4: switcher in the screen', () => {
     const { container } = renderScreen();
     const region = container.querySelector('[role="region"][aria-label="Metric group"]')!;
     expect(region.compareDocumentPosition(container.querySelector('.trends-controls')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect([...region.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Recovery', 'Sleep', 'Fitness', 'Body', 'Blood Pressure']);
+    expect([...region.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Recovery', 'Sleep', 'Fitness', 'Body', 'Blood Pressure', 'Activity']);
     expect(container.querySelectorAll('.trend-card')).toHaveLength(2);
   });
 
@@ -256,5 +256,36 @@ describe('#244: per-group loading and error state', () => {
     const { container } = renderScreen();
     pickGroup(container, 'Body');
     expect(container.querySelector('.trends-error')).toBeNull();
+  });
+});
+
+describe('#245: Activity group state', () => {
+  const pickGroup = (c: Element, name: string) =>
+    fireEvent.click([...c.querySelectorAll<HTMLButtonElement>('.trends-group-btn')].find((b) => b.textContent === name)!);
+
+  it('waits on DailySummary alone, and is not held up by the other tabs', () => {
+    dailyHealth.value = { state: 'loading' };
+    bodyMeasurements.value = { state: 'loading' };
+    dailySummary.value = { state: 'loaded', rows: [] };
+    const { container } = renderScreen();
+    pickGroup(container, 'Activity');
+    expect(container.querySelector('.trends-loading')).toBeNull();
+    expect(container.textContent).toContain('Nothing recorded yet.');
+  });
+  it('shows loading while DailySummary loads, and Recovery is unaffected by it', () => {
+    dailyHealth.value = { state: 'loaded', rows: rows(5) };
+    dailySummary.value = { state: 'loading' };
+    const { container } = renderScreen();
+    expect(container.querySelector('.trends-loading')).toBeNull();
+    pickGroup(container, 'Activity');
+    expect(container.querySelector('.trends-loading')).not.toBeNull();
+  });
+  it('a DailySummary error shows on Activity only', () => {
+    dailyHealth.value = { state: 'loaded', rows: rows(5) };
+    dailySummary.value = { state: 'error', message: 'x' } as never;
+    const { container } = renderScreen();
+    expect(container.querySelector('.trends-error')).toBeNull();
+    pickGroup(container, 'Activity');
+    expect(container.querySelector('.trends-error')).not.toBeNull();
   });
 });

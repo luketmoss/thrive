@@ -1,7 +1,8 @@
 // #243 AC1-AC3 — the Recovery, Sleep and Fitness registry entries.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { TREND_GROUPS, SLEEP_TOTAL, SLEEP_DEEP, VO2MAX, TRAINING_LOAD, HRV } from './metrics';
-import { dailyHealth, bodyMeasurements } from '../../state/store';
+import { dailyHealth, bodyMeasurements, dailySummary } from '../../state/store';
+import { ACTIVITY_COUNT, MOVING_TIME, DISTANCE, ASCENT } from './metrics';
 import { WEIGHT, BODY_FAT, SYSTOLIC, DIASTOLIC, BP_READINGS } from './metrics';
 
 const group = (id: string) => TREND_GROUPS.find((g) => g.id === id)!;
@@ -10,8 +11,8 @@ beforeEach(() => { dailyHealth.value = { state: 'idle' }; });
 
 describe('registry', () => {
   it('has Recovery, Sleep, Fitness in order', () => {
-    expect(TREND_GROUPS.map((g) => g.id)).toEqual(['recovery', 'sleep', 'fitness', 'body', 'blood_pressure']);
-    expect(TREND_GROUPS.map((g) => g.label)).toEqual(['Recovery', 'Sleep', 'Fitness', 'Body', 'Blood Pressure']);
+    expect(TREND_GROUPS.map((g) => g.id)).toEqual(['recovery', 'sleep', 'fitness', 'body', 'blood_pressure', 'activity']);
+    expect(TREND_GROUPS.map((g) => g.label)).toEqual(['Recovery', 'Sleep', 'Fitness', 'Body', 'Blood Pressure', 'Activity']);
     expect(TREND_GROUPS.every((g) => g.metrics.length >= 1 && g.metrics.length <= 4)).toBe(true);
   });
   it('Recovery: resting HR then HRV, both banded', () => {
@@ -104,5 +105,76 @@ describe('Body and Blood Pressure registry', () => {
     dailyHealth.value = { state: 'loaded', rows: [{ date: '2026-09-01', resting_hr: '50', sheetRow: 2 }] as never[] };
     bodyMeasurements.value = { state: 'loaded', rows: [] };
     expect(WEIGHT.points()).toEqual([]);
+  });
+});
+
+// -- #245: Activity ----------------------------------------------------
+const day = (o: Record<string, string>, i = 1) => ({
+  date: '2026-09-01', activity_count: '', total_moving_s: '', total_distance_m: '', total_ascent_m: '',
+  cardio_activity_count: '', distance_withdata: '', ascent_withdata: '', moving_withdata: '', sheetRow: i + 1, ...o,
+}) as never;
+
+describe('Activity registry', () => {
+  it('four metrics in order, unbanded and zero-based, reading only DailySummary', () => {
+    expect(group('activity').metrics.map((m) => [m.id, m.label, m.unit, m.band, m.zeroBased, m.note, m.source])).toEqual([
+      ['activity_count', 'Activities', '', false, true, undefined, 'dailySummary'],
+      ['moving_time', 'Moving Time', 'min', false, true, undefined, 'dailySummary'],
+      ['distance', 'Distance', 'mi', false, true, 'Outdoor only', 'dailySummary'],
+      ['ascent', 'Ascent', 'ft', false, true, 'Outdoor only', 'dailySummary'],
+    ]);
+  });
+  it('is empty until DailySummary has loaded, and never reads DailyHealth', () => {
+    dailyHealth.value = { state: 'loaded', rows: [{ date: '2026-09-01', resting_hr: '50', sheetRow: 2 }] as never[] };
+    dailySummary.value = { state: 'loading' };
+    expect(ACTIVITY_COUNT.points()).toEqual([]);
+  });
+});
+
+describe('Activity points', () => {
+  const load = (rows: unknown[]) => { dailySummary.value = { state: 'loaded', rows: rows as never[] }; };
+  it('count is B straight, a measured 0 kept, no row and blank omitted', () => {
+    load([day({ activity_count: '2' }, 1), day({ date: '2026-09-02', activity_count: '0' }, 2), day({ date: '2026-09-03' }, 3)]);
+    expect(ACTIVITY_COUNT.points()).toEqual([{ date: '2026-09-01', value: 2 }, { date: '2026-09-02', value: 0 }]);
+  });
+  it('moving time is minutes; partial only when S < B', () => {
+    load([
+      day({ activity_count: '2', total_moving_s: '3600', moving_withdata: '2' }, 1),
+      day({ date: '2026-09-02', activity_count: '3', total_moving_s: '1800', moving_withdata: '2' }, 2),
+      day({ date: '2026-09-03', activity_count: '1', total_moving_s: '', moving_withdata: '0' }, 3),
+    ]);
+    expect(MOVING_TIME.points()).toEqual([
+      { date: '2026-09-01', value: 60 },
+      { date: '2026-09-02', value: 30, partial: '2 of 3 activities recorded moving time' },
+    ]);
+  });
+  it('distance in miles and ascent in feet, with outdoor coverage', () => {
+    load([
+      day({ cardio_activity_count: '2', total_distance_m: '16093', distance_withdata: '2', total_ascent_m: '304.8', ascent_withdata: '1' }, 1),
+    ]);
+    expect(DISTANCE.points()).toEqual([{ date: '2026-09-01', value: 10 }]);
+    expect(ASCENT.points()).toEqual([{ date: '2026-09-01', value: 1000, partial: '1 of 2 outdoor activities recorded ascent' }]);
+    expect(DISTANCE.format(10)).toBe('10.0');
+    expect(ASCENT.format(1000)).toBe('1,000');
+  });
+  it('partial distance says N of M outdoor activities', () => {
+    load([day({ cardio_activity_count: '3', total_distance_m: '1609', distance_withdata: '2' })]);
+    expect(DISTANCE.points()).toEqual([{ date: '2026-09-01', value: 1, partial: '2 of 3 outdoor activities recorded distance' }]);
+  });
+  it('an indoor-only day (H = 0) has no point and no sentence, even if a value leaked in', () => {
+    load([
+      day({ activity_count: '1', cardio_activity_count: '0' }, 1),
+      day({ date: '2026-09-02', activity_count: '1', cardio_activity_count: '0', total_distance_m: '500', distance_withdata: '0' }, 2),
+    ]);
+    expect(DISTANCE.points()).toEqual([]);
+    expect(ASCENT.points()).toEqual([]);
+  });
+  it('a measured 0 distance is a point at 0, not a blank day', () => {
+    load([day({ cardio_activity_count: '1', total_distance_m: '0', distance_withdata: '1', total_ascent_m: '0', ascent_withdata: '1' })]);
+    expect(DISTANCE.points()).toEqual([{ date: '2026-09-01', value: 0 }]);
+    expect(ASCENT.points()).toEqual([{ date: '2026-09-01', value: 0 }]);
+  });
+  it('the count formats whole, and fractional averages to one decimal', () => {
+    expect(ACTIVITY_COUNT.format(2)).toBe('2');
+    expect(ACTIVITY_COUNT.format(1.43)).toBe('1.4');
   });
 });

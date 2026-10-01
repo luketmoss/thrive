@@ -167,6 +167,9 @@ export function TrendCard({ metric, from, to, range, avgDays, today }: CardProps
   const series = metricSeries(metric, from, to, avgDays, today, all);
   const headingId = `trend-${metric.id}-heading`;
   const summaryId = `trend-${metric.id}-summary`;
+  const noteId = `trend-${metric.id}-note`;
+  // A note ("Outdoor only", #245) is a caveat on the number: announced with the summary.
+  const describedBy = metric.note ? `${noteId} ${summaryId}` : summaryId;
   let body;
   if (all.length === 0) {
     body = <p class="trend-empty">Nothing recorded yet.</p>;
@@ -178,7 +181,7 @@ export function TrendCard({ metric, from, to, range, avgDays, today }: CardProps
         <p class="trend-summary" id={summaryId}>{summaryText(metric, series, today)}</p>
         <div class="trend-plot-wrap" ref={measure}>
           <TrendPlot metric={metric} series={series} width={width}
-            label={`${metric.label}, ${RANGE_PHRASE[range]}`} describedBy={summaryId} />
+            label={`${metric.label}, ${RANGE_PHRASE[range]}`} describedBy={describedBy} />
         </div>
       </>
     );
@@ -189,7 +192,7 @@ export function TrendCard({ metric, from, to, range, avgDays, today }: CardProps
         {metric.label}
         {metric.unit && <span class="trend-unit"> {metric.unit}</span>}
       </h2>
-      {metric.note && <p class="trend-note">{metric.note}</p>}
+      {metric.note && <p class="trend-note" id={noteId}>{metric.note}</p>}
       {body}
     </section>
   );
