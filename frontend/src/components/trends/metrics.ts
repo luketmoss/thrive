@@ -4,9 +4,10 @@
 // chart, the table, the averages and "your range" are the same for every one.
 // Adding a metric is one entry in TREND_GROUPS, with no chart change.
 
-import { dailyHealth } from '../../state/store';
-import type { DailyHealthField } from '../../api/health-api';
-import { parse } from '../../api/units';
+import { dailyHealth, bodyMeasurements } from '../../state/store';
+import type { DailyHealthField, BodyMeasurementRow } from '../../api/health-api';
+import { parse, kgToLb } from '../../api/units';
+import { bodyDayOf, type BodyDay } from '../../api/body-day';
 import { formatSleep, axisSleep } from './sleep-duration';
 
 export interface TrendPoint {
@@ -16,8 +17,13 @@ export interface TrendPoint {
   partial?: string;
 }
 
+/** The health tab a metric's `points()` reads; Trends waits on, and reports errors from, exactly these. */
+export type TrendSource = 'dailyHealth' | 'bodyMeasurements';
+
 export interface TrendMetric {
   id: string;
+  /** Which tab `points()` reads. Defaults to `dailyHealth`. */
+  source?: TrendSource;
   label: string;
   unit: string;
   /** Every day with a value, from #236's signals. Blanks omitted. The metric owns any reduction. */
@@ -57,6 +63,41 @@ export function dailyHealthPoints(field: DailyHealthField): TrendPoint[] {
     if (!row.date) continue;
     const v = parse(row[field] ?? '');
     if (v !== null) out.push({ date: row.date, value: v });
+  }
+  return out;
+}
+
+// BodyMeasurements holds one row per reading, so a day can have several. The
+// metric owns the reduction: `bodyDayOf` is the Day view's, which mirrors
+// DailySummary U:Y (first weigh-in with a weight; BP mean, half up).
+
+let dayCache: { rows: unknown; days: [string, BodyDay][] } | null = null;
+
+/** Every local date with a BodyMeasurements reading, oldest first, reduced to one BodyDay. Empty until loaded. */
+export function bodyDays(): [string, BodyDay][] {
+  const s = bodyMeasurements.value;
+  if (s.state !== 'loaded') return [];
+  if (dayCache?.rows === s.rows) return dayCache.days;
+  const byDate = new Map<string, BodyMeasurementRow[]>();
+  for (const r of s.rows) {
+    if (!r.grpid || !r.date) continue;
+    const list = byDate.get(r.date);
+    if (list) list.push(r);
+    else byDate.set(r.date, [r]);
+  }
+  const days = [...byDate].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([d, rs]) => [d, bodyDayOf(rs)] as [string, BodyDay]);
+  dayCache = { rows: s.rows, days };
+  return days;
+}
+
+type BodyDayField = 'weight_kg' | 'fat_ratio_pct' | 'systolic_mmhg' | 'diastolic_mmhg' | 'bp_count';
+
+/** One BodyDay field as points: a day without it is omitted, a stored `0` kept. */
+export function bodyDayPoints(field: BodyDayField, convert: (v: string) => number | null = parse): TrendPoint[] {
+  const out: TrendPoint[] = [];
+  for (const [date, day] of bodyDays()) {
+    const v = convert(day[field]);
+    if (v !== null) out.push({ date, value: v });
   }
   return out;
 }
@@ -147,6 +188,84 @@ export const TRAINING_LOAD: TrendMetric = {
 
 const FITNESS_METRICS: TrendMetric[] = [VO2MAX, TRAINING_LOAD];
 
+// ── Body (#244) ──────────────────────────────────────────────────────
+// Stored kg, shown lb: the conversion is the consumer's (units.ts). One value
+// a day, from the first weigh-in that had a weight; fat from that same one.
+
+/** Decimals an axis needs for these ticks: whole when every tick is, else enough for the step. */
+function axisDecimals(ticks: readonly number[]): number {
+  if (ticks.every((t) => Number.isInteger(t))) return 0;
+  const step = ticks.length > 1 ? Math.abs(ticks[1] - ticks[0]) : 1;
+  return step >= 0.1 ? 1 : 2;
+}
+const axisDecimal = (v: number, ticks: readonly number[]): string => v.toFixed(axisDecimals(ticks));
+
+export const WEIGHT: TrendMetric = {
+  id: 'weight',
+  label: 'Weight',
+  unit: 'lb',
+  source: 'bodyMeasurements',
+  points: () => bodyDayPoints('weight_kg', kgToLb),
+  format: (v) => v.toFixed(1),
+  axisFormat: axisDecimal,
+  band: true,
+  zeroBased: false,
+};
+
+export const BODY_FAT: TrendMetric = {
+  id: 'body_fat',
+  label: 'Body Fat',
+  unit: '%',
+  source: 'bodyMeasurements',
+  points: () => bodyDayPoints('fat_ratio_pct'),
+  format: (v) => v.toFixed(1),
+  axisFormat: axisDecimal,
+  band: true,
+  zeroBased: false,
+};
+
+const BODY_METRICS: TrendMetric[] = [WEIGHT, BODY_FAT];
+
+// ── Blood pressure (#244) ────────────────────────────────────────────
+// Systolic and diastolic are two cards, not two series on one: each is the
+// day's mean of its readings. The count is its own, unbanded card.
+
+export const SYSTOLIC: TrendMetric = {
+  id: 'systolic',
+  label: 'Systolic',
+  unit: 'mmHg',
+  source: 'bodyMeasurements',
+  points: () => bodyDayPoints('systolic_mmhg'),
+  format: formatWhole,
+  band: true,
+  zeroBased: false,
+};
+
+export const DIASTOLIC: TrendMetric = {
+  id: 'diastolic',
+  label: 'Diastolic',
+  unit: 'mmHg',
+  source: 'bodyMeasurements',
+  points: () => bodyDayPoints('diastolic_mmhg'),
+  format: formatWhole,
+  band: true,
+  zeroBased: false,
+};
+
+export const BP_READINGS: TrendMetric = {
+  id: 'bp_readings',
+  label: 'BP Readings',
+  unit: '',
+  source: 'bodyMeasurements',
+  points: () => bodyDayPoints('bp_count'),
+  format: (v) => (v === 1 ? '1 reading' : `${Number.isInteger(v) ? v : v.toFixed(1)} readings`),
+  axisFormat: axisDecimal,
+  band: false,
+  zeroBased: true,
+};
+
+const BLOOD_PRESSURE_METRICS: TrendMetric[] = [SYSTOLIC, DIASTOLIC, BP_READINGS];
+
 /**
  * The groups, in switcher order. One entry per line: #244 and #245 append
  * their own (each with its own const above this array).
@@ -155,4 +274,6 @@ export const TREND_GROUPS: TrendGroup[] = [
   { id: 'recovery', label: 'Recovery', metrics: RECOVERY_METRICS },
   { id: 'sleep', label: 'Sleep', metrics: SLEEP_METRICS },
   { id: 'fitness', label: 'Fitness', metrics: FITNESS_METRICS },
+  { id: 'body', label: 'Body', metrics: BODY_METRICS },
+  { id: 'blood_pressure', label: 'Blood Pressure', metrics: BLOOD_PRESSURE_METRICS },
 ];

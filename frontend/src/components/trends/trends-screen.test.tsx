@@ -192,12 +192,12 @@ describe('#243 AC4: switcher in the screen', () => {
   const click = (c: Element, text: string) =>
     fireEvent.click([...c.querySelectorAll<HTMLButtonElement>('.trends-group-btn')].find((b) => b.textContent === text)!);
 
-  it('shows the three groups above the controls, defaulting to Recovery', () => {
+  it('shows the groups above the controls, defaulting to Recovery', () => {
     loaded(rows(100));
     const { container } = renderScreen();
     const region = container.querySelector('[role="region"][aria-label="Metric group"]')!;
     expect(region.compareDocumentPosition(container.querySelector('.trends-controls')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect([...region.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Recovery', 'Sleep', 'Fitness']);
+    expect([...region.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Recovery', 'Sleep', 'Fitness', 'Body', 'Blood Pressure']);
     expect(container.querySelectorAll('.trend-card')).toHaveLength(2);
   });
 
@@ -220,5 +220,41 @@ describe('#243 AC4: switcher in the screen', () => {
     loaded(rows(100));
     const { container } = renderScreen();
     expect(container.querySelector('.trends-group-btn.active')!.textContent).toBe('Recovery');
+  });
+});
+
+describe('#244: per-group loading and error state', () => {
+  const pickGroup = (c: Element, name: string) =>
+    fireEvent.click([...c.querySelectorAll<HTMLButtonElement>('.trends-group-btn')].find((b) => b.textContent === name)!);
+
+  it('Body is not held up by DailyHealth still loading', () => {
+    dailyHealth.value = { state: 'loading' };
+    bodyMeasurements.value = { state: 'loaded', rows: [] };
+    const { container } = renderScreen();
+    pickGroup(container, 'Body');
+    expect(container.querySelector('.trends-loading')).toBeNull();
+    expect(container.textContent).toContain('Nothing recorded yet.');
+  });
+  it('Body shows loading while BodyMeasurements loads, even if DailyHealth has', () => {
+    dailyHealth.value = { state: 'loaded', rows: rows(5) };
+    bodyMeasurements.value = { state: 'loading' };
+    const { container } = renderScreen();
+    pickGroup(container, 'Body');
+    expect(container.querySelector('.trends-loading')).not.toBeNull();
+  });
+  it('a BodyMeasurements error shows on Blood Pressure but not on Recovery', () => {
+    dailyHealth.value = { state: 'loaded', rows: rows(5) };
+    bodyMeasurements.value = { state: 'error', message: 'x' } as never;
+    const { container } = renderScreen();
+    expect(container.querySelector('.trends-error')).toBeNull();
+    pickGroup(container, 'Blood Pressure');
+    expect(container.querySelector('.trends-error')).not.toBeNull();
+  });
+  it('a DailyHealth error does not mask a loaded Body group', () => {
+    dailyHealth.value = { state: 'error', message: 'x' } as never;
+    bodyMeasurements.value = { state: 'loaded', rows: [] };
+    const { container } = renderScreen();
+    pickGroup(container, 'Body');
+    expect(container.querySelector('.trends-error')).toBeNull();
   });
 });

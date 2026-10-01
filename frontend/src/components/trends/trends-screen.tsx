@@ -98,12 +98,15 @@ export function TrendsScreen() {
   }, [token]);
 
   const group: TrendGroup = TREND_GROUPS.find((g) => g.id === groupId) ?? TREND_GROUPS[0];
-  const health = dailyHealth.value;
+  // Only the tabs this group reads count: a Body group is neither held up by
+  // DailyHealth nor spared by a BodyMeasurements failure.
+  const sources = [...new Set(group.metrics.map((m) => m.source ?? 'dailyHealth'))];
+  const states = sources.map((s) => (s === 'bodyMeasurements' ? bodyMeasurements : dailyHealth).value.state);
   const today = localToday();
   const avgDays = averageDays(average);
 
   let content;
-  if (health.state === 'error') {
+  if (states.includes('error')) {
     content = (
       <div class="trends-error" role="alert">
         <p>Couldn't load your health data.</p>
@@ -112,7 +115,7 @@ export function TrendsScreen() {
         </button>
       </div>
     );
-  } else if (health.state !== 'loaded') {
+  } else if (states.some((s) => s !== 'loaded')) {
     content = <p class="trends-loading" role="status">Loading…</p>;
   } else {
     const pointSets = group.metrics.map((m) => m.points());
