@@ -101,6 +101,15 @@
   --chart-line: #b83508;
   --chart-band: #ffe4d9;
   --chart-grid: #e8eaed;
+  /* Calendar shading (#241), low to high. Every bin carries its own passing
+     pairs (calendar-shade-contrast.test.ts): --cal-on-shade text 14.13 /
+     11.86 / 10.02 / 8.51, --color-primary-text (note dot, selected border)
+     5.07 / 4.25 / 3.60 / 3.05. keel#362's dark third step is the case. */
+  --cal-shade-1: #e3effb;
+  --cal-shade-2: #c8ddf4;
+  --cal-shade-3: #aecdee;
+  --cal-shade-4: #97bee8;
+  --cal-on-shade: #1f1f1f;
 }
 
 /* ===== Dark Theme ===== */
@@ -145,6 +154,13 @@
   --chart-line: #ff6b35;
   --chart-band: #402819;
   --chart-grid: #2c2c30;
+  /* Calendar (#241): --cal-on-shade 12.42 / 10.55 / 8.76 / 7.42,
+     --color-primary-text 5.28 / 4.49 / 3.72 / 3.15 on bins 1-4. */
+  --cal-shade-1: #1b2836;
+  --cal-shade-2: #1f344b;
+  --cal-shade-3: #24415d;
+  --cal-shade-4: #294c6d;
+  --cal-on-shade: #e8eaed;
 }
 
 /* ===== Base Styles ===== */
@@ -3784,4 +3800,358 @@ a.training-card {
 .note-box::placeholder {
   color: var(--color-text-secondary);
   opacity: 1;
+}
+
+/* ===== Calendar screen (#241) =====
+   The month grid reached from the Day header. Its four shading tokens and
+   --cal-on-shade live in the theme blocks with their measured pairs; this
+   section uses tokens only. The note dot, focus ring and selected border are
+   --color-primary-text, not the brand orange fill token: that is 2.84:1 on
+   the light card and would fail the 3:1 the dot and border must keep. */
+:root {
+  /* The journal dot, sized like the week strip's marks. */
+  --cal-note-size: 6px;
+}
+
+.calendar-screen {
+  padding-bottom: var(--space-xl);
+}
+
+.calendar-screen :focus-visible {
+  outline: 2px solid var(--color-primary-text);
+  outline-offset: 2px;
+}
+
+/* The existing back control, held to the 44 px target it is used at here. */
+.calendar-back-row {
+  padding: var(--space-sm) 0;
+}
+
+.calendar-back {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.calendar-month-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+.calendar-title {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.calendar-shade {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-md);
+}
+
+.calendar-shade-label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-text-secondary);
+}
+
+/* Five or six unequal words do not fit 320 px as equal chips: the row scrolls
+   sideways, with no scrollbar drawn, and its padding keeps focus rings in view. */
+.calendar-shade-toggle {
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: var(--space-xs);
+  margin: 0 calc(-1 * var(--space-xs));
+  width: auto;
+}
+
+.calendar-shade-toggle::-webkit-scrollbar {
+  display: none;
+}
+
+.calendar-shade-toggle .sub-type-btn {
+  flex: 0 0 auto;
+  padding: var(--space-sm) var(--space-md);
+  white-space: nowrap;
+}
+
+/* Edge to edge at every width, no gap: 53.6 px cells at 375, 45.7 at 320. */
+.calendar-grid {
+  display: flex;
+  flex-direction: column;
+  margin: 0 calc(-1 * var(--space-md)) var(--space-md);
+  touch-action: pan-y;
+}
+
+.calendar-row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.calendar-colhead {
+  padding: var(--space-xs) 0;
+  text-align: center;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.calendar-day {
+  position: relative;
+  min-width: 0;
+  min-height: 52px;
+  padding: 0;
+  border: 0;
+  border-right: 1px solid var(--color-border-light);
+  border-bottom: 1px solid var(--color-border-light);
+  border-radius: 0;
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-align: left;
+}
+
+.calendar-row:nth-child(2) > .calendar-day {
+  border-top: 1px solid var(--color-border-light);
+}
+
+.calendar-row > .calendar-day:first-child {
+  border-left: 1px solid var(--color-border-light);
+}
+
+.calendar-row:nth-child(2) > .calendar-day:first-child {
+  border-top-left-radius: var(--radius-md);
+}
+
+.calendar-row:nth-child(2) > .calendar-day:last-child {
+  border-top-right-radius: var(--radius-md);
+}
+
+.calendar-row:last-child > .calendar-day:first-child {
+  border-bottom-left-radius: var(--radius-md);
+}
+
+.calendar-row:last-child > .calendar-day:last-child {
+  border-bottom-right-radius: var(--radius-md);
+}
+
+.calendar-day:focus-visible {
+  z-index: 1;
+}
+
+.calendar-day-num {
+  position: absolute;
+  top: var(--space-xs);
+  left: 6px;
+  font-size: var(--text-sm);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.calendar-note {
+  display: inline-block;
+  width: var(--cal-note-size);
+  height: var(--cal-note-size);
+  border-radius: var(--radius-full);
+  background: var(--color-primary-text);
+}
+
+.calendar-day .calendar-note {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+
+/* Marks take their colour from the cell: muted, or --cal-on-shade when shaded. */
+.calendar-marks {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  display: flex;
+  gap: 3px;
+  color: var(--color-text-muted);
+}
+
+.calendar-mark {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.calendar-mark-dot {
+  background: currentColor;
+}
+
+.calendar-mark-ring {
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+
+/* A day of a neighbouring month: no border, no shading, everything muted. */
+.calendar-day-outside {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-text-muted);
+}
+
+.calendar-day-outside .calendar-note {
+  background: var(--color-text-muted);
+}
+
+/* Today: the week strip's treatment, a bold underlined number. */
+.calendar-day-today .calendar-day-num {
+  color: var(--color-primary-text);
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+/* Selected: the week strip's viewed day. The border carries it; the fill is
+   decoration, and gives way to shading below when the day is shaded. */
+.calendar-day-selected {
+  background: var(--color-primary-light);
+  box-shadow: inset 0 0 0 2px var(--color-primary-text);
+}
+
+.calendar-day-selected .calendar-day-num {
+  color: var(--color-primary-on-light);
+  font-weight: 700;
+}
+
+/* Shading owns the fill; number and marks turn --cal-on-shade on it. */
+.calendar-shade-1 {
+  background: var(--cal-shade-1);
+}
+
+.calendar-shade-2 {
+  background: var(--cal-shade-2);
+}
+
+.calendar-shade-3 {
+  background: var(--cal-shade-3);
+}
+
+.calendar-shade-4 {
+  background: var(--cal-shade-4);
+}
+
+.calendar-day-shade .calendar-day-num,
+.calendar-day-shade .calendar-marks {
+  color: var(--cal-on-shade);
+}
+
+/* A shaded metric with no value that day: a dashed inner border, never a colour. */
+.calendar-day-nodata::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border: 1px dashed var(--color-text-muted);
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+}
+
+.calendar-legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-md);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.calendar-legend-marks,
+.calendar-scale {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs) var(--space-md);
+}
+
+.calendar-key {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  white-space: nowrap;
+}
+
+.calendar-legend .calendar-mark {
+  color: var(--color-text-muted);
+}
+
+.calendar-swatches {
+  display: inline-flex;
+}
+
+.calendar-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+}
+
+.calendar-swatches .calendar-swatch:first-child {
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+
+.calendar-swatches .calendar-swatch:last-child {
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.calendar-swatch-nodata {
+  border: 1px dashed var(--color-text-muted);
+  border-radius: var(--radius-sm);
+}
+
+.calendar-summary-head {
+  align-items: center;
+}
+
+.calendar-summary-title {
+  font-size: var(--text-base);
+  font-weight: 700;
+}
+
+.calendar-open-day {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 var(--space-xs);
+  color: var(--color-primary-text);
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.calendar-summary-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.calendar-summary-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs) var(--space-sm);
+}
+
+.calendar-summary-text,
+.calendar-summary-note,
+.calendar-summary-value {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.calendar-summary-label {
+  font-weight: 600;
 }

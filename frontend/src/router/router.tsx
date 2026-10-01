@@ -1,5 +1,6 @@
 import { signal } from '@preact/signals';
 import { validPlanDate } from '../components/workout/plan-date';
+import { isIsoMonth } from '../calendar/dates';
 
 export interface ParsedRoute {
   name: string;
@@ -7,6 +8,8 @@ export interface ParsedRoute {
   hash: string;
   /** A `#/day…` hash that names no real date (#237): shown as today, URL replaced with `#/`. */
   badDay?: boolean;
+  /** A `#/calendar/…` hash that names no real month (#241): shown as today's month, URL replaced with `#/calendar`. */
+  badCalendar?: boolean;
 }
 
 function parseHash(hash: string): ParsedRoute {
@@ -74,6 +77,13 @@ function parseHash(hash: string): ParsedRoute {
   if (match && validPlanDate(match[1])) return { name: 'day', params: { date: match[1] }, hash: path };
   if (path === '/day' || path.startsWith('/day/')) return { name: 'day', params: {}, hash: '/', badDay: true };
 
+  // /calendar and /calendar/YYYY-MM (#241). Anything else under /calendar is
+  // today's month, and `settle` replaces its URL with `#/calendar`.
+  if (path === '/calendar') return { name: 'calendar', params: {}, hash: path };
+  match = path.match(/^\/calendar\/([^/]+)$/);
+  if (match && isIsoMonth(match[1])) return { name: 'calendar', params: { month: match[1] }, hash: path };
+  if (path.startsWith('/calendar/')) return { name: 'calendar', params: {}, hash: '/calendar', badCalendar: true };
+
   // Default: Day, for the empty hash, `#/` and any hash that matches no route (#235)
   return { name: 'day', params: {}, hash: '/' };
 }
@@ -83,11 +93,11 @@ function replaceHash(hash: string): void {
   window.history.replaceState(window.history.state, '', hash);
 }
 
-/** Parse, and replace a bad `#/day…` URL with `#/` in place (#237 AC1). */
+/** Parse, and replace a bad `#/day…` or `#/calendar/…` URL in place (#237 AC1, #241 AC1). */
 function settle(hash: string): ParsedRoute {
   const route = parseHash(hash);
-  if (!route.badDay) return route;
-  replaceHash('#/');
+  if (!route.badDay && !route.badCalendar) return route;
+  replaceHash(route.badDay ? '#/' : '#/calendar');
   return { name: route.name, params: route.params, hash: route.hash };
 }
 

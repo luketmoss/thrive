@@ -17,6 +17,7 @@ import { WorkoutFlow } from './components/workout/workout-flow';
 import { WorkoutDetail } from './components/activities/workout-detail';
 import { WorkoutEdit } from './components/activities/workout-edit';
 import { DayScreen } from './components/day/day-screen';
+import { CalendarScreen } from './components/calendar/calendar-screen';
 import { TrendsScreen } from './components/trends/trends-screen';
 import { ManageLabelsScreen } from './components/settings/manage-labels-screen';
 
@@ -26,6 +27,8 @@ function Router() {
   switch (route.name) {
     case 'day':
       return <DayScreen />;
+    case 'calendar':
+      return <CalendarScreen />;
     case 'trends':
       return <TrendsScreen />;
     case 'activities':

@@ -307,3 +307,43 @@ describe('day route (#237 AC1)', () => {
     expect(r.currentRoute.value.params).toEqual({});
   });
 });
+
+describe('calendar route (#241 AC1)', () => {
+  async function fresh(hash: string) {
+    vi.resetModules();
+    window.history.replaceState(null, '', hash === '' ? window.location.pathname : hash);
+    return import('./router');
+  }
+
+  it("parses #/calendar as today's month and #/calendar/YYYY-MM as that month, URLs unchanged", async () => {
+    let r = await fresh('#/calendar');
+    expect(r.currentRoute.value).toEqual({ name: 'calendar', params: {}, hash: '/calendar' });
+    expect(window.location.hash).toBe('#/calendar');
+    r = await fresh('#/calendar/2025-01');
+    expect(r.currentRoute.value).toEqual({ name: 'calendar', params: { month: '2025-01' }, hash: '/calendar/2025-01' });
+    expect(window.location.hash).toBe('#/calendar/2025-01');
+  });
+
+  it.each(['#/calendar/2026-13', '#/calendar/2026-7', '#/calendar/foo', '#/calendar/2026-09/x'])(
+    "shows today's month for %s and replaces the URL with #/calendar, adding no history entry",
+    async (hash) => {
+      const r = await fresh(hash);
+      expect(r.currentRoute.value).toEqual({ name: 'calendar', params: {}, hash: '/calendar' });
+      expect(window.location.hash).toBe('#/calendar');
+      expect(r.canGoBack()).toBe(false);
+    },
+  );
+
+  it('arriving from a link pushes; moving between months replaces', async () => {
+    const r = await fresh('#/');
+    const before = window.history.length;
+    r.navigate('/calendar/2025-01');
+    window.dispatchEvent(new Event('hashchange'));
+    expect(window.history.length).toBe(before + 1);
+    r.replaceRoute('#/calendar/2025-02');
+    r.replaceRoute('#/calendar/2025-03');
+    expect(window.history.length).toBe(before + 1);
+    expect(r.currentRoute.value.params).toEqual({ month: '2025-03' });
+    expect(r.canGoBack()).toBe(true);
+  });
+});

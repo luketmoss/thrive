@@ -11,6 +11,7 @@ const TABS = [
 /** Which tab each route belongs to (#235). Every route marks exactly one tab. */
 const TAB_FOR_ROUTE: Record<string, string> = {
   day: 'day',
+  calendar: 'day', // #241: reached from the Day header, so Day stays marked
   trends: 'trends',
   activities: 'activities',
   'workout-detail': 'activities',

@@ -4,6 +4,8 @@ import type { Ref } from 'preact';
 import { relativeLabel } from '../../day/dates';
 import { fullDate, weekdayName } from '../../day/format';
 import { sunLine } from '../../day/sun';
+import { navigate } from '../../router/router';
+import { calendarHref, monthOf } from '../../calendar/dates';
 
 interface DayHeaderProps {
   date: string;
@@ -13,6 +15,16 @@ interface DayHeaderProps {
   onToday: () => void;
   headingRef: Ref<HTMLHeadingElement>;
   todayButtonRef: Ref<HTMLButtonElement>;
+}
+
+/** A month page: drawn in currentColor, so it takes the button's own colour. */
+function CalendarIcon() {
+  return (
+    <svg class="day-calendar-icon" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false">
+      <rect x="3" y="4.5" width="14" height="12.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" />
+      <path d="M3 8.5h14M7 2.5v4M13 2.5v4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+    </svg>
+  );
 }
 
 export function DayHeader({ date, today, onPrevious, onNext, onToday, headingRef, todayButtonRef }: DayHeaderProps) {
@@ -37,6 +49,15 @@ export function DayHeader({ date, today, onPrevious, onNext, onToday, headingRef
           </button>
           <button type="button" class="day-arrow" aria-label="Next day" onClick={onNext}>
             <span aria-hidden="true">›</span>
+          </button>
+          {/* #241 AC1: last, so it never moves when Today comes or goes. Pushes. */}
+          <button
+            type="button"
+            class="day-arrow day-calendar-btn"
+            aria-label="Calendar"
+            onClick={() => navigate(calendarHref(monthOf(date), today))}
+          >
+            <CalendarIcon />
           </button>
         </div>
       </div>

@@ -143,7 +143,21 @@ describe('AC2 — header', () => {
     cleanup();
     const off = renderAt('#/day/2026-09-12');
     const buttons = [...off.container.querySelectorAll('.day-nav button')].map((b) => b.getAttribute('aria-label') ?? b.textContent);
-    expect(buttons).toEqual(['Today', 'Previous day', 'Next day']);
+    expect(buttons).toEqual(['Today', 'Previous day', 'Next day', 'Calendar']);
+  });
+
+  it('ends the controls with a 44 px Calendar button that pushes to the viewed month (#241 AC1)', () => {
+    const on = renderAt('#/');
+    const onLabels = [...on.container.querySelectorAll('.day-nav button')].map((b) => b.getAttribute('aria-label') ?? b.textContent);
+    expect(onLabels).toEqual(['Previous day', 'Next day', 'Calendar']);
+    const cal = on.getByRole('button', { name: 'Calendar' });
+    expect(cal.classList.contains('day-arrow')).toBe(true);
+    fireEvent.click(cal);
+    expect(window.location.hash).toBe('#/calendar');
+    cleanup();
+    const off = renderAt('#/day/2025-01-14');
+    fireEvent.click(off.getByRole('button', { name: 'Calendar' }));
+    expect(window.location.hash).toBe('#/calendar/2025-01');
   });
 
   it('writes the sun line in words, three nowrap items', () => {
