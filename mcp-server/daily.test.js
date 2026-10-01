@@ -17,7 +17,7 @@ import {
 const HEALTH_FIELDS = [
   'date', 'resting_hr', 'hrv', 'steps', 'calories', 'sleep_total_s', 'sleep_deep_s',
   'sleep_rem_s', 'sleep_light_s', 'sleep_awake_s', 'sleep_score', 'vo2max', 'recovery',
-  'training_load', 'bed_time', 'wake_time', 'raw_ref', 'synced_at',
+  'training_load', 'bed_time', 'wake_time', 'raw_ref', 'synced_at', 'stress_avg',
 ];
 const health = (o) => Object.fromEntries(HEALTH_FIELDS.map((f) => [f, o[f] ?? '']));
 
@@ -26,6 +26,7 @@ const fullDay = health({
   sleep_total_s: '26100', sleep_deep_s: '3120', sleep_rem_s: '6180', sleep_light_s: '15720',
   sleep_awake_s: '1080', sleep_score: '84', vo2max: '48', recovery: '92', training_load: '7',
   bed_time: '22:51', wake_time: '06:06', raw_ref: 'drive-1', synced_at: '2026-09-24T13:25:32.000Z',
+  stress_avg: '26',
 });
 
 const SUMMARY_FIELDS = [
@@ -90,7 +91,7 @@ test('date helpers cross month ends and DST', () => {
 test('a full health day names every field in readable units', () => {
   assert.equal(
     describeHealthDay(fullDay),
-    '- 2026-09-23: resting HR 57 bpm · HRV 41 ms · steps 2,617 · calories 412 kcal · ' +
+    '- 2026-09-23: resting HR 57 bpm · HRV 41 ms · stress 26 · steps 2,617 · calories 412 kcal · ' +
       'sleep 7:15 [deep 0:52, REM 1:43, light 4:22, awake 0:18] · sleep score 84 · ' +
       'bed 22:51 → wake 06:06 · VO2max 48 · recovery 92% · training load 7',
   );
@@ -99,7 +100,7 @@ test('a full health day names every field in readable units', () => {
 test('a sparse health day shows each blank as —, and no field as 0', () => {
   const line = describeHealthDay(health({ date: '2026-09-20', steps: '8400' }));
   assert.match(line, /steps 8,400/);
-  assert.match(line, /resting HR — · HRV — /);
+  assert.match(line, /resting HR — · HRV — · stress — · /);
   assert.match(line, /sleep — \[deep —, REM —, light —, awake —\]/);
   assert.match(line, /VO2max — · recovery — · training load —$/);
   assert.doesNotMatch(line.replace('8,400', ''), /\b0\b/);

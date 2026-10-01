@@ -34,10 +34,10 @@ const byKey = (rows: HealthRowView[], key: string) => rows.find((r) => r.key ===
 const texts = (r: HealthRowView) => r.captions.map(captionText);
 
 describe('AC1 — a past day', () => {
-  it('shows sleep, resting HR, HRV and steps in order, with no stress row before #231', () => {
-    const rows = rowsOf(healthView([hr(D, FULL)], D, false));
-    expect(rows.map((r) => r.label)).toEqual(['Sleep', 'Resting HR', 'HRV', 'Steps']);
-    expect(rows.map((r) => r.value)).toEqual(['7h 12m', '52 bpm', '38 ms', '9,412']);
+  it('shows sleep, resting HR, HRV, average stress (#231) and steps in order', () => {
+    const rows = rowsOf(healthView([hr(D, { ...FULL, stress_avg: '31' })], D, false));
+    expect(rows.map((r) => r.label)).toEqual(['Sleep', 'Resting HR', 'HRV', 'Average stress', 'Steps']);
+    expect(rows.map((r) => r.value)).toEqual(['7h 12m', '52 bpm', '38 ms', '31', '9,412']);
     expect(byKey(rows, 'sleep').qualifier).toBe('Fri night');
   });
 
@@ -72,10 +72,11 @@ describe('AC1 — a past day', () => {
     for (const f of ['sleep_score', 'recovery', 'vo2max', 'training_load', 'calories']) expect(labels).not.toContain(f);
   });
 
-  it('adds Average stress once the field list has stress_avg, before steps', () => {
-    expect(activeMetrics().map((m) => m.key)).toEqual(['sleep', 'resting_hr', 'hrv', 'steps']);
-    const fields = [...DAILY_HEALTH_FIELDS, 'stress_avg'];
-    expect(activeMetrics(fields).map((m) => m.key)).toEqual(['sleep', 'resting_hr', 'hrv', 'stress', 'steps']);
+  it('shows Average stress, before steps, now the field list has stress_avg (#231)', () => {
+    const fields = DAILY_HEALTH_FIELDS;
+    expect(activeMetrics().map((m) => m.key)).toEqual(['sleep', 'resting_hr', 'hrv', 'stress', 'steps']);
+    // A field list without the column (before #231) leaves the row out.
+    expect(activeMetrics(fields.filter((f) => f !== 'stress_avg')).map((m) => m.key)).toEqual(['sleep', 'resting_hr', 'hrv', 'steps']);
     const rows = rowsOf(healthView([hr(D, { ...FULL, stress_avg: '31' })], D, false, fields));
     expect(byKey(rows, 'stress').value).toBe('31');
     const blank = rowsOf(healthView([hr(D, FULL)], D, false, fields));

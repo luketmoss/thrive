@@ -68,9 +68,10 @@ function rowOf(fields: readonly string[], values: Record<string, string>): strin
 }
 
 describe('AC1: each field list mirrors types.js', () => {
-  it('DAILY_HEALTH_FIELDS matches, name for name and in order (A:R)', () => {
+  it('DAILY_HEALTH_FIELDS matches, name for name and in order (A:S)', () => {
     expect([...DAILY_HEALTH_FIELDS]).toEqual(fieldsIn('DAILY_HEALTH_FIELDS'));
-    expect(DAILY_HEALTH_FIELDS).toHaveLength(18);
+    expect(DAILY_HEALTH_FIELDS).toHaveLength(19);
+    expect(DAILY_HEALTH_FIELDS[18]).toBe('stress_avg'); // #231, appended after synced_at
   });
 
   it('BODY_MEASUREMENT_FIELDS matches, name for name and in order (A:T)', () => {
@@ -84,11 +85,11 @@ describe('AC1: each field list mirrors types.js', () => {
   });
 
   it('derives each read range from its list length', () => {
-    expect(readRange('DailyHealth', DAILY_HEALTH_FIELDS)).toBe('DailyHealth!A2:R');
+    expect(readRange('DailyHealth', DAILY_HEALTH_FIELDS)).toBe('DailyHealth!A2:S');
     expect(readRange('BodyMeasurements', BODY_MEASUREMENT_FIELDS)).toBe('BodyMeasurements!A2:T');
     expect(readRange('DailySummary', DAILY_SUMMARY_FIELDS)).toBe('DailySummary!A2:Y');
     // Appending a column is a one-line change: the range follows the list.
-    expect(readRange('DailyHealth', [...DAILY_HEALTH_FIELDS, 'stress_avg'])).toBe('DailyHealth!A2:S');
+    expect(readRange('DailyHealth', [...DAILY_HEALTH_FIELDS, 'next'])).toBe('DailyHealth!A2:T');
   });
 
   it('names columns past Z', () => {
@@ -103,9 +104,9 @@ describe('AC1: each field list mirrors types.js', () => {
     expect(short.synced_at).toBe('');
     expect(short.sheetRow).toBe(7);
 
-    // A sheet that has gained a column the list does not name yet (#231's
-    // stress_avg in DailyHealth!S) still reads correctly.
-    const wide = rowToDailyHealth([...rowOf(DAILY_HEALTH_FIELDS, { date: '2026-09-20', synced_at: 'x' }), '31'], 2);
+    // A sheet that has gained a column the list does not name yet still reads
+    // correctly, as DailyHealth!S did before #231 named it.
+    const wide = rowToDailyHealth([...rowOf(DAILY_HEALTH_FIELDS, { date: '2026-09-20', synced_at: 'x' }), 'later'], 2);
     expect(wide.synced_at).toBe('x');
     expect(Object.keys(wide)).toHaveLength(DAILY_HEALTH_FIELDS.length + 1); // + sheetRow
   });
@@ -208,7 +209,7 @@ describe('AC3/AC4: fetching each tab', () => {
 
   it('reads each tab once, whole, with the token, dropping rows without their key', async () => {
     sheetsGet.mockImplementation(async (range: string) => {
-      if (range === 'DailyHealth!A2:R') return [['2026-09-20', '52'], [], ['', '60'], ['2026-09-19']];
+      if (range === 'DailyHealth!A2:S') return [['2026-09-20', '52'], [], ['', '60'], ['2026-09-19']];
       if (range === 'BodyMeasurements!A2:T') return [['g1', '2026-09-20'], ['', '2026-09-20']];
       if (range === 'DailySummary!A2:Y') return [['2026-09-20', '1'], ['']];
       throw new Error(`unexpected range ${range}`);
@@ -217,7 +218,7 @@ describe('AC3/AC4: fetching each tab', () => {
     expect(sheetsGet).toHaveBeenCalledTimes(3);
     // Every read goes through withReauth, so a 401 re-auths like any other read.
     expect(withReauth).toHaveBeenCalledTimes(3);
-    expect(sheetsGet).toHaveBeenCalledWith('DailyHealth!A2:R', 'tok');
+    expect(sheetsGet).toHaveBeenCalledWith('DailyHealth!A2:S', 'tok');
     expect(h.map((r) => [r.date, r.sheetRow])).toEqual([['2026-09-20', 2], ['2026-09-19', 5]]);
     expect(b.map((r) => [r.grpid, r.sheetRow])).toEqual([['g1', 2]]);
     expect(s.map((r) => [r.date, r.sheetRow])).toEqual([['2026-09-20', 2]]);

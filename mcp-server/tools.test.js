@@ -54,7 +54,7 @@ before(async () => {
       case 'getDailyHealth':
         data = [{ date: p.from, resting_hr: '57', hrv: '', steps: '8400', calories: '', sleep_total_s: '',
           sleep_deep_s: '', sleep_rem_s: '', sleep_light_s: '', sleep_awake_s: '', sleep_score: '',
-          vo2max: '', recovery: '', training_load: '', bed_time: '', wake_time: '', raw_ref: '', synced_at: '' }];
+          vo2max: '', recovery: '', training_load: '', bed_time: '', wake_time: '', raw_ref: '', synced_at: '', stress_avg: '31' }];
         break;
       case 'getDailySummary': data = []; break;
       case 'getBodyMeasurements':
@@ -147,7 +147,8 @@ test('thrive_daily_health sends the resolved range and shows blanks as —', asy
   const sent = calls.findLast((c) => c.action === 'getDailyHealth');
   assert.equal(sent.from, '2026-09-20');
   assert.equal(sent.to, '2026-09-21');
-  assert.match(text, /- 2026-09-20: resting HR 57 bpm · HRV — · steps 8,400/);
+  // stress_avg (#231) is relayed as the API sends it: api.js holds no row mapping.
+  assert.match(text, /- 2026-09-20: resting HR 57 bpm · HRV — · stress 31 · steps 8,400/);
   assert.match(text, /No DailyHealth row for 1 day: 2026-09-21/);
 });
 

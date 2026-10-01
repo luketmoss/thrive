@@ -1,4 +1,4 @@
-// DailyHealth tab (A:R) — one row per local calendar day of COROS health
+// DailyHealth tab (A:S) — one row per local calendar day of COROS health
 // metrics (#165). Written only by the sync, through upsertDailyHealth; read by
 // the DailySummary rollup (getDailyHealth in daily-summary.js) and by callers
 // through the getDailyHealth action (getDailyHealthRows, #158).
@@ -17,11 +17,13 @@ var DAILY_HEALTH_NUMERIC_FIELDS = [
   'resting_hr', 'hrv', 'steps', 'calories',
   'sleep_total_s', 'sleep_deep_s', 'sleep_rem_s', 'sleep_light_s', 'sleep_awake_s',
   'sleep_score', 'vo2max', 'recovery', 'training_load',
+  // No 0-100 bound, unlike sleep_score: COROS documents no range for it (#231).
+  'stress_avg',
 ];
 
 var DAILY_HEALTH_TIME_FIELDS = ['bed_time', 'wake_time'];
 
-/** A DailyHealth row -> an object with all 18 fields, '' where unset. */
+/** A DailyHealth row -> an object with all 19 fields, '' where unset. */
 function rowToDailyHealth(row, sheetRow) {
   var health = {};
   for (var i = 0; i < DAILY_HEALTH_FIELDS.length; i++) {
@@ -31,7 +33,7 @@ function rowToDailyHealth(row, sheetRow) {
   return health;
 }
 
-/** An object -> exactly 18 cells, so a short row never leaves stale cells. */
+/** An object -> exactly 19 cells, so a short row never leaves stale cells. */
 function dailyHealthToRow(health) {
   var row = [];
   for (var i = 0; i < DAILY_HEALTH_FIELDS.length; i++) {
@@ -62,7 +64,7 @@ function readDailyHealthRows() {
  * DailyHealth rows for an inclusive date range, oldest first (#158, #147).
  *
  * The action behind `getDailyHealth`. `from` and `to` are optional and
- * validated exactly as getDailySummaries validates them. Every one of the 18
+ * validated exactly as getDailySummaries validates them. Every one of the 19
  * fields is present on every object, a blank cell as '' and never 0, and no
  * `sheetRow`: callers address a day by its date.
  *

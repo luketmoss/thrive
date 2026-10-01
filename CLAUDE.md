@@ -46,9 +46,10 @@ Google Sheet "Groundwork" with these tabs:
   estimated_seconds
 - **Sets** (A:J): workout_id, exercise_id, Exercise Name, Section, Exercise Order, Set #, Planned Reps, Weight (lbs), Reps, Effort
 - **Labels** (A:D): id, name, color_key, created
-- **DailyHealth** (A:R): date, resting_hr, hrv, steps, calories, sleep_total_s,
+- **DailyHealth** (A:S): date, resting_hr, hrv, steps, calories, sleep_total_s,
   sleep_deep_s, sleep_rem_s, sleep_light_s, sleep_awake_s, sleep_score, vo2max,
-  recovery, training_load, bed_time, wake_time, raw_ref, synced_at (#165). One
+  recovery, training_load, bed_time, wake_time, raw_ref, synced_at (#165),
+  stress_avg (#231: COROS's daily average stress, appended; no range assumed). One
   row per local date, written only by the COROS sync through `upsertDailyHealth`.
   Every value is nullable: blank means COROS did not say, never `0`. Sleep is
   filed under its wake-up day; `sleep_total_s` includes awake time; `vo2max` and

@@ -28,7 +28,7 @@ describe('AC1: getDailyHealth returns every column for a date range', () => {
     full('2026-09-23'),
   ];
 
-  it('returns all 18 fields, oldest first, with no sheetRow', () => {
+  it('returns all 19 fields, oldest first, with no sheetRow', () => {
     const res = read(rows());
     expect(res.success).toBe(true);
     expect(res.data.map((h: any) => h.date)).toEqual(['2026-09-20', '2026-09-22', '2026-09-23']);
@@ -87,6 +87,22 @@ describe('AC1: getDailyHealth returns every column for a date range', () => {
     const res = callDoGet<any>(api.sandbox, { action: 'getDailyHealth', from: '2026-09-20', to: '2026-09-23' });
     expect(res.data).toHaveLength(3);
     expect(ranges).toBe(1);
+  });
+});
+
+describe('#231 AC3: stress_avg is returned as stored', () => {
+  it('passes a value through unchanged, and a blank as ""', () => {
+    const res = read([
+      healthRow({ date: '2026-09-22', stress_avg: '31' }),
+      healthRow({ date: '2026-09-24', steps: '10' }),
+    ]);
+    expect(res.data.map((h: any) => h.stress_avg)).toEqual(['31', '']);
+  });
+
+  it('reads a row with no cell S (written before #231) as a blank stress_avg', () => {
+    const res = read([healthRow({ date: '2026-09-22', steps: '10' }).slice(0, 18)]);
+    expect(res.data[0].stress_avg).toBe('');
+    expect(res.data[0].steps).toBe('10');
   });
 });
 

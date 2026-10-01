@@ -201,13 +201,13 @@ describe('AC3 — shading by one metric', () => {
     hr('2026-08-31', { resting_hr: '90' }), // leading day: never shaded, not in the bins
   ];
 
-  it('offers the five choices as a labelled pressed-button group, Nothing by default', () => {
+  it('offers the six choices as a labelled pressed-button group, Nothing by default', () => {
     const { getByRole, container } = renderAt('#/calendar');
     const group = getByRole('group', { name: 'Shade days by' });
     expect(group.classList.contains('sub-type-toggle')).toBe(true);
     const buttons = [...group.querySelectorAll('button')];
-    expect(buttons.map((b) => b.textContent)).toEqual(['Nothing', 'Sleep', 'Resting HR', 'HRV', 'Steps']);
-    expect(buttons.map((b) => b.getAttribute('aria-pressed'))).toEqual(['true', 'false', 'false', 'false', 'false']);
+    expect(buttons.map((b) => b.textContent)).toEqual(['Nothing', 'Sleep', 'Resting HR', 'HRV', 'Steps', 'Average stress']);
+    expect(buttons.map((b) => b.getAttribute('aria-pressed'))).toEqual(['true', 'false', 'false', 'false', 'false', 'false']);
     expect(container.querySelector('.calendar-day-shade, .calendar-day-nodata')).toBeNull();
   });
 

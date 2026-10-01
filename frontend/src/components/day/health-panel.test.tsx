@@ -110,7 +110,7 @@ describe('AC1–AC3 — the Health panel draws its rows', () => {
     dailyHealth.value = { state: 'loaded', rows: [...history, hr(D, { resting_hr: '52', hrv: '', steps: '9412', sleep_total_s: '25920', sleep_deep_s: '3960' })] };
     const { container } = mount(HealthPanel);
     const rows = [...container.querySelectorAll('dl.health-list > div.health-row')];
-    expect(rows.map((r) => r.querySelector('dt')!.textContent)).toEqual(['Sleep · Fri night', 'Resting HR', 'HRV', 'Steps']);
+    expect(rows.map((r) => r.querySelector('dt')!.textContent)).toEqual(['Sleep · Fri night', 'Resting HR', 'HRV', 'Average stress', 'Steps']);
     const sleep = rows[0].querySelector('dd')!;
     expect(sleep.querySelector('.health-value')!.textContent).toBe('7h 12m');
     expect(sleep.querySelector('.health-stage')!.textContent).toBe('Deep 1h 06m');
@@ -123,7 +123,7 @@ describe('AC1–AC3 — the Health panel draws its rows', () => {
   it('bolds and colours only the unwelcome direction; the arrow is hidden from screen readers', () => {
     dailyHealth.value = { state: 'loaded', rows: [...history, hr(D, { resting_hr: '60', hrv: '60', steps: '1' })] };
     const { container } = mount(HealthPanel);
-    const [rhr, hrvRow, steps] = [...container.querySelectorAll('.health-row')].slice(1).map((r) => r.querySelector('dd')!);
+    const [rhr, hrvRow, , steps] = [...container.querySelectorAll('.health-row')].slice(1).map((r) => r.querySelector('dd')!);
     const attention = rhr.querySelector('.health-attention')!;
     expect(attention.textContent).toBe('↑ above your range');
     expect(attention.querySelector('[aria-hidden="true"]')!.textContent).toBe('↑ ');

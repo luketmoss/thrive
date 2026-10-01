@@ -23,7 +23,7 @@ import { prose } from './ingest.mjs';
 export const DAILY_FIELDS = [
   'resting_hr', 'hrv', 'steps', 'calories',
   'sleep_total_s', 'sleep_deep_s', 'sleep_rem_s', 'sleep_light_s', 'sleep_awake_s',
-  'sleep_score', 'training_load', 'bed_time', 'wake_time',
+  'sleep_score', 'training_load', 'bed_time', 'wake_time', 'stress_avg',
 ];
 
 /**
@@ -59,6 +59,18 @@ function withUnit(tool, line, value, unit) {
   const m = value.trim().match(new RegExp(`^([\\d,]+) ${unit}$`));
   if (!m) throw new HealthFormatError(tool, line, `expected a whole number of ${unit}`);
   return integer(tool, line, m[1]);
+}
+
+/**
+ * `Stress: Avg 31` -> `31` (#231). COROS documents no range for the daily
+ * average, so none is enforced (unlike sleep score): a whole number after
+ * `Avg`, and nothing else. A decimal, a `%` or a word fails the date, the same
+ * as an unknown unit does.
+ */
+function stressAverage(tool, line, value) {
+  const m = value.trim().match(/^Avg (\d+)$/);
+  if (!m) throw new HealthFormatError(tool, line, 'expected "Stress: Avg <whole number>"');
+  return String(Number(m[1]));
 }
 
 /** `7h 15min`, `52 min`, `4h 22min`, `7h`, `0 min` -> whole seconds, as text. */
@@ -128,7 +140,10 @@ function eachDate(entries, tool, fn) {
 
 const SLEEP_STAGES = { Total: 'sleep_total_s', Deep: 'sleep_deep_s', Light: 'sleep_light_s', REM: 'sleep_rem_s', Awake: 'sleep_awake_s' };
 
-/** Steps, calories and the sleep durations. `Total` includes awake time. */
+/**
+ * Steps, calories, the day's average stress (#231) and the sleep durations.
+ * `Total` includes awake time.
+ */
 function parseDailyHealthData(text, tool) {
   requireHeading(tool, text, 'Daily Health Data');
   const entries = blocks(text, (l) => {
@@ -145,6 +160,7 @@ function parseDailyHealthData(text, tool) {
         if (value === null) continue;
         if (label === 'Steps') v.steps = integer(tool, line, value);
         else if (label === 'Calories') v.calories = withUnit(tool, line, value, 'kcal');
+        else if (label === 'Stress') v.stress_avg = stressAverage(tool, line, value);
         else if (sleepSection && SLEEP_STAGES[label]) v[SLEEP_STAGES[label]] = durationSeconds(tool, line, value);
       }
     }
