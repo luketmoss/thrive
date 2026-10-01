@@ -13,7 +13,8 @@ vi.mock('../../state/actions', () => ({ loadHealth: async () => {} }));
 import { TrendsScreen, selectedDay, announcement } from './trends-screen';
 import { AuthContext } from '../../auth/auth-context';
 import { dailyHealth, bodyMeasurements, dailySummary } from '../../state/store';
-import { addDays, rowDate } from './series';
+import { addDays } from '../../day/dates';
+import { rowDate } from './series';
 import { todayInDenver } from '../../day/dates';
 import { today as todaySignal, recheckToday } from '../../day/today';
 

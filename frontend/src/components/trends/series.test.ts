@@ -2,9 +2,10 @@
 
 import { describe, it, expect } from 'vitest';
 import {
-  addDays, averageDays, dateTicks, datesBetween, earliestDate, metricSeries, niceTicks,
+  averageDays, dateTicks, datesBetween, earliestDate, metricSeries, niceTicks,
   rangeBounds, rolling, rowDate, segments, tickLabel, windowText, yDomain,
 } from './series';
+import { addDays } from '../../day/dates';
 import type { TrendMetric, TrendPoint } from './metrics';
 
 const TODAY = '2026-09-27';

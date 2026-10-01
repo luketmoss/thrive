@@ -5,7 +5,8 @@ import { render, cleanup, fireEvent, act } from '@testing-library/preact';
 import { h } from 'preact';
 import { TrendTable, resetTableStop } from './trend-table';
 import type { TrendGroup, TrendMetric, TrendPoint } from './metrics';
-import { addDays, rangeBounds } from './series';
+import { addDays } from '../../day/dates';
+import { metricSeries, rangeBounds } from './series';
 
 beforeEach(() => { resetTableStop(); window.location.hash = '#/trends'; });
 afterEach(cleanup);
@@ -19,7 +20,7 @@ function metric(pts: TrendPoint[], extra: Partial<TrendMetric> = {}): TrendMetri
 function renderTable(m: TrendMetric, avgDays = 7, range: '1W' | '1M' = '1W', metrics: TrendMetric[] = [m]) {
   const group: TrendGroup = { id: 'g', label: 'Heart', metrics };
   const { from, to } = rangeBounds(range, TODAY, null);
-  return render(h(TrendTable, { group, from, to, range, avgDays, today: TODAY }));
+  return render(h(TrendTable, { group, series: metrics.map((m) => metricSeries(m, from, to, avgDays, TODAY)), range, avgDays, today: TODAY }));
 }
 
 const pts: TrendPoint[] = [];
@@ -67,7 +68,7 @@ describe('TrendTable', () => {
   });
 
   it('has no links and no description on a group with no rows', () => {
-    const { container } = render(h(TrendTable, { group: { id: 'g', label: 'Heart', metrics: [] }, from: '2026-09-21', to: TODAY, range: '1W', avgDays: 0, today: TODAY }));
+    const { container } = render(h(TrendTable, { group: { id: 'g', label: 'Heart', metrics: [] }, series: [], range: '1W', avgDays: 0, today: TODAY }));
     expect(container.querySelectorAll('a')).toHaveLength(0);
     expect(container.querySelector('[role="region"]')!.getAttribute('aria-describedby')).toBeNull();
   });
@@ -205,7 +206,7 @@ describe('#255 AC3/AC4: one tab stop and the keys', () => {
     const group: TrendGroup = { id: 'g', label: 'Heart', metrics: [m] };
     const props = (range: '1W' | '1M') => {
       const { from, to } = rangeBounds(range, TODAY, null);
-      return { group, from, to, range, avgDays: 7, today: TODAY };
+      return { group, series: [metricSeries(m, from, to, 7, TODAY)], range, avgDays: 7, today: TODAY };
     };
     const { container, rerender } = render(h(TrendTable, props('1M')));
     act(() => links(container)[20].focus()); // 20 days back

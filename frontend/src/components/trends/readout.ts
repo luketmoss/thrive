@@ -21,9 +21,19 @@ export interface DayCells {
   average: string | null;
 }
 
-/** The series' points keyed by date. */
-export function pointsByDate(series: MetricSeries): Map<string, TrendPoint> {
-  return new Map(series.points.map((p) => [p.date, p]));
+const byDateCache = new WeakMap<MetricSeries, ReadonlyMap<string, TrendPoint>>();
+
+/**
+ * The series' points keyed by date. Built once per series (#270): a series is
+ * never mutated, so every readout and announcement shares one map. Read only.
+ */
+export function pointsByDate(series: MetricSeries): ReadonlyMap<string, TrendPoint> {
+  let m = byDateCache.get(series);
+  if (!m) {
+    m = new Map(series.points.map((p) => [p.date, p]));
+    byDateCache.set(series, m);
+  }
+  return m;
 }
 
 /** What the table prints for `date` in this metric's columns. */

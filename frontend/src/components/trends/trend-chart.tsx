@@ -10,7 +10,7 @@
 import { useLayoutEffect, useState } from 'preact/hooks';
 import type { TrendGroup, TrendMetric } from './metrics';
 import {
-  RANGE_PHRASE, type RangeKey, dateTicks, dayAtX, metricSeries, segments, tickLabel, windowText, yDomain,
+  RANGE_PHRASE, type RangeKey, dateTicks, dayAtX, segments, tickLabel, windowText, yDomain,
   type MetricSeries,
 } from './series';
 import { withUnit } from './readout';
@@ -185,8 +185,10 @@ export function TrendPlot({ metric, series, width, label, describedBy, selectedD
 
 interface CardProps {
   metric: TrendMetric;
-  from: string;
-  to: string;
+  /** The metric's series, built once by the screen (#270). */
+  series: MetricSeries;
+  /** Whether the metric has any value at all, on any date (not only in range). */
+  recorded: boolean;
   range: RangeKey;
   avgDays: number;
   today: string;
@@ -195,17 +197,15 @@ interface CardProps {
 }
 
 /** One metric's card: header, summary line and the plot, or its empty state. */
-export function TrendCard({ metric, from, to, range, avgDays, today, selectedDate, onSelect }: CardProps) {
+export function TrendCard({ metric, series, recorded, range, avgDays, today, selectedDate, onSelect }: CardProps) {
   const [measure, width] = useWidth();
-  const all = metric.points();
-  const series = metricSeries(metric, from, to, avgDays, today, all);
   const headingId = `trend-${metric.id}-heading`;
   const summaryId = `trend-${metric.id}-summary`;
   const noteId = `trend-${metric.id}-note`;
   // A note ("Outdoor only", #245) is a caveat on the number: announced with the summary.
   const describedBy = metric.note ? `${noteId} ${summaryId}` : summaryId;
   let body;
-  if (all.length === 0) {
+  if (!recorded) {
     body = <p class="trend-empty">Nothing recorded yet.</p>;
   } else if (series.points.length === 0) {
     body = <p class="trend-empty">No {midSentence(metric.label)} in this range.</p>;
@@ -242,8 +242,10 @@ export function TrendCard({ metric, from, to, range, avgDays, today, selectedDat
 
 interface ChartsProps {
   group: TrendGroup;
-  from: string;
-  to: string;
+  /** One per metric of `group`, in order. */
+  series: readonly MetricSeries[];
+  /** One per metric: does it have any value at all. */
+  recorded: readonly boolean[];
   range: RangeKey;
   avgDays: number;
   today: string;
@@ -252,11 +254,11 @@ interface ChartsProps {
 }
 
 /** A group as stacked cards, all on the same from..to and so the same x positions. */
-export function TrendCharts({ group, from, to, range, avgDays, today, selectedDate, onSelect }: ChartsProps) {
+export function TrendCharts({ group, series, recorded, range, avgDays, today, selectedDate, onSelect }: ChartsProps) {
   return (
     <div class="trend-cards">
-      {group.metrics.map((m) => (
-        <TrendCard key={m.id} metric={m} from={from} to={to} range={range} avgDays={avgDays} today={today}
+      {group.metrics.map((m, i) => (
+        <TrendCard key={m.id} metric={m} series={series[i]} recorded={recorded[i]} range={range} avgDays={avgDays} today={today}
           selectedDate={selectedDate} onSelect={onSelect} />
       ))}
     </div>
