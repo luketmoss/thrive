@@ -1,5 +1,5 @@
 import { signal, computed } from '@preact/signals';
-import type { ExerciseWithRow, LabelWithRow, Template, WorkoutWithRow, SetWithRow, WorkoutType } from '../api/types';
+import type { JournalEntry, ExerciseWithRow, LabelWithRow, Template, WorkoutWithRow, SetWithRow, WorkoutType } from '../api/types';
 import type { SyncLogEntryWithRow } from '../api/sync-log-api';
 import type { DailyHealthRow, BodyMeasurementRow, DailySummaryRow } from '../api/health-api';
 import { sortPlannedWorkouts } from '../components/activities/activities-helpers';
@@ -117,6 +117,47 @@ export type HealthTabState<T> =
 export const dailyHealth = signal<HealthTabState<DailyHealthRow>>({ state: 'idle' });
 export const bodyMeasurements = signal<HealthTabState<BodyMeasurementRow>>({ state: 'idle' });
 export const dailySummary = signal<HealthTabState<DailySummaryRow>>({ state: 'idle' });
+
+// Journal (#240): every `Journal` row, read whole by `loadJournal` and held in
+// sheet order, one entry per date that has a note. A date with no note has NO
+// entry (never a blank one). The Day Note panel reads its date out of this; the
+// Calendar (#241) reads the dates that have notes from the same signal. A save
+// updates it in place (`applyJournalSave`), so entries carry no `sheetRow`:
+// after a save or a delete it would be stale. `loaded` is kept through a failed
+// background refresh. Not part of `loadInitialData`: the Day screen loads it.
+export type JournalState =
+  | { state: 'idle' }
+  | { state: 'loading' }
+  | { state: 'error' }
+  | { state: 'loaded'; entries: JournalEntry[] };
+export const journalEntries = signal<JournalState>({ state: 'idle' });
+
+let journalSaveCount = 0;
+const journalSavedAt = new Map<string, number>();
+/** Counts saves that landed, so a refresh that began before one can tell. */
+export function journalSaveSeq(): number {
+  return journalSaveCount;
+}
+export function journalSavedSince(date: string, seq: number): boolean {
+  return (journalSavedAt.get(date) ?? 0) > seq;
+}
+
+/**
+ * A save for `date` landed: put its result in `journalEntries` in place (null
+ * means the day now has no note). Leaves the signal alone until a load has
+ * landed, since that load will read the saved row.
+ */
+export function applyJournalSave(date: string, entry: JournalEntry | null): void {
+  journalSavedAt.set(date, ++journalSaveCount);
+  const cur = journalEntries.value;
+  if (cur.state !== 'loaded') return;
+  const i = cur.entries.findIndex((e) => e.date === date);
+  const entries = cur.entries.slice();
+  if (!entry) { if (i >= 0) entries.splice(i, 1); }
+  else if (i >= 0) entries[i] = entry;
+  else entries.push(entry);
+  journalEntries.value = { state: 'loaded', entries };
+}
 
 // Offline sync queue state
 export const pendingSyncCount = signal(0);

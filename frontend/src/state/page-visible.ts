@@ -2,12 +2,25 @@
 // #237's Day screen reuses both for `loadHealth`.
 
 /**
- * Call `cb` whenever the page changes *to* visible. The only `document`
- * `visibilitychange` subscription in the app. Returns an unsubscribe.
+ * Call `cb` whenever the page changes *to* visible. Returns an unsubscribe.
+ * (`onPageHidden` below is the one other `visibilitychange` subscription.)
  */
 export function onPageVisible(cb: () => void): () => void {
   const handler = () => {
     if (document.visibilityState === 'visible') cb();
+  };
+  document.addEventListener('visibilitychange', handler);
+  return () => document.removeEventListener('visibilitychange', handler);
+}
+
+/**
+ * Call `cb` whenever the page changes *to* hidden (a phone backgrounding the
+ * tab). The Day Note panel (#240) flushes unsaved edits with it. Returns an
+ * unsubscribe.
+ */
+export function onPageHidden(cb: () => void): () => void {
+  const handler = () => {
+    if (document.visibilityState === 'hidden') cb();
   };
   document.addEventListener('visibilitychange', handler);
   return () => document.removeEventListener('visibilitychange', handler);

@@ -1,6 +1,9 @@
 import { batch } from '@preact/signals';
-import { exercises, labels, templates, workouts, sets, loading, activeWorkoutId, activeWorkoutSets, activeWarmupExercises, isEditMode, showToast, syncLog, withingsSyncLog, dailyHealth, bodyMeasurements, dailySummary } from './store';
+import { journalEntries, journalSaveSeq, journalSavedSince, exercises, labels, templates, workouts, sets, loading, activeWorkoutId, activeWorkoutSets, activeWarmupExercises, isEditMode, showToast, syncLog, withingsSyncLog, dailyHealth, bodyMeasurements, dailySummary } from './store';
 import type { HealthTabState } from './store';
+import type { JournalEntry } from '../api/types';
+import { fetchJournal } from '../api/journal-api';
+import { isNoteLocked } from '../panels/journal/drafts';
 import { fetchSyncLog, fetchWithingsSyncLog } from '../api/sync-log-api';
 import { fetchDailyHealth, fetchBodyMeasurements, fetchDailySummary } from '../api/health-api';
 import { SyncLogNotSetUpError } from '../api/sync-log-errors';
@@ -1285,3 +1288,43 @@ export function loadHealth(token: string): Promise<void> {
  * Each load is three Sheets reads against a quota of 60 a minute.
  */
 export const healthRefresh = throttled(loadHealth, { minIntervalMs: 60_000 });
+
+// ── Journal (#240) ───────────────────────────────────────────────────
+
+/**
+ * Read every Journal row into `journalEntries`. One load at a time: a call
+ * while one runs joins it. A date the user has an unsaved edit on, has focused,
+ * or saved since this read began keeps its local entry, so a refresh never
+ * overwrites what the user is writing or has just written. A failed refresh
+ * keeps loaded entries.
+ */
+let journalInFlight: Promise<void> | null = null;
+
+async function readJournal(token: string): Promise<void> {
+  if (journalEntries.value.state !== 'loaded') journalEntries.value = { state: 'loading' };
+  const startSeq = journalSaveSeq();
+  try {
+    const rows = await fetchJournal(token);
+    let entries: JournalEntry[] = rows.map(({ date, note, created, updated }) => ({ date, note, created, updated }));
+    const cur = journalEntries.value;
+    if (cur.state === 'loaded') {
+      const keep = (d: string) => isNoteLocked(d) || journalSavedSince(d, startSeq);
+      entries = entries.filter((e) => !keep(e.date));
+      for (const e of cur.entries) if (keep(e.date)) entries.push(e);
+    }
+    journalEntries.value = { state: 'loaded', entries };
+  } catch (err) {
+    if (isReauthFailure(err)) return; // auth-provider handles this
+    console.error('Failed to read Journal:', err);
+    if (journalEntries.value.state !== 'loaded') journalEntries.value = { state: 'error' };
+  }
+}
+
+export function loadJournal(token: string): Promise<void> {
+  if (journalInFlight) return journalInFlight;
+  journalInFlight = readJournal(token).finally(() => { journalInFlight = null; });
+  return journalInFlight;
+}
+
+/** The Day screen's journal load: on show and on visible, at most once a minute. */
+export const journalRefresh = throttled(loadJournal, { minIntervalMs: 60_000 });

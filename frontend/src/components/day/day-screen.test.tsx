@@ -4,8 +4,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, cleanup, fireEvent, act } from '@testing-library/preact';
 
 const run = vi.fn(async (_t: string) => {});
+const journalRun = vi.fn(async (_t: string) => {});
 vi.mock('../../state/actions', () => ({
   healthRefresh: { run: (t: string) => run(t), markStarted: vi.fn() },
+  journalRefresh: { run: (t: string) => journalRun(t), markStarted: vi.fn() },
+  loadJournal: vi.fn(async () => {}),
+  loadHealth: vi.fn(async () => {}),
 }));
 
 const { DayScreen } = await import('./day-screen');
@@ -71,6 +75,7 @@ beforeEach(() => {
   today.value = TODAY;
   workouts.value = [];
   run.mockClear();
+  journalRun.mockClear();
 });
 afterEach(() => {
   cleanup();
@@ -355,6 +360,20 @@ describe('AC5 — panels and health', () => {
     cleanup();
     visible();
     expect(run).toHaveBeenCalledTimes(2); // not once the screen is gone
+  });
+
+  it('loads the journal on show and on visible, never on a move (#240 AC1)', () => {
+    const { getByLabelText } = renderAt('#/');
+    expect(journalRun).toHaveBeenCalledTimes(1);
+    expect(journalRun).toHaveBeenCalledWith('tok');
+    fireEvent.click(getByLabelText('Next day'));
+    key('ArrowLeft');
+    expect(journalRun).toHaveBeenCalledTimes(1);
+    visible();
+    expect(journalRun).toHaveBeenCalledTimes(2);
+    cleanup();
+    visible();
+    expect(journalRun).toHaveBeenCalledTimes(2);
   });
 
   it('keeps the Start workout FAB', () => {

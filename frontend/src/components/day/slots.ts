@@ -15,7 +15,7 @@ import type { DayPanelProps } from './panel';
 import { TrainingPanel } from './training-panel';
 import { HealthPanel } from './health-panel';
 import { BodyPanel } from './body-panel';
-import { NotePlaceholder } from './placeholders';
+import { JournalPanel } from './journal-panel';
 
 export type SlotName = 'training' | 'health' | 'body' | 'note';
 
@@ -23,7 +23,7 @@ export const SLOTS: Record<SlotName, ComponentType<DayPanelProps>> = {
   training: TrainingPanel,
   health: HealthPanel,
   body: BodyPanel,
-  note: NotePlaceholder,
+  note: JournalPanel,
 };
 
 /** Top to bottom, one column. */

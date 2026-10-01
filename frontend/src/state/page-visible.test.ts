@@ -91,3 +91,20 @@ describe('throttled', () => {
     expect(load).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('onPageHidden (#240)', () => {
+  afterEach(() => setVisibility('visible'));
+
+  it('calls back on a change to hidden, ignores visible, and unsubscribes', async () => {
+    const { onPageHidden } = await import('./page-visible');
+    const cb = vi.fn();
+    const off = onPageHidden(cb);
+    setVisibility('visible');
+    expect(cb).not.toHaveBeenCalled();
+    setVisibility('hidden');
+    expect(cb).toHaveBeenCalledTimes(1);
+    off();
+    setVisibility('hidden');
+    expect(cb).toHaveBeenCalledTimes(1);
+  });
+});
