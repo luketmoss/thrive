@@ -23,7 +23,8 @@ export const NOTE_PLACEHOLDER: Record<DayState, string> = {
   future: 'Notes for this day…',
 };
 
-const SUB: Record<NoteStatus, string> = {
+const SUB: Record<NoteStatus, string | undefined> = {
+  idle: undefined,
   waiting: 'Saving…',
   saving: 'Saving…',
   saved: 'Saved',
