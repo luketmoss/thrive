@@ -6,7 +6,7 @@
 // (#239), so every panel says it the same way.
 
 import type { ComponentChildren } from 'preact';
-import { useId, useRef } from 'preact/hooks';
+import { useId, useLayoutEffect, useRef } from 'preact/hooks';
 import type { DayState } from '../../day/dates';
 
 /** What the Day screen passes every slot. Dates are `YYYY-MM-DD` in Denver. */
@@ -33,7 +33,7 @@ export function Panel({ title, sub, action, children }: PanelProps) {
     <section class="day-panel" aria-labelledby={id}>
       <div class="day-panel-head">
         <div class="day-panel-heading">
-          <h2 class="day-panel-title" id={id}>{title}</h2>
+          <h2 class="day-panel-title" id={id} tabIndex={-1}>{title}</h2>
           {sub != null && <p class="day-panel-sub">{sub}</p>}
         </div>
         {action != null && <div class="day-panel-action">{action}</div>}
@@ -55,6 +55,11 @@ export interface PanelStatusProps {
   what: string;
   /** Load again. Called by Try again, as a user's request (no throttle). */
   onRetry: () => void;
+  /**
+   * Where focus goes when the status goes away holding it (#276). Defaults to
+   * the enclosing panel's `h2`; the Calendar passes the pressed shading button.
+   */
+  returnFocusTo?: () => HTMLElement | null | undefined;
 }
 
 /**
@@ -62,9 +67,27 @@ export interface PanelStatusProps {
  * `role="status"` container, so the change from loading to error is announced
  * once, politely. Try again moves focus to that container before the button
  * goes, so focus never falls to `body`.
+ *
+ * When the status unmounts while it holds focus (a retry succeeded), focus is
+ * handed to the panel's heading instead of falling to `body` (#276). It never
+ * takes focus on mount, and stands down if anything but `body` holds focus by
+ * then or the target has left the document (a date change).
  */
-export function PanelStatus({ status, what, onRetry }: PanelStatusProps) {
+export function PanelStatus({ status, what, onRetry, returnFocusTo }: PanelStatusProps) {
   const ref = useRef<HTMLDivElement>(null);
+  const returnRef = useRef(returnFocusTo);
+  returnRef.current = returnFocusTo;
+  useLayoutEffect(() => () => {
+    const node = ref.current;
+    if (!node || document.activeElement !== node) return;
+    const heading = node.closest('.day-panel')?.querySelector<HTMLElement>('.day-panel-title');
+    // After Preact's commit, so a date change has already removed the panel.
+    queueMicrotask(() => {
+      const target = returnRef.current ? returnRef.current() : heading;
+      const active = document.activeElement;
+      if (target && target.isConnected && (active === document.body || active == null)) target.focus();
+    });
+  }, []);
   return (
     <div class="panel-status" role="status" tabIndex={-1} ref={ref}>
       {status === 'error' ? (

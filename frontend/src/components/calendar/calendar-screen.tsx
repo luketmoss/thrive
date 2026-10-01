@@ -83,6 +83,7 @@ export function CalendarScreen() {
   const selected = sel.month === month ? sel.date : initialSelection(month, today);
 
   const headingId = useId();
+  const shadeRef = useRef<HTMLDivElement>(null);
   const summaryId = useId();
   const cells = useRef<Array<HTMLButtonElement | null>>([]);
   const focusDate = useRef<string | null>(null);
@@ -175,7 +176,7 @@ export function CalendarScreen() {
 
       <div class="calendar-shade">
         <span class="calendar-shade-label" aria-hidden="true">Shade by</span>
-        <div class="sub-type-toggle calendar-shade-toggle" role="group" aria-label="Shade days by">
+        <div class="sub-type-toggle calendar-shade-toggle" role="group" ref={shadeRef} aria-label="Shade days by">
           {choices.map((c) => (
             <button
               key={c.key}
@@ -189,7 +190,7 @@ export function CalendarScreen() {
           ))}
         </div>
         {shade.metric && health.state === 'error' && (
-          <PanelStatus status="error" what="your health data" onRetry={() => { if (token) void loadHealth(token); }} />
+          <PanelStatus status="error" what="your health data" onRetry={() => { if (token) void loadHealth(token); }} returnFocusTo={() => shadeRef.current?.querySelector<HTMLElement>('[aria-pressed="true"]')} />
         )}
       </div>
 

@@ -145,6 +145,21 @@ describe('Note panel', () => {
     }
   });
 
+  // #276 — the Note's load failure hands focus to its heading on a successful retry.
+  it('Try again that succeeds puts focus on the Note heading, not the textarea', async () => {
+    journalEntries.value = { state: 'error' };
+    const { container } = mount();
+    fireEvent.click(container.querySelector('.panel-retry')!);
+    expect(document.activeElement).toBe(container.querySelector('[role="status"]'));
+    act(() => { journalEntries.value = { state: 'loaded', entries: [entry(D, 'hello')] }; });
+    await settle();
+    const h2 = container.querySelector('h2.day-panel-title')!;
+    expect(h2.textContent).toBe('Note');
+    expect(h2.getAttribute('tabindex')).toBe('-1');
+    expect(document.activeElement).toBe(h2);
+    expect(document.activeElement).not.toBe(box(container));
+  });
+
   it('keeps held changes while the journal is not loaded and shows them once it is', () => {
     upsert.mockReturnValue(new Promise(() => {}));
     const first = mount();

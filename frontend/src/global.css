@@ -3663,6 +3663,10 @@ input, select, textarea {
   color: var(--color-text-secondary);
 }
 
+.day-panel-title:focus:not(:focus-visible) {
+  outline: none;
+}
+
 .day-panel-sub {
   font-size: var(--text-xs);
   color: var(--color-text-muted);
