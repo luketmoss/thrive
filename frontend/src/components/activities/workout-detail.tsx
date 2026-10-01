@@ -149,6 +149,7 @@ export function WorkoutDetail({ workoutId }: Props) {
           )}
           <button
             class="btn btn-primary btn-sm"
+            data-focus-key="workout-edit"
             onClick={() => navigate(`/history/${workoutId}/edit`)}
           >
             Edit

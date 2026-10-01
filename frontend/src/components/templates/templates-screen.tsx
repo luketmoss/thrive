@@ -32,6 +32,7 @@ function TemplateList() {
             {templates.value.map((t) => (
               <div
                 key={t.id}
+                data-focus-key={`template:${t.id}`}
                 class="template-card"
                 onClick={() => navigate(`/templates/${t.id}`)}
               >

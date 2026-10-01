@@ -216,6 +216,7 @@ export function ExercisesScreen() {
                 >
                   <div
                     class="exercise-list-item-header"
+                    data-focus-key={`exercise:${ex.id}`}
                     role="button"
                     aria-expanded={isExpanded}
                     tabIndex={0}

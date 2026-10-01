@@ -37,6 +37,7 @@ export function SettingsScreen() {
           </div>
           <div
             class="settings-row settings-row-link"
+            data-focus-key="manage-labels"
             onClick={() => navigate('/settings/labels')}
             role="button"
             tabIndex={0}

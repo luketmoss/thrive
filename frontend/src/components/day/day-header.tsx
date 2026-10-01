@@ -54,6 +54,7 @@ export function DayHeader({ date, today, onPrevious, onNext, onToday, headingRef
           <button
             type="button"
             class="day-arrow day-calendar-btn"
+            data-focus-key="day-calendar"
             aria-label="Calendar"
             onClick={() => navigate(calendarHref(monthOf(date), today))}
           >

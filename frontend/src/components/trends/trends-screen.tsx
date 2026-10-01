@@ -21,6 +21,7 @@ import { GroupSwitcher } from './group-switcher';
 import { TrendCharts } from './trend-chart';
 import { TrendTable } from './trend-table';
 import { openDay } from './open-day';
+import { isRestoringFocus } from '../../router/route-focus';
 import { today as todaySignal, watchToday } from '../../day/today';
 
 interface SegmentedProps<T extends string> {
@@ -255,6 +256,7 @@ export function TrendsScreen() {
         ) : (
           <div
             class="trend-charts"
+            data-focus-key="trend-charts"
             ref={charts}
             tabIndex={0}
             role="group"
@@ -265,10 +267,11 @@ export function TrendsScreen() {
             onPointerCancel={() => { pointerFocus.current = false; }}
             onPointerLeave={(e) => { if (e.pointerType === 'mouse') clearSelection(); }}
             onFocus={() => {
-              // Arriving by Tab selects today and says so; a press does not.
+              // Arriving by Tab selects today and says so; a press does not,
+              // nor does Back restoring focus here (#256 AC5).
               const press = pointerFocus.current;
               pointerFocus.current = false;
-              if (!press && selectedDay.value === null) moveTo(to);
+              if (!press && !isRestoringFocus() && selectedDay.value === null) moveTo(to);
             }}
             onBlur={(e) => {
               // Pressing "Open day" moves focus to the link inside; the day must outlast that.
