@@ -4371,3 +4371,11 @@ a.training-card {
 .trend-open-day:active {
   text-decoration: underline;
 }
+
+/* ── Route focus (#256) ──────────────────────────────────────────────
+   A route change focuses the new screen's heading, or main when it has none.
+   Neither is a control, so neither shows a ring. Restored controls keep theirs. */
+.app-content:focus,
+.app-content :is(h1, h2, [data-screen-heading])[tabindex="-1"]:focus {
+  outline: none;
+}

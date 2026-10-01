@@ -128,7 +128,7 @@ export function DayScreen() {
       <p class="sr-only" role="status" aria-live="polite">
         {announcement}
       </p>
-      <button class="fab" onClick={() => navigate('/workout/new')} aria-label="Start workout">
+      <button class="fab" data-focus-key="start-workout" onClick={() => navigate('/workout/new')} aria-label="Start workout">
         +
       </button>
     </div>

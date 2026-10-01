@@ -9,6 +9,7 @@ import { loadInitialData, workoutsRefresh, libraryRefresh } from './state/action
 import { loading, pendingSyncCount, isSyncing } from './state/store';
 import { onPageVisible } from './state/page-visible';
 import { currentRoute } from './router/router';
+import { RouteFocus } from './router/route-focus';
 import { ActivitiesScreen } from './components/activities/activities-screen';
 import { TemplatesScreen } from './components/templates/templates-screen';
 import { SettingsScreen } from './components/settings/settings-screen';
@@ -126,8 +127,10 @@ function AuthenticatedApp() {
 
   return (
     <div class="app-layout">
-      <main class="app-content">
+      {/* #256: tabindex so focus can land on main when a screen has no heading. */}
+      <main class="app-content" tabIndex={-1}>
         <Router />
+        <RouteFocus />
       </main>
       <BottomNav />
     </div>

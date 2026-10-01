@@ -166,6 +166,7 @@ export function ActivitiesScreen() {
             <button
               type="button"
               key={w.id}
+              data-focus-key={`workout:${w.id}`}
               class="workout-card workout-card-active"
               onClick={() => navigate(`/workout/${w.id}`)}
               aria-label={`${w.name || w.type}, in progress. Resume workout.`}
@@ -205,6 +206,7 @@ export function ActivitiesScreen() {
               <button
                 type="button"
                 key={w.id}
+                data-focus-key={`workout:${w.id}`}
                 class="workout-card workout-card-planned"
                 onClick={() => navigate(`/history/${w.id}`)}
                 aria-label={ariaLabel}
@@ -259,6 +261,7 @@ export function ActivitiesScreen() {
                     <button
                       type="button"
                       key={w.id}
+                      data-focus-key={`workout:${w.id}`}
                       class={`workout-card workout-card-${w.type}`}
                       style={typeColor ? { '--type-accent': typeColor.light, '--type-accent-dark': typeColor.dark } as any : undefined}
                       onClick={() => navigate(`/history/${w.id}`)}

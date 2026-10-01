@@ -20,6 +20,7 @@ export function LibraryHeader() {
             <button
               key={s.name}
               type="button"
+              data-focus-key={`library-switch:${s.name}`}
               class={`library-switch-btn${current ? ' active' : ''}`}
               aria-current={current ? 'page' : undefined}
               onClick={() => navigate(s.path)}

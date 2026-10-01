@@ -118,15 +118,44 @@ let expected: 'push' | 'pop' | null = null;
 // from a workout's detail must not reopen its edit form or its tracker (#235).
 const NOT_A_BACK_TARGET = ['workout-edit', 'workout-active'];
 
+/**
+ * A route change (#256), told to listeners before `currentRoute` changes, so the
+ * old screen is still in the DOM. `kind` is the router's guess for a hashchange
+ * (#264): a push or a pop, or `replace` for `replaceRoute`. The hashes are the
+ * history entries left and arrived at, normalised (`#/` for the empty hash).
+ */
+export interface RouteChange {
+  kind: 'push' | 'pop' | 'replace';
+  from: ParsedRoute;
+  to: ParsedRoute;
+  fromHash: string;
+  toHash: string;
+}
+
+const listeners = new Set<(change: RouteChange) => void>();
+
+/** Listen for route changes; returns the unsubscribe. */
+export function onRouteChange(listener: (change: RouteChange) => void): () => void {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
+}
+
+function emit(change: RouteChange): void {
+  for (const listener of [...listeners]) listener(change);
+}
+
 window.addEventListener('hashchange', () => {
   const hash = normalise(window.location.hash);
+  const fromHash = visited[visited.length - 1];
   const previous = visited[visited.length - 2];
   const isPop = expected === 'pop' || (expected === null && previous === hash);
   expected = null;
   if (isPop) visited.pop();
   else visited.push(hash);
-  currentRoute.value = settle(window.location.hash);
+  const to = settle(window.location.hash);
   visited[visited.length - 1] = normalise(window.location.hash);
+  emit({ kind: isPop ? 'pop' : 'push', from: currentRoute.value, to, fromHash, toHash: visited[visited.length - 1] });
+  currentRoute.value = to;
 });
 
 /** True when the previous in-app screen is a sensible place for Back to land. */
@@ -160,7 +189,10 @@ export function navigate(path: string): void {
 export function replaceRoute(path: string): void {
   const hash = normalise('#' + path.replace(/^#/, ''));
   if (hash === normalise(window.location.hash)) return;
+  const fromHash = visited[visited.length - 1];
   replaceHash(hash);
   visited[visited.length - 1] = hash;
-  currentRoute.value = settle(hash);
+  const to = settle(hash);
+  emit({ kind: 'replace', from: currentRoute.value, to, fromHash, toHash: hash });
+  currentRoute.value = to;
 }
