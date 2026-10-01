@@ -2,13 +2,16 @@
 // loading, empty and failed states.
 
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
-import { render, cleanup, fireEvent } from '@testing-library/preact';
+import { render, cleanup, fireEvent, waitFor } from '@testing-library/preact';
 import { h } from 'preact';
+import { effect } from '@preact/signals';
 
 const loadHealth = vi.fn(async (_t: string) => {});
 vi.mock('../../state/actions', () => ({ loadHealth: (t: string) => loadHealth(t) }));
 
-import { TrendsScreen, captionText } from './trends-screen';
+import { TrendsScreen, captionText, selectedDay, announcement } from './trends-screen';
+import { RouteFocus } from '../../router/route-focus';
+import { currentRoute, navigate, goBack } from '../../router/router';
 import { AuthContext } from '../../auth/auth-context';
 import { dailyHealth, bodyMeasurements, dailySummary } from '../../state/store';
 import { addDays } from '../../day/dates';
@@ -290,5 +293,78 @@ describe('#245: Activity group state', () => {
     expect(container.querySelector('.trends-error')).toBeNull();
     pickGroup(container, 'Activity');
     expect(container.querySelector('.trends-error')).not.toBeNull();
+  });
+});
+
+// #256 AC5: Back restores focus to the charts, and a script restore is not a
+// Tab arrival: no day is selected and nothing is announced.
+
+describe('#256 AC5: Back restores the charts without selecting a day', () => {
+  const settle = () => new Promise((r) => setTimeout(r, 120));
+  async function go(move: () => void, name: string) {
+    move();
+    await waitFor(() => expect(currentRoute.value.name).toBe(name));
+    await settle();
+  }
+  // Trends on #/trends, a stand-in Day elsewhere: the app's Router in small.
+  function Screen() {
+    return currentRoute.value.name === 'trends' ? h(TrendsScreen, {}) : h('h1', {}, 'Day');
+  }
+  function renderInMain() {
+    return render(
+      h('main', { class: 'app-content', tabIndex: -1 },
+        h(AuthContext.Provider, {
+          value: { token: 'tok', user: null, isAuthenticated: true, login: () => {}, logout: () => {} },
+          children: h(Screen, {}),
+        }),
+        h(RouteFocus, {}),
+      ),
+    );
+  }
+
+  beforeEach(() => {
+    window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
+    localStorage.setItem('thrive-trends-range', '1W');
+    loaded(rows(30));
+    selectedDay.value = null;
+    announcement.value = '';
+  });
+
+  async function openDayFromCharts(container: Element) {
+    await settle(); // RouteFocus subscribes after paint
+    if (currentRoute.value.name !== 'trends') await go(() => navigate('/trends'), 'trends');
+    container.querySelector<HTMLElement>('.trend-charts')!.focus(); // a Tab arrival: selects today
+    expect(selectedDay.value).toBe(TODAY);
+    await go(() => navigate(`/day/${addDays(TODAY, -1)}`), 'day');
+    selectedDay.value = null;
+    announcement.value = '';
+  }
+
+  it('focuses div.trend-charts, selects nothing and announces nothing; arrows then select', async () => {
+    const { container } = renderInMain();
+    await openDayFromCharts(container);
+    expect(document.activeElement!.textContent).toBe('Day');
+    // Every value either signal takes on the way back, not just the last:
+    // the screen's mount effect clears the selection, which would hide one.
+    const seen: unknown[] = [];
+    const stop = effect(() => { seen.push(selectedDay.value, announcement.value); });
+    await go(() => goBack(), 'trends');
+    stop();
+    const charts = container.querySelector<HTMLElement>('.trend-charts')!;
+    expect(document.activeElement).toBe(charts);
+    expect(seen.every((v) => v === null || v === '')).toBe(true);
+    expect(selectedDay.value).toBeNull();
+    expect(announcement.value).toBe('');
+    fireEvent.keyDown(charts, { key: 'ArrowLeft' });
+    expect(selectedDay.value).not.toBeNull();
+  });
+
+  it('focuses the heading when the charts are not rendered (Table view)', async () => {
+    const { container } = renderInMain();
+    await openDayFromCharts(container);
+    localStorage.setItem('thrive-trends-view', 'Table'); // Trends comes back in Table view
+    await go(() => goBack(), 'trends');
+    expect(document.activeElement!.tagName).toBe('H1');
+    expect(document.activeElement!.textContent).toBe('Trends');
   });
 });
