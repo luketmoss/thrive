@@ -4121,6 +4121,7 @@ a.training-card {
 .calendar-open-day {
   display: inline-flex;
   align-items: center;
+  gap: 2px;
   min-height: 44px;
   min-width: 44px;
   padding: 0 var(--space-xs);
