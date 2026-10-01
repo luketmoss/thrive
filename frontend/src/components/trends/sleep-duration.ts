@@ -21,6 +21,6 @@ export function axisSleep(hours: number, ticks: readonly number[] = []): string 
   const step = ticks.length > 1 ? Math.abs(ticks[1] - ticks[0]) : 1;
   if (step >= 0.5) return `${Number(hours.toFixed(1))}h`;
   if (step >= 1 / 60) return formatSleep(hours);
-  const decimals = Math.min(6, Math.ceil(-Math.log10(step) - 1e-9));
+  const decimals = Math.min(12, Math.ceil(-Math.log10(step) - 1e-9));
   return `${Number(hours.toFixed(decimals))}h`;
 }

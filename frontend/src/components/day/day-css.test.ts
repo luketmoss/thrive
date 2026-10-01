@@ -88,3 +88,13 @@ describe('Day Health and Body panels CSS (#239)', () => {
     expect(rule('.panel-retry')).toMatch(/min-width:\s*44px/);
   });
 });
+
+describe('Day Note panel CSS (#240)', () => {
+  it('draws the box on the card with no border of its own, growing, placeholder in the darker muted token', () => {
+    expect(rule('.note-box')).toMatch(/border:\s*0/);
+    expect(rule('.note-box')).toMatch(/resize:\s*none/);
+    expect(rule('.note-box')).toMatch(/overflow:\s*hidden/);
+    expect(rule('.note-box::placeholder')).toMatch(/color:\s*var\(--color-text-secondary\)/);
+    expect(rule('.note-box::placeholder')).not.toMatch(/color-text-muted/);
+  });
+});

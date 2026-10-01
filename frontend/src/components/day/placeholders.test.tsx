@@ -1,20 +1,11 @@
-// #237 AC5 — the panel shell contract and the four placeholders.
+// #237 AC5 — the panel shell contract and the slot registry.
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, cleanup } from '@testing-library/preact';
+import { JournalPanel } from './journal-panel';
 import { SLOTS, SLOT_ORDER, slotsFor } from './slots';
 import { Panel, PanelNote } from './panel';
-import type { DayState } from '../../day/dates';
 
 afterEach(cleanup);
-
-const COPY: Record<string, Partial<Record<DayState, string>>> = {
-  note: {
-    past: "That day's note will show here.",
-    today: "Today's note will show here.",
-    future: 'A note for this day will show here.',
-  },
-};
-const TITLES: Record<string, string> = { training: 'Training', health: 'Health', body: 'Body', note: 'Note' };
 
 describe('slots', () => {
   it('orders the four slots and drops health and body on a future day', () => {
@@ -24,19 +15,9 @@ describe('slots', () => {
     expect(slotsFor('future')).toEqual(['training', 'note']);
   });
 
-  for (const state of ['past', 'today', 'future'] as DayState[]) {
-    for (const name of slotsFor(state)) {
-      if (name !== 'note') continue; // #238, #239: see training-panel and health-panel tests
-      it(`${name} placeholder on a ${state} day shows its title and line`, () => {
-        const Slot = SLOTS[name];
-        const { container } = render(<Slot date="2026-09-30" state={state} today="2026-09-30" />);
-        expect(container.querySelector('section h2')!.textContent).toBe(TITLES[name]);
-        const note = container.querySelector('.panel-note')!;
-        expect(note.textContent).toBe(COPY[name][state]);
-        expect(note.textContent).not.toMatch(/#\d+/);
-      });
-    }
-  }
+  it('fills the note slot with the journal panel', () => {
+    expect(SLOTS.note).toBe(JournalPanel);
+  });
 });
 
 describe('Panel', () => {

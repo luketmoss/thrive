@@ -8,34 +8,10 @@ import type { WorkoutWithRow } from '../../api/types';
 import { addDays, weekOf } from '../../day/dates';
 import { dayOfMonth, fullDate, stripDayLabel, weekdayLetter } from '../../day/format';
 import { useSwipe } from './use-swipe';
+import { marksFor, markKinds } from '../../calendar/marks';
 
-export const MAX_MARKS = 3;
-
-export interface DayMarks {
-  done: number;
-  planned: number;
-}
-
-/** Done and planned counts for each of `dates`, from the workouts in memory. */
-export function marksFor(dates: readonly string[], all: readonly WorkoutWithRow[]): Record<string, DayMarks> {
-  const out: Record<string, DayMarks> = {};
-  for (const d of dates) out[d] = { done: 0, planned: 0 };
-  for (const w of all) {
-    const m = out[w.date];
-    if (!m) continue;
-    if (w.status === 'planned') m.planned++;
-    else m.done++;
-  }
-  return out;
-}
-
-/** The marks drawn for one day: dots first, then rings, three in all. */
-export function markKinds({ done, planned }: DayMarks): Array<'dot' | 'ring'> {
-  const kinds: Array<'dot' | 'ring'> = [];
-  for (let i = 0; i < done; i++) kinds.push('dot');
-  for (let i = 0; i < planned; i++) kinds.push('ring');
-  return kinds.slice(0, MAX_MARKS);
-}
+// The mark rule itself lives in calendar/marks.ts, shared with the Calendar (#241).
+export { MAX_MARKS, marksFor, markKinds, type DayMarks } from '../../calendar/marks';
 
 interface WeekStripProps {
   date: string;

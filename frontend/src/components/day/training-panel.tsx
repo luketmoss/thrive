@@ -11,7 +11,7 @@ import { Panel, PanelNote, type DayPanelProps } from './panel';
 const isPlanned = (w: WorkoutWithRow) => w.status === 'planned';
 
 /** By `time` ascending; no time last. Stable, so equal times keep sheet order. */
-function byTime(list: WorkoutWithRow[]): WorkoutWithRow[] {
+function byTime(list: readonly WorkoutWithRow[]): WorkoutWithRow[] {
   return list
     .map((w, i) => ({ w, i }))
     .sort((a, b) => {
@@ -23,6 +23,22 @@ function byTime(list: WorkoutWithRow[]): WorkoutWithRow[] {
       return a.i - b.i;
     })
     .map((x) => x.w);
+}
+
+export type TrainingKind = 'done' | 'planned' | 'overdue';
+
+/**
+ * A day's workouts in the panel's order (#238), shared with the Calendar's
+ * day summary (#241): a past day reads what happened first, then what was
+ * planned and missed; today and later read what is planned, then what is done.
+ * Done ones are by time, planned ones in sheet order.
+ */
+export function trainingOrder(day: readonly WorkoutWithRow[], state: DayPanelProps['state']): Array<{ w: WorkoutWithRow; kind: TrainingKind }> {
+  const planned = day.filter(isPlanned);
+  const done = byTime(day.filter((w) => !isPlanned(w)));
+  return state === 'past'
+    ? [...done.map((w) => ({ w, kind: 'done' as const })), ...planned.map((w) => ({ w, kind: 'overdue' as const }))]
+    : [...planned.map((w) => ({ w, kind: 'planned' as const })), ...done.map((w) => ({ w, kind: 'done' as const }))];
 }
 
 /** A workout row, a link to `href` when there is an id to open. */
@@ -100,8 +116,6 @@ function PlannedCard({ w, overdue }: { w: WorkoutWithRow; overdue: boolean }) {
 
 export function TrainingPanel({ date, state }: DayPanelProps) {
   const day = workouts.value.filter((w) => w.date === date);
-  const planned = day.filter(isPlanned);
-  const done = byTime(day.filter((w) => !isPlanned(w)));
   const planHref = `#/workout/new?plan=${date}`;
   const canPlan = state !== 'past';
 
@@ -114,12 +128,10 @@ export function TrainingPanel({ date, state }: DayPanelProps) {
     );
   }
 
-  // A past day reads what happened first; today and later read what is ahead.
-  const cards = state === 'past'
-    ? [...done.map((w) => <DoneCard key={w.id || `row${w.sheetRow}`} w={w} />),
-       ...planned.map((w) => <PlannedCard key={w.id || `row${w.sheetRow}`} w={w} overdue />)]
-    : [...planned.map((w) => <PlannedCard key={w.id || `row${w.sheetRow}`} w={w} overdue={false} />),
-       ...done.map((w) => <DoneCard key={w.id || `row${w.sheetRow}`} w={w} />)];
+  const cards = trainingOrder(day, state).map(({ w, kind }) => {
+    const key = w.id || `row${w.sheetRow}`;
+    return kind === 'done' ? <DoneCard key={key} w={w} /> : <PlannedCard key={key} w={w} overdue={kind === 'overdue'} />;
+  });
 
   return (
     <Panel title="Training" action={canPlan ? <a class="training-plan-link" href={planHref}>Plan</a> : undefined}>
