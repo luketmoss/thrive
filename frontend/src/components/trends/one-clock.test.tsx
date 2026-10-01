@@ -63,18 +63,19 @@ const lastTableRow = (c: Element) => [...c.querySelectorAll('tbody tr th')].pop(
 const firstTableRow = (c: Element) => c.querySelector('tbody tr th')!.textContent;
 
 describe.each([
-  // Denver is 2026-10-01 11:10 (MDT) in both.
-  ['device a day ahead (UTC+14)', 'Pacific/Kiritimati', '2026-10-01T17:10:00Z'],
-  ['device a day behind (UTC-11)', 'Pacific/Pago_Pago', '2026-10-02T03:10:00Z'],
-])('AC1/AC3: %s', (_name, tz, iso) => {
+  // Denver (MDT, UTC-6) is 2026-10-01 11:10 here; the device is on 10-02 (05:10).
+  ['device a day ahead (UTC+14)', 'Pacific/Kiritimati', '2026-10-01T17:10:00Z', 1],
+  // Denver is 2026-10-01 00:30; the device is on 09-30 (19:30).
+  ['device a day behind (UTC-11)', 'Pacific/Pago_Pago', '2026-10-01T06:30:00Z', -1],
+])('AC1/AC3: %s', (_name, tz, iso, offset) => {
   const DENVER_TODAY = todayInDenver(new Date(iso));
 
   it('really is a mismatch window', () => {
     pin(iso, tz);
-    // Guard the premise: if the runtime ignores a runtime TZ change, say so.
+    // The premise, asserted hard: if the runtime ignores a runtime TZ change
+    // (vitest's threads pool does), this fails loudly rather than passing empty.
     expect(DENVER_TODAY).toBe('2026-10-01');
-    if (localDate(new Date(iso)) === DENVER_TODAY) return; // TZ not switchable here
-    expect(localDate(new Date(iso))).not.toBe(DENVER_TODAY);
+    expect(localDate(new Date(iso))).toBe(addDays(DENVER_TODAY, offset));
   });
 
   it('ends the chart and the table on Denver\'s date', () => {
