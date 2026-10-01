@@ -3,11 +3,19 @@
 // Counts when it moves more than 60 px sideways, sideways travel exceeds 1.6×
 // vertical, and it takes under 900 ms. A mouse drag never counts. A swipe that
 // starts in a text field is left to it. Vertical scrolling is untouched: the
-// element carries `touch-action: pan-y`, so the browser cancels the pointer
-// when the user scrolls. The click that ends a counted swipe is swallowed, so
-// it does not also activate whatever it started on.
+// element carries `touch-action: pan-y pinch-zoom`, so the browser cancels the
+// pointer when the user scrolls, and a pinch still zooms (#272). The click that
+// ends a counted swipe is swallowed, so it does not also activate whatever it
+// started on.
+//
+// #272: a second finger down is a pinch, never half a swipe: it abandons the
+// gesture, and nothing is counted or swallowed when the fingers lift. While the
+// page is zoomed in (visualViewport.scale above 1) a one-finger drag is a pan,
+// so no swipe counts, and `data-zoomed` on the root switches the swipe surfaces
+// to `touch-action: manipulation` so the browser can pan them sideways. Where
+// visualViewport is missing the page is treated as not zoomed.
 
-import { useRef } from 'preact/hooks';
+import { useEffect, useRef } from 'preact/hooks';
 
 export const SWIPE_MIN_PX = 60;
 export const SWIPE_RATIO = 1.6;
@@ -20,6 +28,30 @@ interface Start {
   x: number;
   y: number;
   t: number;
+}
+
+/** Scale above this is zoomed in; the slack absorbs sub-pixel float scale. */
+const ZOOM_EPSILON = 1.01;
+
+/** Is the page pinch-zoomed in? False where visualViewport is missing. */
+export function isZoomed(): boolean {
+  const scale = window.visualViewport?.scale ?? 1;
+  return scale > ZOOM_EPSILON;
+}
+
+function syncZoomAttribute(): void {
+  const root = document.documentElement;
+  if (isZoomed()) root.setAttribute('data-zoomed', '');
+  else root.removeAttribute('data-zoomed');
+}
+
+/** Keep `data-zoomed` on the root in step with the visual viewport. Returns cleanup. */
+export function watchZoom(): () => void {
+  const vv = window.visualViewport;
+  syncZoomAttribute();
+  if (!vv) return () => {};
+  vv.addEventListener('resize', syncZoomAttribute);
+  return () => vv.removeEventListener('resize', syncZoomAttribute);
 }
 
 const TEXT_ENTRY = 'input, textarea, select, [contenteditable]:not([contenteditable="false"])';
@@ -63,9 +95,14 @@ export function useSwipe({ onSwipe, ignore }: SwipeOptions) {
   const handler = useRef(onSwipe);
   handler.current = onSwipe;
 
+  useEffect(() => watchZoom(), []);
+
   return {
     onPointerDown(e: PointerEvent) {
+      // Any pointer down first abandons the pending gesture: a second finger
+      // (a pinch) must never leave the first one's start behind.
       start.current = null;
+      if (isZoomed()) return;
       if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
       if (!e.isPrimary) return;
       if (startsInTextEntry(e.target)) return;
@@ -76,6 +113,7 @@ export function useSwipe({ onSwipe, ignore }: SwipeOptions) {
       const s = start.current;
       start.current = null;
       if (!s || s.id !== e.pointerId) return;
+      if (isZoomed()) return;
       const direction = swipeDirection(e.clientX - s.x, e.clientY - s.y, e.timeStamp - s.t);
       if (!direction) return;
       swallowNextClick();

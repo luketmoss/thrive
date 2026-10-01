@@ -49,8 +49,8 @@ describe('Day screen CSS (#237)', () => {
 
   it('pads the screen clear of the FAB and leaves vertical scrolling alone', () => {
     expect(rule('.day-screen')).toMatch(/padding-bottom:\s*calc\(56px/);
-    expect(rule('.day-screen')).toMatch(/touch-action:\s*pan-y/);
-    expect(rule('.week-strip')).toMatch(/touch-action:\s*pan-y/);
+    expect(rule('.day-screen')).toMatch(/touch-action:\s*pan-y pinch-zoom;/);
+    expect(rule('.week-strip')).toMatch(/touch-action:\s*pan-y pinch-zoom;/);
   });
 
   it('draws panels on the surface with the agreed title and note styles', () => {
@@ -96,5 +96,35 @@ describe('Day Note panel CSS (#240)', () => {
     expect(rule('.note-box')).toMatch(/overflow:\s*hidden/);
     expect(rule('.note-box::placeholder')).toMatch(/color:\s*var\(--color-text-secondary\)/);
     expect(rule('.note-box::placeholder')).not.toMatch(/color-text-muted/);
+  });
+});
+
+// #272 — pinch-zoom stays on, on every swipe and drag surface.
+describe('pinch-zoom (#272)', () => {
+  const all = raw.replace(/\/\*[\s\S]*?\*\//g, '');
+  const ruleIn = (selector: string): string => {
+    const esc = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const m = all.match(new RegExp(`(?:^|\\n)\\s*${esc}\\s*\\{([^}]*)\\}`));
+    if (!m) throw new Error(`no rule for ${selector}`);
+    return m[1];
+  };
+
+  it('AC1: all four surfaces declare pan-y pinch-zoom and none is a bare pan-y', () => {
+    for (const sel of ['.day-screen', '.week-strip', '.calendar-grid', '.trend-plot']) {
+      expect(ruleIn(sel)).toMatch(/touch-action:\s*pan-y pinch-zoom;/);
+    }
+    expect(all).not.toMatch(/touch-action:\s*pan-y\s*;/);
+  });
+
+  it('AC4: zoomed, the three swipe surfaces use touch-action: manipulation', () => {
+    const m = all.match(
+      /:root\[data-zoomed\] \.day-screen,\s*:root\[data-zoomed\] \.week-strip,\s*:root\[data-zoomed\] \.calendar-grid\s*\{([^}]*)\}/,
+    );
+    expect(m).not.toBeNull();
+    expect(m![1]).toMatch(/touch-action:\s*manipulation;/);
+  });
+
+  it('AC5: the chart is not overridden when zoomed', () => {
+    expect(all).not.toMatch(/data-zoomed[^{]*trend-plot/);
   });
 });
