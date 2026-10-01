@@ -10,10 +10,10 @@ const group = (id: string) => TREND_GROUPS.find((g) => g.id === id)!;
 beforeEach(() => { dailyHealth.value = { state: 'idle' }; });
 
 describe('registry', () => {
-  it('has Recovery, Sleep, Fitness in order', () => {
-    expect(TREND_GROUPS.map((g) => g.id)).toEqual(['recovery', 'sleep', 'fitness', 'body', 'blood_pressure', 'activity']);
-    expect(TREND_GROUPS.map((g) => g.label)).toEqual(['Recovery', 'Sleep', 'Fitness', 'Body', 'Blood Pressure', 'Activity']);
-    expect(TREND_GROUPS.every((g) => g.metrics.length >= 1 && g.metrics.length <= 4)).toBe(true);
+  it('has the six groups in order, then Custom', () => {
+    expect(TREND_GROUPS.map((g) => g.id)).toEqual(['recovery', 'sleep', 'fitness', 'body', 'blood_pressure', 'activity', 'custom']);
+    expect(TREND_GROUPS.map((g) => g.label)).toEqual(['Recovery', 'Sleep', 'Fitness', 'Body', 'Blood Pressure', 'Activity', 'Custom']);
+    expect(TREND_GROUPS.filter((g) => g.id !== 'custom').every((g) => g.metrics.length >= 1 && g.metrics.length <= 4)).toBe(true);
   });
   it('Recovery: resting HR then HRV, both banded', () => {
     expect(group('recovery').metrics.map((m) => [m.id, m.unit, m.band])).toEqual([

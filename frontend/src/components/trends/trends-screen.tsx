@@ -9,13 +9,14 @@ import { signal } from '@preact/signals';
 import { useAuth } from '../../auth/auth-context';
 import { loadHealth } from '../../state/actions';
 import { dailyHealth, bodyMeasurements, dailySummary } from '../../state/store';
-import { TREND_GROUPS, type TrendGroup, type TrendMetric } from './metrics';
+import { TREND_GROUPS, CUSTOM_GROUP_ID, customGroup, type TrendGroup, type TrendMetric } from './metrics';
 import {
   RANGES, AVERAGES, VIEWS, type RangeKey, type AverageKey, type ViewKey,
   averageDays, earliestDate, localToday, metricSeries, rangeBounds, datesBetween,
 } from './series';
 import { announceText } from './readout';
-import { RANGE_PREF, AVERAGE_PREF, VIEW_PREF, GROUP_PREF, readPref, writePref, type Pref } from './prefs';
+import { RANGE_PREF, AVERAGE_PREF, VIEW_PREF, GROUP_PREF, readPref, writePref, readCustom, writeCustom, type Pref } from './prefs';
+import { CustomMetricsPicker } from './custom-metrics-picker';
 import { GroupSwitcher } from './group-switcher';
 import { TrendCharts } from './trend-chart';
 import { TrendTable } from './trend-table';
@@ -109,6 +110,9 @@ export function TrendsScreen() {
   const [average, setAverage] = usePref<AverageKey>(AVERAGE_PREF);
   const [view, setView] = usePref<ViewKey>(VIEW_PREF);
   const [groupId, setGroupId] = usePref<string>(GROUP_PREF);
+  const [custom, setCustomIds] = useState<string[]>(readCustom);
+  const [picking, setPicking] = useState(false);
+  const editButton = useRef<HTMLButtonElement>(null);
   const charts = useRef<HTMLDivElement>(null);
   // Set by a pointer press so the focus it causes is not mistaken for Tab arrival.
   // On touch the browser moves focus after pointerup, so it is cleared by the
@@ -143,9 +147,21 @@ export function TrendsScreen() {
     if (idle) void loadHealth(token);
   }, [token]);
 
-  const group: TrendGroup = TREND_GROUPS.find((g) => g.id === groupId) ?? TREND_GROUPS[0];
+  const picked: TrendGroup = TREND_GROUPS.find((g) => g.id === groupId) ?? TREND_GROUPS[0];
+  const isCustom = picked.id === CUSTOM_GROUP_ID;
+  const group: TrendGroup = isCustom ? customGroup(custom) : picked;
+  const setCustom = (ids: string[]) => {
+    clearSelection();
+    setCustomIds(ids);
+    writeCustom(ids);
+  };
+  const closePicker = () => {
+    setPicking(false);
+    editButton.current?.focus();
+  };
   // Only the tabs this group reads count: a Body group is neither held up by
-  // DailyHealth nor spared by a BodyMeasurements failure.
+  // DailyHealth nor spared by a BodyMeasurements failure. A custom set reads
+  // exactly the union of its metrics' tabs, and none when nothing is picked.
   const sources = [...new Set(group.metrics.map((m) => m.source ?? 'dailyHealth'))];
   const tabs = { dailyHealth, bodyMeasurements, dailySummary };
   const states = sources.map((s) => tabs[s].value.state);
@@ -164,6 +180,8 @@ export function TrendsScreen() {
     );
   } else if (states.some((s) => s !== 'loaded')) {
     content = <p class="trends-loading" role="status">Loading…</p>;
+  } else if (isCustom && group.metrics.length === 0) {
+    content = <p class="trends-custom-empty">Pick up to 4 metrics to see them here.</p>;
   } else {
     const pointSets = group.metrics.map((m) => m.points());
     const { from, to } = rangeBounds(range, today, earliestDate(pointSets));
@@ -246,8 +264,16 @@ export function TrendsScreen() {
           <Segmented label="Average" id="average" options={AVERAGES} value={average} onChange={setAverage} />
           <Segmented label="View" id="view" options={VIEWS} value={view} onChange={clearing(setView)} />
         </div>
+        {isCustom && (
+          <div class="trends-custom-head">
+            <button type="button" class="btn btn-secondary trends-custom-edit" ref={editButton} onClick={() => setPicking(true)}>
+              Edit metrics
+            </button>
+          </div>
+        )}
         {content}
         <p class="sr-only" role="status" id="trends-announce">{announcement.value}</p>
+        {picking && <CustomMetricsPicker selected={custom} onChange={setCustom} onClose={closePicker} />}
       </div>
     </div>
   );

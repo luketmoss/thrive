@@ -197,7 +197,7 @@ describe('#243 AC4: switcher in the screen', () => {
     const { container } = renderScreen();
     const region = container.querySelector('[role="region"][aria-label="Metric group"]')!;
     expect(region.compareDocumentPosition(container.querySelector('.trends-controls')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect([...region.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Recovery', 'Sleep', 'Fitness', 'Body', 'Blood Pressure', 'Activity']);
+    expect([...region.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Recovery', 'Sleep', 'Fitness', 'Body', 'Blood Pressure', 'Activity', 'Custom']);
     expect(container.querySelectorAll('.trend-card')).toHaveLength(2);
   });
 

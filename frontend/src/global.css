@@ -4242,3 +4242,84 @@ a.training-card {
   outline: 2px solid var(--color-text);
   outline-offset: 2px;
 }
+
+/* ===== Trends: custom set (#246) ===== */
+.trends-custom-head {
+  display: flex;
+  margin-bottom: var(--space-sm);
+}
+
+.trends-custom-edit {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.trends-custom-empty {
+  margin: var(--space-md) 0;
+  color: var(--color-text-secondary);
+}
+
+/* The picker's list scrolls on its own; Done stays in view and nothing scrolls sideways. */
+.trends-picker {
+  display: flex;
+  flex-direction: column;
+  overflow-y: hidden;
+  min-height: 0;
+}
+
+.trends-picker-title {
+  margin: 0 0 var(--space-xs);
+}
+
+.trends-picker-hint {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.trends-picker-status {
+  margin: var(--space-xs) 0;
+  min-height: 1lh;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.trends-picker-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.trends-picker-heading {
+  margin: var(--space-md) 0 var(--space-xs);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.trends-picker-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.trends-picker-row input {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+}
+
+.trends-picker-row.is-blocked {
+  color: var(--color-text-secondary);
+  cursor: not-allowed;
+}
+
+.trends-picker-done {
+  flex: none;
+  min-height: 44px;
+  margin-top: var(--space-md);
+}
