@@ -40,7 +40,11 @@ export function ActivitiesFilters() {
             key={value}
             class={`filter-chip badge-${value}${activeType === value ? ' active' : ''}`}
             onClick={() => toggleType(value)}
+            aria-pressed={activeType === value}
           >
+            {activeType === value && (
+              <span class="chip-check" aria-hidden="true">✓</span>
+            )}
             {label}
           </button>
         ))}

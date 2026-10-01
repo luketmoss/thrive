@@ -110,6 +110,20 @@
   --cal-shade-3: #aecdee;
   --cal-shade-4: #97bee8;
   --cal-on-shade: #1f1f1f;
+  /* --- #183 control contrast --- */
+  /* Fills for controls that carry text. --color-on-fill is the text on every
+     one of them (4.5:1 minimum; ratios on the fill: 4.63 / 5.91 / 4.98 / 6.57 /
+     5.13). --color-primary stays the brand orange for accents and rings. */
+  --color-on-fill: #ffffff;
+  --color-primary-fill: #D4400A;
+  --color-primary-fill-hover: #B83508;
+  --color-danger-fill: #d32f2f;
+  --color-danger-fill-hover: #b71c1c;
+  --color-success-fill: #2e7d32;
+  /* Outline of a text field and of an unselected chip: 3:1 (1.4.11) on the
+     page 3.41, card 3.83. --color-border stays for dividers and card edges. */
+  --color-border-strong: #7d838a;
+  /* --- end #183 --- */
 }
 
 /* ===== Dark Theme ===== */
@@ -161,6 +175,18 @@
   --cal-shade-3: #24415d;
   --cal-shade-4: #294c6d;
   --cal-on-shade: #e8eaed;
+  /* --- #183 control contrast --- */
+  /* Dark keeps the bright fills and draws near-black text on them: on-fill on
+     fill 6.61 / 9.04 / 5.37 / 6.31 / 7.92. */
+  --color-on-fill: #121212;
+  --color-primary-fill: #FF6B35;
+  --color-primary-fill-hover: #FF9A76;
+  --color-danger-fill: #ef5350;
+  --color-danger-fill-hover: #f26b68;
+  --color-success-fill: #66bb6a;
+  /* 3.48 on the raised field, 3.95 card, 4.27 page. */
+  --color-border-strong: #74797f;
+  /* --- end #183 --- */
 }
 
 /* ===== Base Styles ===== */
@@ -272,8 +298,8 @@ input, select, textarea {
   justify-content: center;
   gap: var(--space-sm);
   padding: 12px 24px;
-  background: var(--color-primary);
-  color: #fff;
+  background: var(--color-primary-fill);
+  color: var(--color-on-fill);
   border-radius: var(--radius-md);
   font-weight: 600;
   font-size: var(--text-base);
@@ -282,7 +308,7 @@ input, select, textarea {
 }
 
 .login-btn:hover {
-  background: var(--color-primary-hover);
+  background: var(--color-primary-fill-hover);
 }
 
 /* ===== Bottom Nav ===== */
@@ -341,8 +367,8 @@ input, select, textarea {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: var(--color-primary);
-  color: #fff;
+  background: var(--color-primary-fill);
+  color: var(--color-on-fill);
   font-size: 1.75rem;
   font-weight: 300;
   display: flex;
@@ -354,7 +380,7 @@ input, select, textarea {
 }
 
 .fab:hover {
-  background: var(--color-primary-hover);
+  background: var(--color-primary-fill-hover);
   transform: scale(1.05);
 }
 
@@ -391,13 +417,13 @@ input, select, textarea {
 }
 
 .toast-error {
-  background: var(--color-danger);
-  color: #fff;
+  background: var(--color-danger-fill);
+  color: var(--color-on-fill);
 }
 
 .toast-success {
-  background: var(--color-success);
-  color: #fff;
+  background: var(--color-success-fill);
+  color: var(--color-on-fill);
 }
 
 @keyframes toast-in {
@@ -933,7 +959,7 @@ input, select, textarea {
   width: 100%;
   padding: 12px var(--space-md);
   background: var(--color-surface-raised);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-md);
   font-size: var(--text-base);
   color: var(--color-text);
@@ -964,7 +990,7 @@ input, select, textarea {
 .form-select:focus,
 .form-textarea:focus {
   outline: none;
-  border-color: var(--color-primary);
+  border-color: var(--color-primary-fill);
   box-shadow: 0 0 0 3px var(--color-primary-focus-ring);
 }
 
@@ -996,12 +1022,12 @@ input, select, textarea {
 }
 
 .btn-primary {
-  background: var(--color-primary);
-  color: #fff;
+  background: var(--color-primary-fill);
+  color: var(--color-on-fill);
 }
 
 .btn-primary:hover {
-  background: var(--color-primary-hover);
+  background: var(--color-primary-fill-hover);
 }
 
 .btn-secondary {
@@ -1011,12 +1037,12 @@ input, select, textarea {
 }
 
 .btn-danger {
-  background: var(--color-danger);
-  color: #fff;
+  background: var(--color-danger-fill);
+  color: var(--color-on-fill);
 }
 
 .btn-danger:hover {
-  background: var(--color-danger-hover);
+  background: var(--color-danger-fill-hover);
 }
 
 /* ===== Tag Badge (Pill) ===== */
@@ -1076,89 +1102,15 @@ input, select, textarea {
 }
 
 .settings-btn.danger {
-  background: var(--color-danger);
-  color: #fff;
+  background: var(--color-danger-fill);
+  color: var(--color-on-fill);
 }
 
 .settings-btn.danger:hover {
-  background: var(--color-danger-hover);
+  background: var(--color-danger-fill-hover);
 }
 
 /* ===== Exercise Library ===== */
-
-.tag-input-wrapper {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-xs);
-  padding: var(--space-sm);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-raised);
-  min-height: 48px;
-  align-items: center;
-  cursor: text;
-}
-
-.tag-input-wrapper:focus-within {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px var(--color-primary-focus-ring);
-}
-
-.tag-input-field {
-  border: none;
-  outline: none;
-  background: transparent;
-  flex: 1;
-  min-width: 80px;
-  font-size: var(--text-base);
-  font-family: var(--font-sans);
-  color: var(--color-text);
-  padding: var(--space-xs) 0;
-}
-
-.tag-badge-removable {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.tag-badge-remove {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border: none;
-  background: none;
-  color: inherit;
-  opacity: 0.6;
-  cursor: pointer;
-  font-size: var(--text-xs);
-  padding: 0;
-  border-radius: var(--radius-full);
-}
-
-.tag-badge-remove:hover {
-  opacity: 1;
-  background: rgba(0, 0, 0, 0.1);
-}
-
-.tag-suggestions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-xs);
-  margin-top: var(--space-xs);
-}
-
-.tag-suggestion {
-  cursor: pointer;
-  opacity: 0.55;
-  transition: opacity var(--transition-fast);
-}
-
-.tag-suggestion:hover {
-  opacity: 1;
-}
 
 .modal-header {
   display: flex;
@@ -1212,8 +1164,8 @@ input, select, textarea {
 }
 
 .tag-badge.active {
-  background: var(--color-primary);
-  color: #fff;
+  background: var(--color-primary-fill);
+  color: var(--color-on-fill);
 }
 
 .exercise-list {
@@ -1462,8 +1414,8 @@ input, select, textarea {
 }
 
 .template-exercise-row-remove:hover {
-  background: var(--color-danger);
-  color: #fff;
+  background: var(--color-danger-fill);
+  color: var(--color-on-fill);
 }
 
 .template-exercise-config {
@@ -1581,8 +1533,8 @@ input, select, textarea {
 }
 
 .compact-card-remove:hover {
-  background: var(--color-danger);
-  color: #fff;
+  background: var(--color-danger-fill);
+  color: var(--color-on-fill);
 }
 
 /* ===== Workout Type Selector ===== */
@@ -1981,8 +1933,8 @@ input, select, textarea {
 }
 
 .set-remove-btn:hover {
-  background: var(--color-danger);
-  color: #fff;
+  background: var(--color-danger-fill);
+  color: var(--color-on-fill);
 }
 
 /* ===== Simple Workout Form ===== */
@@ -2045,6 +1997,7 @@ input, select, textarea {
 .filter-chip {
   display: inline-flex;
   align-items: center;
+  min-height: 44px;
   padding: 4px 12px;
   border-radius: var(--radius-full);
   font-size: var(--text-xs);
@@ -2052,17 +2005,29 @@ input, select, textarea {
   text-transform: uppercase;
   cursor: pointer;
   border: 1px solid transparent;
-  opacity: 0.5;
-  transition: opacity var(--transition-fast), border-color var(--transition-fast);
+  transition: border-color var(--transition-fast);
 }
 
-.filter-chip:hover {
-  opacity: 0.8;
+/* Unselected (#183): full strength, in the type's own hue on the card, with a
+   3:1 outline. :not(.active) because this sits after the .badge-* rules, and a
+   plain background here would also wipe the selected tint. */
+.filter-chip:not(.active) {
+  background: var(--color-surface);
+  border-color: var(--color-border-strong);
+}
+
+.filter-chip:not(.active):hover {
+  border-color: var(--color-text-muted);
 }
 
 .filter-chip.active {
-  opacity: 1;
   border-color: currentColor;
+}
+
+/* The selected cue that does not rest on the tint (#183). */
+.chip-check {
+  margin-right: var(--space-xs);
+  font-weight: 700;
 }
 
 .filter-clear {
@@ -2540,8 +2505,8 @@ input, select, textarea {
 }
 
 .copy-down-btn:hover {
-  background: var(--color-primary);
-  color: var(--color-bg);
+  background: var(--color-primary-fill);
+  color: var(--color-on-fill);
 }
 
 .last-time-close-btn {
@@ -2738,8 +2703,8 @@ input, select, textarea {
   font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
-  border: 2px solid var(--color-border);
-  background: transparent;
+  border: 2px solid var(--color-border-strong);
+  background: var(--color-surface);
   color: var(--color-text-secondary);
   transition: all var(--transition-fast);
 }
@@ -2748,20 +2713,18 @@ input, select, textarea {
   border-color: var(--color-text-muted);
 }
 
+/* Unselected: the label's own hue as text, full strength, on the card, with
+   the strong outline (#183). Selected restores the tint below. */
 .label-chip.tag-badge-colored {
-  border-color: var(--label-text, var(--color-border));
-  background: transparent;
+  background: var(--color-surface);
   color: var(--label-text, var(--color-text-secondary));
-  opacity: 0.55;
 }
 
 [data-theme="dark"] .label-chip.tag-badge-colored {
-  border-color: var(--label-text-dark, var(--color-border));
   color: var(--label-text-dark, var(--color-text-secondary));
 }
 
 .label-chip-active {
-  opacity: 1 !important;
   border-color: transparent;
 }
 
@@ -2780,12 +2743,6 @@ input, select, textarea {
 .label-chip-create {
   border-style: dashed;
   color: var(--color-primary-text);
-  border-color: var(--color-primary);
-  opacity: 0.6;
-}
-
-.label-chip-create:hover {
-  opacity: 1;
 }
 
 .label-create-inline {
@@ -2887,8 +2844,8 @@ input, select, textarea {
 }
 
 .manage-label-delete:hover {
-  background: var(--color-danger);
-  color: #fff;
+  background: var(--color-danger-fill);
+  color: var(--color-on-fill);
 }
 
 .manage-label-create-form {
@@ -3077,8 +3034,8 @@ input, select, textarea {
 }
 
 .exercise-toolbar-remove:hover:not(:disabled) {
-  background: var(--color-danger);
-  color: #fff;
+  background: var(--color-danger-fill);
+  color: var(--color-on-fill);
 }
 
 /* Screen-reader only utility */
