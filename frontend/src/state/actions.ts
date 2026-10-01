@@ -54,6 +54,7 @@ export function parseSetCount(setsStr: string): number {
 export async function loadInitialData(token: string): Promise<void> {
   loading.value = true;
   workoutsRefresh.markStarted(); // the initial read counts toward the 60 s guard (#249)
+  libraryRefresh.markStarted(); // ...and toward the library loader's own clock (#252)
   try {
     const [exerciseData, labelData, templateRowData, workoutData, setData] = await Promise.all([
       fetchExercises(token),
@@ -119,6 +120,48 @@ export async function refreshWorkouts(token: string): Promise<void> {
 
 /** The shared throttle for the Workouts refresh; `loadInitialData` stamps it. */
 export const workoutsRefresh = throttled(refreshWorkouts);
+
+// ── Background refresh of Exercises, Templates and Labels (#252) ─────
+
+/**
+ * Re-read Exercises, Templates and Labels with no spinner and swap them in
+ * together, so a template never points at an exercise the store lacks. All or
+ * nothing: a failure leaves all three untouched. If any was replaced locally
+ * while the read was in flight, the result is discarded whole. The label
+ * bootstrap stays a `loadInitialData`-only migration. The edit-route /
+ * offline-queue guard lives in app.tsx.
+ */
+export async function refreshLibraryData(token: string): Promise<void> {
+  if (isDemo() || loading.value) return;
+  const startExercises = exercises.value;
+  const startTemplates = templates.value;
+  const startLabels = labels.value;
+  try {
+    const [exerciseData, templateRows, labelData] = await Promise.all([
+      fetchExercises(token),
+      fetchTemplateRows(token),
+      fetchLabels(token),
+    ]);
+    if (
+      exercises.value !== startExercises ||
+      templates.value !== startTemplates ||
+      labels.value !== startLabels
+    ) {
+      return;
+    }
+    batch(() => {
+      exercises.value = exerciseData;
+      templates.value = groupTemplateRows(templateRows);
+      labels.value = labelData;
+    });
+  } catch (err) {
+    if (isReauthFailure(err)) return; // auth-provider handles this
+    console.warn('Background refresh of exercises, templates and labels failed:', err);
+  }
+}
+
+/** The library loader's own throttle (independent of Workouts'); `loadInitialData` stamps it. */
+export const libraryRefresh = throttled(refreshLibraryData);
 
 /** One-time migration: create label rows for all unique tags found in exercises. */
 async function bootstrapLabels(
