@@ -319,3 +319,22 @@ export function metricSeries(
     band: metric.band ? yourRange(all, today) : null,
   };
 }
+
+// ── Pointer to day ───────────────────────────────────────────────────
+
+/**
+ * The index of the day whose slot holds `x`: the inverse of the chart's x
+ * scale (`padLeft + (i + 0.5) * plotW / count`). Nearest day, clamped to the
+ * first and last, so a pointer in either margin still selects an end. #247.
+ */
+export function dayIndexAtX(x: number, count: number, padLeft: number, plotW: number): number {
+  if (count <= 0 || !Number.isFinite(x)) return 0;
+  const slot = plotW / count;
+  const i = Math.round((x - padLeft) / slot - 0.5);
+  return Math.min(count - 1, Math.max(0, i));
+}
+
+/** The date `dayIndexAtX` lands on, from the range's dates. */
+export function dayAtX(dates: readonly string[], x: number, padLeft: number, plotW: number): string {
+  return dates[dayIndexAtX(x, dates.length, padLeft, plotW)];
+}

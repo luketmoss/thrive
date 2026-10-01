@@ -4,15 +4,17 @@
 // Loads the health tabs once on entry if nothing has loaded them; every
 // control then redraws from the rows already in memory, with no sheet read.
 
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { signal } from '@preact/signals';
 import { useAuth } from '../../auth/auth-context';
 import { loadHealth } from '../../state/actions';
 import { dailyHealth, bodyMeasurements, dailySummary } from '../../state/store';
 import { TREND_GROUPS, type TrendGroup, type TrendMetric } from './metrics';
 import {
   RANGES, AVERAGES, VIEWS, type RangeKey, type AverageKey, type ViewKey,
-  averageDays, earliestDate, localToday, metricSeries, rangeBounds,
+  averageDays, earliestDate, localToday, metricSeries, rangeBounds, datesBetween,
 } from './series';
+import { announceText } from './readout';
 import { RANGE_PREF, AVERAGE_PREF, VIEW_PREF, GROUP_PREF, readPref, writePref, type Pref } from './prefs';
 import { GroupSwitcher } from './group-switcher';
 import { TrendCharts } from './trend-chart';
@@ -48,6 +50,23 @@ function Segmented<T extends string>({ label, id, options, value, onChange, tigh
       </div>
     </div>
   );
+}
+
+/**
+ * The day the charts have selected (#247), or null. Module-level, owned by this
+ * screen and passed down to each card. Never stored: not in localStorage, not
+ * in the URL. It lasts as long as the view it was made in (AC5).
+ */
+export const selectedDay = signal<string | null>(null);
+/** What the screen-reader status region says. Written by the keyboard only. */
+export const announcement = signal('');
+
+const HINT_ID = 'trends-charts-hint';
+const HINT = 'Left and right arrows read one day at a time. The table view lists every day.';
+
+function clearSelection() {
+  selectedDay.value = null;
+  announcement.value = '';
 }
 
 /** A control's state, read from and written to its remembered pref. */
@@ -90,6 +109,33 @@ export function TrendsScreen() {
   const [average, setAverage] = usePref<AverageKey>(AVERAGE_PREF);
   const [view, setView] = usePref<ViewKey>(VIEW_PREF);
   const [groupId, setGroupId] = usePref<string>(GROUP_PREF);
+  const charts = useRef<HTMLDivElement>(null);
+  // Set by a pointer press so the focus it causes is not mistaken for Tab arrival.
+  // On touch the browser moves focus after pointerup, so it is cleared by the
+  // focus itself, a click, a cancel, or any key press (Tab arrives after a keydown).
+  const pointerFocus = useRef(false);
+
+  // A selection lives only as long as the view it was made in: leaving the
+  // screen clears it, and so does a tap or click outside the charts.
+  useEffect(() => {
+    clearSelection();
+    const anyKey = () => { pointerFocus.current = false; };
+    document.addEventListener('keydown', anyKey, true);
+    const outside = (e: Event) => {
+      if (selectedDay.value !== null && !charts.current?.contains(e.target as Node)) clearSelection();
+    };
+    document.addEventListener('pointerdown', outside);
+    return () => {
+      document.removeEventListener('pointerdown', outside);
+      document.removeEventListener('keydown', anyKey, true);
+      clearSelection();
+    };
+  }, []);
+  // A control that changes what the days are clears the day. Average does not.
+  const clearing = <T,>(set: (v: T) => void) => (v: T) => {
+    clearSelection();
+    set(v);
+  };
 
   useEffect(() => {
     if (!token) return;
@@ -124,13 +170,65 @@ export function TrendsScreen() {
     // The band clause stays only while some card actually draws a band.
     const hasBand = groupHasBand(group.metrics, pointSets, from, to, avgDays, today);
     const nothingEver = pointSets.every((p) => p.length === 0);
+    const dates = datesBetween(from, to);
+    // Keyboard moves select and announce; pointer moves only select (AC4).
+    const moveTo = (date: string) => {
+      selectedDay.value = date;
+      announcement.value = announceText(
+        date, today,
+        group.metrics.flatMap((metric) => {
+          const series = metricSeries(metric, from, to, avgDays, today);
+          return series.points.length ? [{ metric, series }] : [];
+        }),
+        avgDays,
+      );
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
+      const at = selectedDay.value === null ? -1 : dates.indexOf(selectedDay.value);
+      let next: number;
+      if (e.key === 'ArrowLeft') next = at < 0 ? dates.length - 1 : Math.max(0, at - 1);
+      else if (e.key === 'ArrowRight') next = at < 0 ? dates.length - 1 : Math.min(dates.length - 1, at + 1);
+      else if (e.key === 'Home') next = 0;
+      else if (e.key === 'End') next = dates.length - 1;
+      else if (e.key === 'Escape') {
+        e.preventDefault();
+        clearSelection();
+        return;
+      } else return;
+      e.preventDefault();
+      moveTo(dates[next]);
+    };
     content = (
       <>
         <p class="trends-caption">{captionText(avgDays, hasBand)}</p>
         {view === 'Table' && !nothingEver ? (
           <TrendTable group={group} from={from} to={to} range={range} avgDays={avgDays} today={today} />
         ) : (
-          <TrendCharts group={group} from={from} to={to} range={range} avgDays={avgDays} today={today} />
+          <div
+            class="trend-charts"
+            ref={charts}
+            tabIndex={0}
+            role="group"
+            aria-label={`${group.label} charts`}
+            aria-describedby={HINT_ID}
+            onPointerDown={() => { pointerFocus.current = true; }}
+            onClick={() => { pointerFocus.current = false; }}
+            onPointerCancel={() => { pointerFocus.current = false; }}
+            onPointerLeave={(e) => { if (e.pointerType === 'mouse') clearSelection(); }}
+            onFocus={() => {
+              // Arriving by Tab selects today and says so; a press does not.
+              const press = pointerFocus.current;
+              pointerFocus.current = false;
+              if (!press && selectedDay.value === null) moveTo(to);
+            }}
+            onBlur={clearSelection}
+            onKeyDown={onKeyDown}
+          >
+            <p class="sr-only" id={HINT_ID}>{HINT}</p>
+            <TrendCharts group={group} from={from} to={to} range={range} avgDays={avgDays} today={today}
+              selectedDate={selectedDay.value} onSelect={(d) => { selectedDay.value = d; }} />
+          </div>
         )}
       </>
     );
@@ -142,13 +240,14 @@ export function TrendsScreen() {
         <h1>Trends</h1>
       </header>
       <div class="screen-body">
-        <GroupSwitcher groups={TREND_GROUPS} value={group.id} onChange={setGroupId} />
+        <GroupSwitcher groups={TREND_GROUPS} value={group.id} onChange={clearing(setGroupId)} />
         <div class="trends-controls">
-          <Segmented label="Range" id="range" options={RANGES} value={range} onChange={setRange} tight />
+          <Segmented label="Range" id="range" options={RANGES} value={range} onChange={clearing(setRange)} tight />
           <Segmented label="Average" id="average" options={AVERAGES} value={average} onChange={setAverage} />
-          <Segmented label="View" id="view" options={VIEWS} value={view} onChange={setView} />
+          <Segmented label="View" id="view" options={VIEWS} value={view} onChange={clearing(setView)} />
         </div>
         {content}
+        <p class="sr-only" role="status" id="trends-announce">{announcement.value}</p>
       </div>
     </div>
   );

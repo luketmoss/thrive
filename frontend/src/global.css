@@ -3349,6 +3349,8 @@ input, select, textarea {
 
 .trend-plot {
   display: block;
+  /* A vertical swipe on a chart scrolls the page; a sideways drag selects a day (#247). */
+  touch-action: pan-y;
   width: 100%;
   height: auto;
   overflow: visible;
@@ -4200,4 +4202,43 @@ a.training-card {
   color: var(--color-primary-on-light);
   font-weight: 700;
   box-shadow: inset 0 0 0 1px currentColor;
+}
+
+/* ===== Trends: day readout (#247) ===== */
+/* Summary and readout share one grid cell, so a selection changes the text and
+   never the card's height. The summary stays in the layout, only hidden, so
+   the chart's aria-describedby still resolves. */
+.trend-readout-cell {
+  display: grid;
+  /* Two lines, the readout's height (date, then value), so a one-line summary
+     does not make the card grow when a day is selected. */
+  font-size: var(--text-sm);
+  min-height: 2lh;
+}
+
+.trend-readout-cell > .trend-summary,
+.trend-readout-cell > .trend-readout {
+  grid-area: 1 / 1;
+  min-width: 0;
+}
+
+.trend-readout-cell.has-readout > .trend-summary {
+  visibility: hidden;
+}
+
+.trend-readout {
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+}
+
+.trend-readout-date {
+  color: var(--color-text);
+}
+
+/* Not .workout-card:focus-visible: its --color-primary ring is 2.53:1 on the
+   light background (WCAG 1.4.11). --color-text is 14.70:1 light, 15.54:1 dark. */
+.trend-charts:focus-visible {
+  outline: 2px solid var(--color-text);
+  outline-offset: 2px;
 }

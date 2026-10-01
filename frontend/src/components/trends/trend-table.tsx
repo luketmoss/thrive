@@ -10,6 +10,7 @@
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import type { TrendGroup } from './metrics';
 import { RANGE_PHRASE, type RangeKey, metricSeries, rowDate } from './series';
+import { dayCells, pointsByDate } from './readout';
 import { rangeText } from './trend-chart';
 
 interface Props {
@@ -20,8 +21,6 @@ interface Props {
   avgDays: number;
   today: string;
 }
-
-const BLANK = '—';
 
 /** "Last 3 months" from "last 3 months". */
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -43,7 +42,7 @@ export function TrendTable({ group, from, to, range, avgDays, today }: Props) {
 
   const columns = group.metrics.map((metric) => {
     const series = metricSeries(metric, from, to, avgDays, today);
-    const byDate = new Map(series.points.map((p) => [p.date, p]));
+    const byDate = pointsByDate(series);
     return { metric, series, byDate };
   });
   const dates = columns[0]?.series.dates ?? [];
@@ -82,14 +81,13 @@ export function TrendTable({ group, from, to, range, avgDays, today }: Props) {
             <tr key={date}>
               <th scope="row">{rowDate(date, today)}</th>
               {columns.map(({ metric, series, byDate }) => {
-                const p = byDate.get(date);
-                const avg = series.average.get(date);
+                const c = dayCells(metric, series, byDate, date, avgDays);
                 return [
                   <td key={metric.id}>
-                    {p ? metric.format(p.value) : BLANK}
-                    {p?.partial && <span class="trend-partial"> {p.partial}</span>}
+                    {c.value}
+                    {c.partial && <span class="trend-partial"> {c.partial}</span>}
                   </td>,
-                  avgDays > 0 && <td key={`${metric.id}-avg`}>{avg !== undefined ? metric.format(avg) : BLANK}</td>,
+                  avgDays > 0 && <td key={`${metric.id}-avg`}>{c.average}</td>,
                 ];
               })}
             </tr>
