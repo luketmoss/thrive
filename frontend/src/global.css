@@ -4374,8 +4374,10 @@ a.training-card {
 
 /* ── Route focus (#256) ──────────────────────────────────────────────
    A route change focuses the new screen's heading, or main when it has none.
-   Neither is a control, so neither shows a ring. Restored controls keep theirs. */
+   Neither is a control, so neither shows a ring. Only headings route-focus.ts
+   marked: one a screen focuses itself (a Day panel title, #276) keeps its ring,
+   as do restored controls. */
 .app-content:focus,
-.app-content :is(h1, h2, [data-screen-heading])[tabindex="-1"]:focus {
+[data-route-focus]:focus {
   outline: none;
 }

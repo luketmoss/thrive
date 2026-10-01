@@ -4,6 +4,8 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { render, cleanup, waitFor } from '@testing-library/preact';
 import { h, type ComponentChildren } from 'preact';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { keyOf, findByKey, headingOf, remember, remembered } from './route-focus';
 
 type Router = typeof import('./router');
@@ -340,5 +342,36 @@ describe('AC4: failure modes land on the heading', () => {
     await go(router, () => router.navigate('/history/w1'), 'workout-detail');
     await go(router, () => router.goBack(), 'activities');
     expect(active().textContent).toBe('Activities');
+  });
+});
+
+// Review of #300: the no-ring rule must not reach a heading a screen focuses
+// itself — a Day panel title after Try again keeps its ring (#276).
+describe('no focus ring only on route-focused headings', () => {
+  it('marks the heading it focuses, and unmarks it on blur', async () => {
+    const { router } = await boot('#/activities');
+    await go(router, () => router.navigate('/settings'), 'settings');
+    const heading = active();
+    expect(heading.hasAttribute('data-route-focus')).toBe(true);
+    document.getElementById('tab')!.focus();
+    expect(heading.hasAttribute('data-route-focus')).toBe(false);
+  });
+
+  it("global.css's #256 rule matches main and a marked heading, never a Day panel title", async () => {
+    const css = readFileSync(resolve(__dirname, '../global.css'), 'utf-8').replace(/\r\n/g, '\n');
+    const block = css.slice(css.indexOf('Route focus (#256)'));
+    const selectors = block.slice(block.indexOf('*/') + 2, block.indexOf('{')).split(',').map((s) => s.trim().replace(/:focus$/, ''));
+    expect(selectors).toEqual(['.app-content', '[data-route-focus]']);
+    document.body.innerHTML = `
+      <main class="app-content"><div class="day-screen">
+        <h1 class="day-title" tabindex="-1">Day</h1>
+        <h2 class="day-panel-title" tabindex="-1">Training</h2>
+        <h1 id="marked" tabindex="-1" data-route-focus>Trends</h1>
+      </div></main>`;
+    const hits = (el: Element) => selectors.some((s) => el.matches(s));
+    expect(hits(document.querySelector('main')!)).toBe(true);
+    expect(hits(document.getElementById('marked')!)).toBe(true);
+    expect(hits(document.querySelector('.day-panel-title')!)).toBe(false);
+    expect(hits(document.querySelector('.day-title')!)).toBe(false);
   });
 });

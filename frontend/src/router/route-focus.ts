@@ -107,6 +107,9 @@ interface Pending {
 
 let pending: Pending | null = null;
 
+/** On a heading while it holds the focus a route change gave it (#256). */
+export const ROUTE_FOCUS_ATTR = 'data-route-focus';
+
 /** Captures the opener (AC3), before the old screen is removed. */
 function capture(change: RouteChange): void {
   if (change.kind === 'replace' || change.from.name === change.to.name) return;
@@ -157,7 +160,13 @@ function arrive(p: Pending): void {
   const heading = headingOf(main);
   if (heading) {
     if (!heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1');
+    // Marks this focus as ours, for global.css's no-ring rule: a heading a screen
+    // focuses itself (Day's h1 after Today, a Day panel title after Try again)
+    // keeps its own ring.
+    heading.setAttribute(ROUTE_FOCUS_ATTR, '');
+    heading.addEventListener('blur', () => heading.removeAttribute(ROUTE_FOCUS_ATTR), { once: true });
     if (tryFocus(heading)) return;
+    heading.removeAttribute(ROUTE_FOCUS_ATTR);
   }
   // No heading (or it would not take focus): `main`, never `body` (AC1, AC4).
   if (!main.hasAttribute('tabindex')) main.setAttribute('tabindex', '-1');
