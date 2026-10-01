@@ -70,6 +70,7 @@ export function ManageLabelsScreen() {
         <button
           type="button"
           class="template-editor-back"
+          aria-label="Back"
           onClick={() => navigate('/settings')}
         >
           &larr;
