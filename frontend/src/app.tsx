@@ -5,7 +5,7 @@ import { useAuth } from './auth/auth-context';
 import { LoginScreen } from './auth/login-screen';
 import { BottomNav } from './components/shared/bottom-nav';
 import { Toast } from './components/shared/toast';
-import { loadInitialData, workoutsRefresh } from './state/actions';
+import { loadInitialData, workoutsRefresh, libraryRefresh } from './state/actions';
 import { loading, pendingSyncCount, isSyncing } from './state/store';
 import { onPageVisible } from './state/page-visible';
 import { currentRoute } from './router/router';
@@ -58,32 +58,46 @@ function Router() {
 }
 
 const EDIT_ROUTES = new Set(['workout-new', 'workout-active', 'workout-edit']);
+// #252: TemplatesScreen renders TemplateEditor full-screen on these two.
+const LIBRARY_EDIT_ROUTES = new Set([...EDIT_ROUTES, 'template-new', 'template-edit']);
+
+function queueBusy(): boolean {
+  return pendingSyncCount.value > 0 || isSyncing.value;
+}
 
 /** True while a refresh of workouts/sets could overwrite something in progress (#249 AC3). */
 function refreshHeld(): boolean {
-  return (
-    EDIT_ROUTES.has(currentRoute.value.name) ||
-    pendingSyncCount.value > 0 ||
-    isSyncing.value
-  );
+  return EDIT_ROUTES.has(currentRoute.value.name) || queueBusy();
 }
 
-/** Refresh on the page coming back into view; hold it while an edit is in progress. */
+/** The same for exercises/templates/labels (#252 AC3): also the template editor routes. */
+function libraryRefreshHeld(): boolean {
+  return LIBRARY_EDIT_ROUTES.has(currentRoute.value.name) || queueBusy();
+}
+
+/**
+ * Refresh on the page coming back into view; hold each loader while an edit it
+ * could clobber is in progress, and run it once when its hold lifts.
+ */
 function useRefreshOnVisible(token: string | null) {
   useEffect(() => {
     if (!token) return;
-    let pending = false;
+    const loaders = [
+      { run: (t: string) => workoutsRefresh.run(t), held: refreshHeld, pending: false },
+      { run: (t: string) => libraryRefresh.run(t), held: libraryRefreshHeld, pending: false },
+    ];
     const unsubscribe = onPageVisible(() => {
-      if (refreshHeld()) {
-        pending = true;
-        return;
+      for (const l of loaders) {
+        if (l.held()) l.pending = true;
+        else void l.run(token);
       }
-      void workoutsRefresh.run(token);
     });
     const stop = effect(() => {
-      if (refreshHeld() || !pending) return;
-      pending = false;
-      void workoutsRefresh.run(token);
+      for (const l of loaders) {
+        if (l.held() || !l.pending) continue;
+        l.pending = false;
+        void l.run(token);
+      }
     });
     return () => {
       unsubscribe();
