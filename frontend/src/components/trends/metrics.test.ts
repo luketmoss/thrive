@@ -1,7 +1,8 @@
 // #243 AC1-AC3 — the Recovery, Sleep and Fitness registry entries.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { TREND_GROUPS, SLEEP_TOTAL, SLEEP_DEEP, VO2MAX, TRAINING_LOAD, HRV } from './metrics';
-import { dailyHealth } from '../../state/store';
+import { dailyHealth, bodyMeasurements } from '../../state/store';
+import { WEIGHT, BODY_FAT, SYSTOLIC, DIASTOLIC, BP_READINGS } from './metrics';
 
 const group = (id: string) => TREND_GROUPS.find((g) => g.id === id)!;
 
@@ -9,8 +10,8 @@ beforeEach(() => { dailyHealth.value = { state: 'idle' }; });
 
 describe('registry', () => {
   it('has Recovery, Sleep, Fitness in order', () => {
-    expect(TREND_GROUPS.map((g) => g.id)).toEqual(['recovery', 'sleep', 'fitness']);
-    expect(TREND_GROUPS.map((g) => g.label)).toEqual(['Recovery', 'Sleep', 'Fitness']);
+    expect(TREND_GROUPS.map((g) => g.id)).toEqual(['recovery', 'sleep', 'fitness', 'body', 'blood_pressure']);
+    expect(TREND_GROUPS.map((g) => g.label)).toEqual(['Recovery', 'Sleep', 'Fitness', 'Body', 'Blood Pressure']);
     expect(TREND_GROUPS.every((g) => g.metrics.length >= 1 && g.metrics.length <= 4)).toBe(true);
   });
   it('Recovery: resting HR then HRV, both banded', () => {
@@ -46,5 +47,62 @@ describe('sleep points', () => {
     expect(SLEEP_TOTAL.points()).toEqual([{ date: '2026-09-01', value: 7.5 }]);
     expect(SLEEP_DEEP.points()).toEqual([{ date: '2026-09-02', value: 0.5 }]);
     expect(SLEEP_TOTAL.format(7.5)).toBe('7h 30m');
+  });
+});
+
+// ── #244: Body and Blood Pressure ────────────────────────────────────
+const reading = (o: Record<string, string>, i = 1) => ({
+  grpid: `g${i}`, date: '2026-09-01', time: '07:00', measured_at_utc: '2026-09-01T13:00:00Z', kind: 'scale',
+  weight_kg: '', fat_ratio_pct: '', systolic_mmhg: '', diastolic_mmhg: '', sheetRow: i + 1, ...o,
+}) as never;
+
+describe('Body and Blood Pressure registry', () => {
+  it('declares the groups, tab and shape', () => {
+    expect(group('body').metrics.map((m) => [m.id, m.unit, m.band, m.zeroBased])).toEqual([
+      ['weight', 'lb', true, false], ['body_fat', '%', true, false],
+    ]);
+    expect(group('blood_pressure').metrics.map((m) => [m.id, m.unit, m.band, m.zeroBased])).toEqual([
+      ['systolic', 'mmHg', true, false], ['diastolic', 'mmHg', true, false], ['bp_readings', '', false, true],
+    ]);
+    for (const id of ['body', 'blood_pressure']) {
+      expect(group(id).metrics.every((m) => m.source === 'bodyMeasurements')).toBe(true);
+    }
+  });
+  it('is empty until BodyMeasurements has loaded', () => {
+    bodyMeasurements.value = { state: 'loading' };
+    expect(WEIGHT.points()).toEqual([]);
+  });
+  it('weight is the first weigh-in in lb; fat comes from that same reading', () => {
+    bodyMeasurements.value = { state: 'loaded', rows: [
+      reading({ weight_kg: '80.9', fat_ratio_pct: '20.5', measured_at_utc: '2026-09-01T14:00:00Z' }, 1),
+      reading({ weight_kg: '82', fat_ratio_pct: '25', measured_at_utc: '2026-09-01T16:00:00Z' }, 2),
+      reading({ date: '2026-09-02', weight_kg: '81', measured_at_utc: '2026-09-02T14:00:00Z' }, 3),
+      reading({ date: '2026-09-03', kind: 'bp', systolic_mmhg: '120', diastolic_mmhg: '80' }, 4),
+    ] };
+    expect(WEIGHT.points()).toEqual([{ date: '2026-09-01', value: 178.4 }, { date: '2026-09-02', value: 178.6 }]);
+    expect(BODY_FAT.points()).toEqual([{ date: '2026-09-01', value: 20.5 }]);
+    expect(WEIGHT.format(178.4)).toBe('178.4');
+    expect(BODY_FAT.format(20.5)).toBe('20.5');
+  });
+  it('blood pressure is the day mean half up, with the reading count; blanks omitted, never 0', () => {
+    bodyMeasurements.value = { state: 'loaded', rows: [
+      reading({ kind: 'bp', systolic_mmhg: '120', diastolic_mmhg: '80', measured_at_utc: '2026-09-01T14:00:00Z' }, 1),
+      reading({ kind: 'bp', systolic_mmhg: '123', diastolic_mmhg: '81', measured_at_utc: '2026-09-01T15:00:00Z' }, 2),
+      reading({ date: '2026-09-02', weight_kg: '80' }, 3),
+    ] };
+    expect(SYSTOLIC.points()).toEqual([{ date: '2026-09-01', value: 122 }]);
+    expect(DIASTOLIC.points()).toEqual([{ date: '2026-09-01', value: 81 }]);
+    expect(BP_READINGS.points()).toEqual([{ date: '2026-09-01', value: 2 }]);
+  });
+  it('formats readings with a plural and picks axis precision from the ticks', () => {
+    expect(BP_READINGS.format(1)).toBe('1 reading');
+    expect(BP_READINGS.format(2)).toBe('2 readings');
+    expect(WEIGHT.axisFormat!(178, [176, 178, 180])).toBe('178');
+    expect(WEIGHT.axisFormat!(178.5, [178, 178.5, 179])).toBe('178.5');
+  });
+  it('does not read DailyHealth', () => {
+    dailyHealth.value = { state: 'loaded', rows: [{ date: '2026-09-01', resting_hr: '50', sheetRow: 2 }] as never[] };
+    bodyMeasurements.value = { state: 'loaded', rows: [] };
+    expect(WEIGHT.points()).toEqual([]);
   });
 });
