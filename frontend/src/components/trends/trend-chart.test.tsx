@@ -6,7 +6,8 @@ import { render, cleanup } from '@testing-library/preact';
 import { h } from 'preact';
 import { TrendCharts, TrendCard, summaryText, midSentence } from './trend-chart';
 import { RESTING_HR, type TrendGroup, type TrendMetric, type TrendPoint } from './metrics';
-import { addDays, metricSeries, rangeBounds } from './series';
+import { addDays } from '../../day/dates';
+import { metricSeries, rangeBounds } from './series';
 import { dailyHealth } from '../../state/store';
 
 afterEach(cleanup);
@@ -26,7 +27,7 @@ function daily(n: number, value: (i: number) => number, skip: number[] = []): Tr
 
 function renderCard(m: TrendMetric, range: '1W' | '1M' | '3M' | '1Y' = '1M', avgDays = 7) {
   const { from, to } = rangeBounds(range, TODAY, null);
-  return render(h(TrendCard, { metric: m, from, to, range, avgDays, today: TODAY }));
+  return render(h(TrendCard, { metric: m, series: metricSeries(m, from, to, avgDays, TODAY), recorded: m.points().length > 0, range, avgDays, today: TODAY }));
 }
 
 describe('dots', () => {
@@ -167,7 +168,10 @@ describe('a group', () => {
     const b = metric('b', daily(91, (i) => 9000 + i * 10, [4]), { zeroBased: true, band: false });
     const group: TrendGroup = { id: 'fixture', label: 'Fixture', metrics: [a, b] };
     const { from, to } = rangeBounds('3M', TODAY, null);
-    const { container } = render(h(TrendCharts, { group, from, to, range: '3M', avgDays: 7, today: TODAY }));
+    const { container } = render(h(TrendCharts, {
+      group, series: group.metrics.map((m) => metricSeries(m, from, to, 7, TODAY)),
+      recorded: group.metrics.map((m) => m.points().length > 0), range: '3M', avgDays: 7, today: TODAY,
+    }));
     const cards = container.querySelectorAll('section.trend-card');
     expect(cards).toHaveLength(2);
     const cx = (card: Element, date: string) => card.querySelector(`circle[data-date="${date}"]`)!.getAttribute('cx');

@@ -13,6 +13,7 @@ import {
   checkFit, createFitStep, fitBudget, fitCrc, fitFromResult, FitFormatError, FIT_TOOL,
 } from '../src/fit.mjs';
 import { redact } from '../src/redact.mjs';
+import { fitSummary } from '../src/sync-run.mjs';
 import { syncActivities } from '../src/sync-activities.mjs';
 import { memoryDrive } from './helpers.mjs';
 
@@ -385,4 +386,203 @@ test('AC5: a failure message quoting a FIT URL reaches the log and the row redac
   for (const text of [...failures, ...lines, JSON.stringify(archived(drive, id))]) {
     assert.doesNotMatch(text, /s3\.coros\.com/);
   }
+});
+
+// --- #257: a changed payload re-fetches the FIT --------------------------------
+
+const F = FIXTURES[0];
+const FID = F.activity_id;
+const NEW_FIT = makeFit(Buffer.from('the whole ride, not the partial upload'));
+const t = (n) => `2026-09-2${n}T09:17:00.000Z`;
+
+/** The archive's payload changes, as when COROS later serves the full ride. */
+const changePayload = (archive, suffix = ' ') => archive.upsertActivity({
+  activityId: FID, localDate: F.list_entry.date, tool: F.tool, args: F.args,
+  listEntry: F.list_entry, payload: `${F.payload}${suffix}`,
+});
+const run1 = (archive, opts = {}) => runOnce({ archive, activityIds: [FID], api: fakeApi(), ...opts });
+
+async function storedOnce() {
+  const { drive, archive } = await archiveWith([F]);
+  const client = fakeCoros();
+  await run1(archive, { client, startedAt: t(1) });
+  return { drive, archive, client };
+}
+
+test('#257 AC2: every stored record carries the payload_hash it was fetched against', async () => {
+  const { drive } = await storedOnce();
+  assert.equal(archived(drive, FID).fit.payload_hash, archived(drive, FID).payload_hash);
+});
+
+test('#257 AC2: adopting a FIT records the payload_hash too', async () => {
+  const { drive, archive } = await storedOnce();
+  const file = [...drive.files.values()].find((f) => f.props.activity_id === FID);
+  delete file.data.fit;
+  await run1(archive, { client: fakeCoros(), startedAt: t(2) });
+  assert.equal(archived(drive, FID).fit.payload_hash, archived(drive, FID).payload_hash);
+});
+
+test('#257 AC2: an unchanged payload makes no request and re-sends the fit fields', async () => {
+  const { archive, client } = await storedOnce();
+  const api = fakeApi();
+  const r = await run1(archive, { client, api, startedAt: t(2) });
+  assert.equal(client.calls.length, 1);
+  assert.equal(r.fit.counts.requested, 0);
+  assert.equal(upserts(api)[0].fit_fetched_at, t(1));
+});
+
+test('#257 AC2: a rename (list entry only) leaves payload_hash alone, so no re-fetch', async () => {
+  const { archive, client } = await storedOnce();
+  await archive.upsertActivity({
+    activityId: FID, localDate: F.list_entry.date, tool: F.tool, args: F.args,
+    listEntry: { ...F.list_entry, name: 'Renamed in COROS' }, payload: F.payload,
+  });
+  const r = await run1(archive, { client, startedAt: t(2) });
+  assert.equal(client.calls.length, 1);
+  assert.equal(r.fit.counts.requested, 0);
+});
+
+test('#257 AC1: a changed payload re-fetches and replaces the same Drive file in place', async () => {
+  const { drive, archive } = await storedOnce();
+  const fileId = fitFiles(drive)[0].id;
+  drive.writes.length = 0;
+  await changePayload(archive);
+  const client = fakeCoros((args) => fitResult(args.labelId, NEW_FIT));
+  const api = fakeApi();
+  const r = await run1(archive, { client, api, startedAt: t(2) });
+
+  assert.deepEqual(r.failures, []);
+  assert.equal(client.calls.length, 1);
+  assert.equal(r.fit.counts.requested, 1);
+  assert.equal(r.fit.counts.refetched, 1);
+  assert.equal(r.fit.counts.stored, 0);
+  assert.equal(fitFiles(drive).length, 1, 'no second file');
+  assert.equal(fitFiles(drive)[0].id, fileId);
+  assert.deepEqual(fitFiles(drive)[0].bytes, NEW_FIT);
+  assert.ok(drive.writes.some((w) => w.op === 'updateBinary' && w.id === fileId));
+  assert.ok(!drive.writes.some((w) => w.op === 'create'), 'nothing created');
+  const rec = archived(drive, FID).fit;
+  assert.equal(rec.status, 'stored');
+  assert.equal(rec.file_id, fileId);
+  assert.equal(rec.payload_hash, archived(drive, FID).payload_hash);
+  assert.equal(rec.fetched_at, t(2));
+  assert.equal(rec.bytes, NEW_FIT.length);
+  assert.equal(rec.refetches, 1);
+  assert.equal(upserts(api)[0].fit_ref, fileId);
+  assert.equal(upserts(api)[0].fit_fetched_at, t(2));
+  assert.match(fitSummary(r.fit), /1 refetched/);
+
+  // And the next run is quiet.
+  const again = await run1(archive, { client, startedAt: t(3) });
+  assert.equal(client.calls.length, 1);
+  assert.equal(again.fit.counts.requested, 0);
+});
+
+test('#257 AC1: a FIT in Drive is not adopted in place of the request', async () => {
+  const { drive, archive } = await storedOnce();
+  await changePayload(archive);
+  const client = fakeCoros();
+  const r = await run1(archive, { client, startedAt: t(2) });
+  assert.equal(r.fit.counts.adopted, 0);
+  assert.equal(client.calls.length, 1);
+  assert.equal(r.fit.counts.refetched, 1);
+  assert.equal(fitFiles(drive).length, 1);
+});
+
+test('#257 AC1: the re-fetch spends budget like any request', async () => {
+  const { archive } = await storedOnce();
+  await changePayload(archive);
+  const api = fakeApi({ syncLog: [row(ago(HOUR), 49)] });
+  const r = await run1(archive, { client: fakeCoros(), api, startedAt: START });
+  assert.equal(r.fit.counts.requested, 1);
+  assert.equal(r.fit.remaining, 0);
+});
+
+test('#257 AC3: a stored record with no payload_hash is re-fetched once, then settles', async () => {
+  const { drive, archive } = await storedOnce();
+  const file = [...drive.files.values()].find((f) => f.props.activity_id === FID);
+  delete file.data.fit.payload_hash; // written before #257
+  const client = fakeCoros();
+  const first = await run1(archive, { client, startedAt: t(2) });
+  assert.equal(first.fit.counts.refetched, 1);
+  assert.equal(client.calls.length, 1);
+  assert.equal(archived(drive, FID).fit.payload_hash, archived(drive, FID).payload_hash);
+  const second = await run1(archive, { client, startedAt: t(3) });
+  assert.equal(second.fit.counts.requested, 0);
+  assert.equal(client.calls.length, 1);
+});
+
+test('#257 AC4: a failed re-fetch keeps the FIT and the row, counts toward the cap, and is a failure', async () => {
+  const { drive, archive } = await storedOnce();
+  const fileId = fitFiles(drive)[0].id;
+  const oldBytes = fitFiles(drive)[0].bytes;
+  const oldHash = archived(drive, FID).fit.payload_hash;
+  await changePayload(archive);
+  for (const bad of [new Error('COROS answered 500'), fitResult(FID, makeFit().subarray(0, 30))]) {
+    const api = fakeApi();
+    const r = await run1(archive, { client: fakeCoros(() => bad), api, startedAt: t(2) });
+    assert.equal(r.failures.length, 1);
+    assert.match(r.failures[0], new RegExp(`activity ${FID}: FIT re-fetch \\d of 3 failed, keeping the stored FIT`));
+    assert.deepEqual(fitFiles(drive)[0].bytes, oldBytes);
+    assert.equal(upserts(api)[0].fit_ref, fileId);
+    assert.equal(upserts(api)[0].fit_fetched_at, t(1), 'the row is untouched');
+    assert.equal(archived(drive, FID).fit.status, 'stored');
+    assert.equal(archived(drive, FID).fit.payload_hash, oldHash);
+  }
+  assert.equal(archived(drive, FID).fit.refetches, 2);
+});
+
+test('#257 AC4: a Drive failure on the replace keeps the old file and does not use up an attempt', async () => {
+  const { drive, archive } = await storedOnce();
+  const oldBytes = fitFiles(drive)[0].bytes;
+  await changePayload(archive);
+  drive.failUpdateBinary = new Error('Drive 503: backend error');
+  const r = await run1(archive, { client: fakeCoros(), startedAt: t(2) });
+  assert.equal(r.fit.counts.requested, 1, 'the request still counted');
+  assert.match(r.failures[0], /FIT re-downloaded but not replaced in Drive: Drive 503/);
+  assert.deepEqual(fitFiles(drive)[0].bytes, oldBytes);
+  assert.equal(archived(drive, FID).fit.refetches, undefined);
+  assert.notEqual(archived(drive, FID).fit.payload_hash, archived(drive, FID).payload_hash);
+
+  drive.failUpdateBinary = null;
+  const next = await run1(archive, { client: fakeCoros(() => fitResult(FID, NEW_FIT)), startedAt: t(3) });
+  assert.equal(next.fit.counts.refetched, 1, 'the next run retries');
+  assert.deepEqual(fitFiles(drive)[0].bytes, NEW_FIT);
+});
+
+test('#257 AC4: with no budget left the re-fetch waits, and is not a failure', async () => {
+  const { archive } = await storedOnce();
+  await changePayload(archive);
+  const client = fakeCoros();
+  const api = fakeApi({ syncLog: [row(ago(HOUR), 50)] });
+  const r = await run1(archive, { client, api, startedAt: START });
+  assert.equal(client.calls.length, 0);
+  assert.equal(r.fit.counts.waiting, 1);
+  assert.deepEqual(r.failures, []);
+});
+
+test('#257 AC5: after 3 re-fetches a fourth change makes no request, marks stale, and notes it once', async () => {
+  const { drive, archive } = await storedOnce();
+  const client = fakeCoros(() => new Error('COROS answered 500'));
+  // Three re-fetch requests; failed ones count the same as successful ones.
+  for (let n = 2; n <= 4; n++) {
+    await changePayload(archive, ' '.repeat(n));
+    await run1(archive, { client, startedAt: t(n) });
+  }
+  assert.equal(archived(drive, FID).fit.refetches, 3);
+  assert.equal(client.calls.length, 3);
+
+  await changePayload(archive, ' '.repeat(5));
+  const fourth = await run1(archive, { client, startedAt: t(5) });
+  assert.equal(client.calls.length, 3, 'no request');
+  assert.deepEqual(fourth.failures, []);
+  assert.equal(archived(drive, FID).fit.stale, true);
+  assert.equal(fourth.fit.notes.length, 1);
+  assert.match(fourth.fit.notes[0], new RegExp(FID));
+
+  await changePayload(archive, ' '.repeat(6));
+  const fifth = await run1(archive, { client, startedAt: t(6) });
+  assert.equal(client.calls.length, 3);
+  assert.deepEqual(fifth.fit.notes, [], 'later runs stay silent');
+  assert.deepEqual(fifth.failures, []);
 });

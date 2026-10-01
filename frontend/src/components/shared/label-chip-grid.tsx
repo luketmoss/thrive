@@ -56,6 +56,7 @@ export function LabelChipGrid({ selected, onToggle, onCreated }: LabelChipGridPr
               onClick={() => onToggle(label.name)}
               aria-pressed={isActive}
             >
+              {isActive && <span class="chip-check" aria-hidden="true">✓</span>}
               {label.name}
             </button>
           );

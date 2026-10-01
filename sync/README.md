@@ -276,11 +276,26 @@ included) has no row to record one on. `src/fit.mjs`:
   that fetched it. Both blank means not fetched yet. `fit_fetched_at` set
   with `fit_ref` blank means the sync gave up: no FIT will be fetched.
 - **The archive remembers.** Each activity's archive file carries a `fit`
-  record (`status`, `file_id`, `fetched_at`, `attempts`, `last_error`), which
-  an ingest update carries over like `normalized`. A FIT on record is never
-  requested again, and is re-sent to the row on every run, so a row write
-  that failed heals. A FIT that is in Drive while the record is missing (a
-  run died between the two) is adopted without a request.
+  record (`status`, `file_id`, `fetched_at`, `attempts`, `last_error`,
+  `payload_hash`, `refetches`, `stale`), which an ingest update carries over
+  like `normalized`. A FIT on record is re-sent to the row on every run, so a
+  row write that failed heals, and is requested again only when the activity
+  changed (below). A FIT that is in Drive while the record is missing (a run
+  died between the two) is adopted without a request.
+- **A changed activity re-fetches its FIT (#257).** The record carries the
+  archive's `payload_hash` the FIT was fetched against. When the archive's
+  current hash differs, one request replaces the content of the **same** Drive
+  file (`file_id`, and so the row's `fit_ref`, never change), the record takes
+  the new hash, `fetched_at` and `bytes`, `refetches` goes up, and the row's
+  `fit_fetched_at` moves. A rename in COROS leaves the hash alone and costs
+  nothing. A record with no `payload_hash` (all written before #257) counts
+  as changed, once. The re-fetch spends budget like any request and is
+  counted in the `FIT:` line as `refetched`. A failed one (COROS error, or a
+  file that fails the FIT check) leaves the stored FIT and the row alone, is a
+  run failure, and counts toward a cap of **3 re-fetches** per activity; a
+  Drive failure on the replace does not count. After 3, a further change makes
+  no request: the record is marked `stale`, the run adds a `SyncLog` note,
+  and later runs are silent. `unavailable` FITs are not retried on a change.
 
 **The budget** is `50 − sum(n_fit_fetched)` over the `SyncLog` rows that
 started in the 24 hours before this run. It is derived, never stored. COROS's

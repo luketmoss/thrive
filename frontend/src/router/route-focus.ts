@@ -69,12 +69,6 @@ export function remembered(hash: string): FocusKey | undefined {
   return memory.get(hash);
 }
 
-/** For tests: forget everything. */
-export function resetRouteFocus(): void {
-  memory.clear();
-  pending = null;
-}
-
 // True only while a focus() call of ours runs, so a screen's onFocus can tell a
 // script restore from a Tab arrival (AC5: Trends must not select a day).
 let restoring = false;

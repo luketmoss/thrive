@@ -5,14 +5,7 @@
 // polarity here, beside it. Kept pure: no DOM, no signal, and no notion of
 // "now". The caller passes the date.
 
-/** YYYY-MM-DD → whole UTC days since the epoch. */
-function dayNumber(ymd: string): number {
-  return Math.round(Date.parse(`${ymd}T00:00:00Z`) / 86_400_000);
-}
-
-function shiftDate(ymd: string, days: number): string {
-  return new Date((dayNumber(ymd) + days) * 86_400_000).toISOString().slice(0, 10);
-}
+import { addDays } from '../day/dates';
 
 export interface YourRange {
   mean: number;
@@ -38,11 +31,11 @@ export const YOUR_RANGE_WINDOW_DAYS = 30;
  * `null` with fewer than 14 values.
  */
 export function yourRange(values: ReadonlyMap<string, number>, date: string): YourRange | null {
-  const from = shiftDate(date, -YOUR_RANGE_WINDOW_DAYS);
-  const to = shiftDate(date, -1);
+  const from = addDays(date, -YOUR_RANGE_WINDOW_DAYS);
+  const to = addDays(date, -1);
   const xs: number[] = [];
   for (let i = YOUR_RANGE_WINDOW_DAYS; i >= 1; i--) {
-    const v = values.get(shiftDate(date, -i));
+    const v = values.get(addDays(date, -i));
     if (v !== undefined && Number.isFinite(v)) xs.push(v);
   }
   if (xs.length < YOUR_RANGE_MIN_VALUES) return null;
@@ -56,7 +49,7 @@ export function yourRange(values: ReadonlyMap<string, number>, date: string): Yo
 export function valuesInWindow(values: ReadonlyMap<string, number>, date: string): number {
   let n = 0;
   for (let i = YOUR_RANGE_WINDOW_DAYS; i >= 1; i--) {
-    const v = values.get(shiftDate(date, -i));
+    const v = values.get(addDays(date, -i));
     if (v !== undefined && Number.isFinite(v)) n++;
   }
   return n;

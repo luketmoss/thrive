@@ -4,7 +4,7 @@
 // Loads the health tabs once on entry if nothing has loaded them; every
 // control then redraws from the rows already in memory, with no sheet read.
 
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { signal } from '@preact/signals';
 import { useAuth } from '../../auth/auth-context';
 import { loadHealth } from '../../state/actions';
@@ -12,7 +12,7 @@ import { dailyHealth, bodyMeasurements, dailySummary } from '../../state/store';
 import { TREND_GROUPS, CUSTOM_GROUP_ID, customGroup, type TrendGroup, type TrendMetric } from './metrics';
 import {
   RANGES, AVERAGES, VIEWS, type RangeKey, type AverageKey, type ViewKey,
-  averageDays, earliestDate, metricSeries, rangeBounds, datesBetween,
+  averageDays, earliestDate, metricSeries, rangeBounds, usablePoints, type MetricSeries,
 } from './series';
 import { announceText } from './readout';
 import { RANGE_PREF, AVERAGE_PREF, VIEW_PREF, GROUP_PREF, readPref, writePref, readCustom, writeCustom, type Pref } from './prefs';
@@ -95,16 +95,8 @@ export function captionText(avgDays: number, hasBand: boolean): string {
  * the group actually draws a band this range (`band: true` and enough data).
  * One banded card is enough; the clause stays generic.
  */
-export function groupHasBand(
-  metrics: readonly TrendMetric[],
-  pointSets: readonly (readonly { date: string; value: number }[])[],
-  from: string, to: string, avgDays: number, today: string,
-): boolean {
-  return metrics.some((m, i) => {
-    if (!m.band) return false;
-    const s = metricSeries(m, from, to, avgDays, today, pointSets[i] as never);
-    return s.band !== null && s.points.length > 0;
-  });
+export function groupHasBand(metrics: readonly TrendMetric[], series: readonly MetricSeries[]): boolean {
+  return metrics.some((m, i) => m.band && series[i].band !== null && series[i].points.length > 0);
 }
 
 export function TrendsScreen() {
@@ -160,7 +152,8 @@ export function TrendsScreen() {
 
   const picked: TrendGroup = TREND_GROUPS.find((g) => g.id === groupId) ?? TREND_GROUPS[0];
   const isCustom = picked.id === CUSTOM_GROUP_ID;
-  const group: TrendGroup = isCustom ? customGroup(custom) : picked;
+  // One object per custom set, so the series memo below can key on it.
+  const group: TrendGroup = useMemo(() => (isCustom ? customGroup(custom) : picked), [picked, isCustom, custom]);
   const setCustom = (ids: string[]) => {
     clearSelection();
     setCustomIds(ids);
@@ -178,6 +171,34 @@ export function TrendsScreen() {
   const states = sources.map((s) => tabs[s].value.state);
   const avgDays = averageDays(average);
 
+  const ready = !states.includes('error') && states.every((s) => s === 'loaded')
+    && !(isCustom && group.metrics.length === 0);
+  // Each metric's series, built once per (group, range, average, today, rows of
+  // the tabs it reads) and shared by the band check, the cards or table, the
+  // readout and the keyboard announcement (#270). A selection changes none of
+  // these, so it rebuilds nothing. The rows are keyed by reference: a reload
+  // writes a new array, so a series is never stale.
+  const rowsOf = (s: keyof typeof tabs) => {
+    const v = tabs[s].value;
+    return sources.includes(s) && v.state === 'loaded' ? v.rows : null;
+  };
+  const built = useMemo(() => {
+    if (!ready) return null;
+    const pointSets = group.metrics.map((m) => m.points());
+    // All begins at the earliest day that is drawn: a metric that excludes today
+    // does not count today's value (AC6).
+    const earliest = earliestDate(pointSets.map((p, i) => usablePoints(group.metrics[i], p, today)));
+    const { from, to } = rangeBounds(range, today, earliest);
+    const series = group.metrics.map((m, i) => metricSeries(m, from, to, avgDays, today, pointSets[i]));
+    return {
+      from, to, series,
+      recorded: pointSets.map((p) => p.length > 0),
+      nothingEver: pointSets.every((p) => p.length === 0),
+      hasBand: groupHasBand(group.metrics, series),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, group, range, avgDays, today, rowsOf('dailyHealth'), rowsOf('bodyMeasurements'), rowsOf('dailySummary')]);
+
   let content;
   if (states.includes('error')) {
     content = (
@@ -192,22 +213,16 @@ export function TrendsScreen() {
     content = <p class="trends-loading" role="status">Loading…</p>;
   } else if (isCustom && group.metrics.length === 0) {
     content = <p class="trends-custom-empty">Pick up to 4 metrics to see them here.</p>;
-  } else {
-    const pointSets = group.metrics.map((m) => m.points());
-    const { from, to } = rangeBounds(range, today, earliestDate(pointSets));
-    // The band clause stays only while some card actually draws a band.
-    const hasBand = groupHasBand(group.metrics, pointSets, from, to, avgDays, today);
-    const nothingEver = pointSets.every((p) => p.length === 0);
-    const dates = datesBetween(from, to);
+  } else if (built) {
+    const { to, series, recorded, nothingEver, hasBand } = built;
+    const dates = series[0]?.dates ?? [];
     // Keyboard moves select and announce; pointer moves only select (AC4).
     const moveTo = (date: string) => {
       selectedDay.value = date;
       announcement.value = announceText(
         date, today,
-        group.metrics.flatMap((metric) => {
-          const series = metricSeries(metric, from, to, avgDays, today);
-          return series.points.length ? [{ metric, series }] : [];
-        }),
+        group.metrics.flatMap((metric, i) =>
+          series[i].points.length ? [{ metric, series: series[i] }] : []),
         avgDays,
       );
     };
@@ -237,7 +252,7 @@ export function TrendsScreen() {
       <>
         <p class="trends-caption">{captionText(avgDays, hasBand)}</p>
         {view === 'Table' && !nothingEver ? (
-          <TrendTable group={group} from={from} to={to} range={range} avgDays={avgDays} today={today} />
+          <TrendTable group={group} series={series} range={range} avgDays={avgDays} today={today} />
         ) : (
           <div
             class="trend-charts"
@@ -266,7 +281,7 @@ export function TrendsScreen() {
             onKeyDown={onKeyDown}
           >
             <p class="sr-only" id={HINT_ID}>{HINT}</p>
-            <TrendCharts group={group} from={from} to={to} range={range} avgDays={avgDays} today={today}
+            <TrendCharts group={group} series={series} recorded={recorded} range={range} avgDays={avgDays} today={today}
               selectedDate={selectedDay.value} onSelect={(d) => { selectedDay.value = d; }} />
           </div>
         )}

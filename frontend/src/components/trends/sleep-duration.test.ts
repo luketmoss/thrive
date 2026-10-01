@@ -1,7 +1,8 @@
 // #243 AC2 — the sleep duration formatter.
 import { describe, it, expect } from 'vitest';
 import { formatSleep, axisSleep } from './sleep-duration';
-import { yDomain, niceTicks, rolling, addDays } from './series';
+import { addDays } from '../../day/dates';
+import { yDomain, niceTicks, rolling } from './series';
 
 describe('formatSleep', () => {
   it('prints hours and minutes, dropping the hour under one', () => {

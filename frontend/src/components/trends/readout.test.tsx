@@ -6,7 +6,8 @@ import { h } from 'preact';
 import { announceText, dayCells, pointsByDate, readoutLine, readoutDate, valueText } from './readout';
 import { TrendTable } from './trend-table';
 import { TrendCard } from './trend-chart';
-import { addDays, dayAtX, dayIndexAtX, metricSeries, rangeBounds, datesBetween } from './series';
+import { addDays } from '../../day/dates';
+import { dayAtX, dayIndexAtX, metricSeries, rangeBounds, datesBetween } from './series';
 import type { TrendGroup, TrendMetric, TrendPoint } from './metrics';
 
 afterEach(cleanup);
@@ -64,14 +65,14 @@ describe('the table and the readout agree', () => {
   it.each([[7], [0]])('for every day with the average at %i', (avgDays) => {
     const m = metric(pts);
     const group: TrendGroup = { id: 'g', label: 'Heart', metrics: [m] };
-    const table = render(h(TrendTable, { group, from, to, range: '1W', avgDays, today: TODAY }));
+    const table = render(h(TrendTable, { group, series: [metricSeries(m, from, to, avgDays, TODAY)], range: '1W', avgDays, today: TODAY }));
     const rows = [...table.container.querySelectorAll('tbody tr')];
     expect(rows).toHaveLength(7);
     for (const row of rows) {
-      const rowHead = row.querySelector('th')!.textContent!;
+      const rowHead = row.querySelector('th a')!.firstChild!.textContent!;
       const date = datesBetween(from, to).find((d) => readoutDate(d, TODAY) === rowHead)!;
       const cells = [...row.querySelectorAll('td')].map((td) => td.textContent!.trim());
-      const card = render(h(TrendCard, { metric: m, from, to, range: '1W', avgDays, today: TODAY, selectedDate: date }));
+      const card = render(h(TrendCard, { metric: m, series: metricSeries(m, from, to, avgDays, TODAY), recorded: true, range: '1W', avgDays, today: TODAY, selectedDate: date }));
       const lines = card.container.querySelectorAll('.trend-readout p');
       expect(lines[0].textContent).toBe(rowHead);
       const value = lines[1].textContent!;

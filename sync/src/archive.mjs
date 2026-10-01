@@ -227,6 +227,15 @@ export function createArchive(drive, { now = () => Date.now() } = {}) {
     },
 
     /**
+     * Replace a stored FIT's content in place (#257), for an activity COROS
+     * changed after the FIT was fetched. The Drive file, its ID (the row's
+     * `fit_ref`) and its tags stay as they are.
+     */
+    replaceFit(fileId, bytes) {
+      return drive.updateBinary(fileId, bytes);
+    },
+
+    /**
      * The run date's health bundle as archived, with its Drive file ID (the
      * rows' `raw_ref`), or null if no run has landed one. #165 normalizes from
      * this rather than from memory, so a re-parse and a run read the same text.

@@ -310,11 +310,11 @@ test('#154 AC1: n_fit_fetched is the FIT step\'s requests, and its failures reac
 test('#154 AC2: the FIT line is counts only, and safe in a summary log', async () => {
   const fit = fakeFit({ counts: { requested: 2, stored: 2, waiting: 2 }, remaining: 0 });
   const { text, rows } = await run({ env: { ...ACTIONS_ENV, SYNC_LOG: 'summary' }, createFitStep: () => fit });
-  assert.match(text, /FIT: 2 requested, 2 stored, 0 already in Drive, 0 failed; 2 waiting for budget; 0 of 50 left in the rolling 24 h\./);
+  assert.match(text, /FIT: 2 requested, 2 stored, 0 already in Drive, 0 refetched, 0 failed; 2 waiting for budget; 0 of 50 left in the rolling 24 h\./);
   assert.match(text, /2 FIT requested;/);
   assert.equal(rows[0].status, 'ok', 'hitting the cap is not a failure');
   for (const canary of CANARIES) assert.ok(!text.includes(canary));
-  assert.equal(fitSummary(fakeFit()), 'FIT: 0 requested, 0 stored, 0 already in Drive, 0 failed; 0 waiting for budget; budget not needed, so not read.');
+  assert.equal(fitSummary(fakeFit()), 'FIT: 0 requested, 0 stored, 0 already in Drive, 0 refetched, 0 failed; 0 waiting for budget; budget not needed, so not read.');
 });
 
 test('#154: a COROS without the FIT tool fails loudly and requests nothing, and the rest still runs', async () => {
