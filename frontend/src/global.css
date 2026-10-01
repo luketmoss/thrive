@@ -3756,3 +3756,32 @@ a.training-card {
   min-width: 44px;
   min-height: 44px;
 }
+
+/* ===== Day Note panel (#240) =====
+   After the Health and Body section and apart from it. The box reuses
+   .form-textarea as its base; the card's own border is the field, so the box
+   draws none of its own, and it grows with its text rather than scrolling. */
+.note-box {
+  display: block;
+  min-height: 96px;
+  padding: var(--space-xs) 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  resize: none;
+  overflow: hidden;
+  line-height: 1.5;
+}
+
+.note-box:focus {
+  border: 0;
+  box-shadow: none;
+}
+
+/* The only cue to the box's purpose on an empty day: --color-text-secondary
+   is the darker of the two muted tokens, so it clears 4.5:1 on the card. */
+.note-box::placeholder {
+  color: var(--color-text-secondary);
+  opacity: 1;
+}

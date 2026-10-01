@@ -4,14 +4,14 @@
 // Moving between days replaces the history entry (`replaceRoute`), so Back
 // leaves the screen rather than stepping back through every day seen. The
 // screen stays mounted across dates; the panels are keyed by date and mount
-// fresh for each one. Health is loaded on show and on the page becoming
+// fresh for each one. Health and the journal are loaded on show and on the page becoming
 // visible, throttled, and never on a move.
 
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { useAuth } from '../../auth/auth-context';
 import { currentRoute, navigate, replaceRoute } from '../../router/router';
 import { workouts } from '../../state/store';
-import { healthRefresh } from '../../state/actions';
+import { healthRefresh, journalRefresh } from '../../state/actions';
 import { onPageVisible } from '../../state/page-visible';
 import { addDays, dayHref, dayStateOf } from '../../day/dates';
 import { moveAnnouncement } from '../../day/format';
@@ -46,6 +46,13 @@ export function DayScreen() {
     if (!token) return;
     void healthRefresh.run(token);
     return onPageVisible(() => void healthRefresh.run(token));
+  }, [token]);
+
+  // Journal (#240): the same triggers, its own throttle. Never on a move.
+  useEffect(() => {
+    if (!token) return;
+    void journalRefresh.run(token);
+    return onPageVisible(() => void journalRefresh.run(token));
   }, [token]);
 
   // Announce each move the user made, but not the first load or a midnight
