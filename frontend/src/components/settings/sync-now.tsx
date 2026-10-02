@@ -93,7 +93,7 @@ export function useSyncNow(token: string | null, email: string) {
 
   const bothOpen = open.coros && open.withings;
   const press = () => {
-    if (bothOpen || ask === 'asking' || !token && !demo) return;
+    if (bothOpen || ask === 'asking' || (!token && !demo)) return;
     const vendors = SYNC_REQUEST_VENDORS.filter((v) => !open[v]);
     setNow(new Date());
     void requestSyncNow(token ?? '', email, vendors);
