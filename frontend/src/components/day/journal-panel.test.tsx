@@ -221,3 +221,136 @@ describe('Note panel', () => {
     expect(box(loading.container).value).toBe('held');
   });
 });
+
+// #290 — the save retry keeps focus through the retry and hands it to the heading.
+describe('Note save retry focus (#290)', () => {
+  const status = (c: Element) => c.querySelector('p.sr-only[role="status"]')!.textContent;
+  const retryBtn = (c: Element) => c.querySelector('.day-panel-action button') as HTMLButtonElement | null;
+
+  /** A failed draft, then a Try again pressed with focus on it; resolve/reject settles the retry. */
+  async function pressed() {
+    upsert.mockRejectedValueOnce(new Error('500'));
+    const view = mount();
+    fireEvent.input(box(view.container), { target: { value: 'keep me' } });
+    fireEvent.blur(box(view.container));
+    await settle();
+    let resolve!: (v: unknown) => void;
+    let reject!: (e: Error) => void;
+    upsert.mockImplementationOnce(() => new Promise((res, rej) => { resolve = res; reject = rej; }));
+    const btn = retryBtn(view.container)!;
+    btn.focus();
+    fireEvent.click(btn);
+    return { ...view, btn, resolve: (v: unknown) => resolve(v), reject: (e: Error) => reject(e) };
+  }
+
+  it('AC1: the same button stays mounted and focused, aria-disabled, with the same name; presses do nothing', async () => {
+    const { container, btn } = await pressed();
+    expect(retryBtn(container)).toBe(btn);
+    expect(document.activeElement).toBe(btn);
+    expect(btn.getAttribute('aria-disabled')).toBe('true');
+    expect(btn.hasAttribute('disabled')).toBe(false);
+    expect(btn.getAttribute('aria-label')).toBe('Try again — save note');
+    expect(btn.textContent).toBe('Try again');
+    expect(container.querySelector('.day-panel-sub')!.textContent).toBe('Saving…');
+    fireEvent.click(btn);
+    fireEvent.click(btn);
+    expect(upsert).toHaveBeenCalledTimes(2); // the failed save, one retry
+  });
+
+  it('AC2: success hands focus to the Note heading (not the textarea) and says Note saved.', async () => {
+    const { container, resolve } = await pressed();
+    expect(status(container)).toBe('');
+    resolve(entry(D, 'keep me'));
+    await settle();
+    expect(retryBtn(container)).toBeNull();
+    expect(document.activeElement).toBe(container.querySelector('h2.day-panel-title'));
+    expect(document.activeElement).not.toBe(box(container));
+    expect(container.querySelector('.day-panel-sub')!.textContent).toBe('Saved');
+    expect(status(container)).toBe('Note saved.');
+    fireEvent.input(box(container), { target: { value: 'more' } });
+    expect(status(container)).toBe('');
+  });
+
+  it('AC2: an ordinary autosave does not say Note saved.', async () => {
+    const { container } = mount();
+    fireEvent.input(box(container), { target: { value: 'plain' } });
+    fireEvent.blur(box(container));
+    await settle();
+    expect(container.querySelector('.day-panel-sub')!.textContent).toBe('Saved');
+    expect(status(container)).toBe('');
+  });
+
+  it('AC2: a retry that resolves at once (text equals the stored note) still hands focus over', async () => {
+    upsert.mockRejectedValueOnce(new Error('500'));
+    const { container } = mount();
+    fireEvent.input(box(container), { target: { value: 'changed' } });
+    fireEvent.blur(box(container));
+    await settle();
+    // The stored note catches up to the draft elsewhere, so the retry has nothing to send.
+    act(() => { journalEntries.value = { state: 'loaded', entries: [entry(D, 'changed')] }; });
+    await settle();
+    const btn = retryBtn(container)!;
+    btn.focus();
+    fireEvent.click(btn);
+    await settle();
+    expect(upsert).toHaveBeenCalledTimes(1);
+    expect(retryBtn(container)).toBeNull();
+    expect(document.activeElement).toBe(container.querySelector('h2.day-panel-title'));
+    expect(status(container)).toBe('Note saved.');
+  });
+
+  it('AC3: a retry that fails again keeps the same button and focus, re-announces, and works again', async () => {
+    const { container, btn, reject } = await pressed();
+    reject(new Error('500'));
+    await settle();
+    expect(retryBtn(container)).toBe(btn);
+    expect(document.activeElement).toBe(btn);
+    expect(btn.getAttribute('aria-disabled')).toBeNull();
+    expect(status(container)).toBe("Couldn't save your note.");
+    upsert.mockResolvedValueOnce(entry(D, 'keep me'));
+    fireEvent.click(btn);
+    expect(upsert).toHaveBeenCalledTimes(3);
+    await settle();
+    expect(document.activeElement).toBe(container.querySelector('h2.day-panel-title'));
+  });
+
+  it('AC4: leaves focus alone when the user moved to the textarea before it landed', async () => {
+    const { container, resolve } = await pressed();
+    box(container).focus();
+    resolve(entry(D, 'keep me'));
+    await settle();
+    expect(document.activeElement).toBe(box(container));
+  });
+
+  it('AC4: typing clears the disabled state', async () => {
+    const { container } = await pressed();
+    fireEvent.input(box(container), { target: { value: 'keep me!' } });
+    expect(retryBtn(container)).toBeNull();
+  });
+
+  it('AC4: a date change before it lands throws nothing and focuses nothing', async () => {
+    // The Day screen remounts the slot on every date change (#237).
+    const { container, unmount, resolve } = await pressed();
+    const h2 = container.querySelector('h2.day-panel-title')!;
+    unmount();
+    const next = mount('2026-09-27');
+    resolve(entry(D, 'keep me'));
+    await settle();
+    expect(h2.isConnected).toBe(false);
+    expect(document.activeElement).toBe(document.body);
+    expect(next.container.querySelector('.day-panel-action')).toBeNull();
+  });
+
+  it('AC4: a failed draft retried by the online event without the button focused never moves focus', async () => {
+    upsert.mockRejectedValueOnce(new Error('500'));
+    const { container } = mount();
+    fireEvent.input(box(container), { target: { value: 'keep me' } });
+    fireEvent.blur(box(container));
+    await settle();
+    expect(document.activeElement).toBe(document.body);
+    window.dispatchEvent(new Event('online'));
+    await settle();
+    expect(retryBtn(container)).toBeNull();
+    expect(document.activeElement).toBe(document.body);
+  });
+});

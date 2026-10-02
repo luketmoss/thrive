@@ -4348,3 +4348,11 @@ a.training-card {
   overflow-wrap: anywhere;
   min-width: 0;
 }
+
+/* ===== Trends retry container (#290) =====
+   div.trends-state holds focus (tabindex -1) while Try again reloads, so it is
+   programmatic focus of a non-control: no ring, as .panel-status. The Trends h1
+   uses #256's [data-route-focus] no-ring rule. */
+.trends-state:focus {
+  outline: none;
+}
