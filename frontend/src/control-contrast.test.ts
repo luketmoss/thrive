@@ -93,13 +93,14 @@ describe('AC1: a rule filling with a fill token sets color: var(--color-on-fill)
   it('finds the filled controls', () => {
     // login, fab, toasts x2, btn-primary x2, btn-danger x2, settings danger x2,
     // tag filter, copy-down hover, five remove hovers.
-    expect(filled.length).toBeGreaterThanOrEqual(17);
+    expect(filled.length).toBeGreaterThanOrEqual(19);
   });
 
   // A :hover rule that only swaps the fill inherits the colour from its base rule.
   it.each(filled.map((r) => [r.selector, r.body] as const))('%s', (selector, body) => {
     const color = decl(body, 'color');
-    if (color === undefined) expect(selector).toMatch(/:hover/);
+    // .streak-dot.filled (#293) is a 10 px mark with no text at all.
+    if (color === undefined) expect(selector).toMatch(/:hover|^\.streak-dot\.filled$/);
     else expect(color).toBe('var(--color-on-fill)');
   });
 
@@ -192,5 +193,100 @@ describe('AC4: nothing interactive is dimmed with opacity', () => {
     for (const dead of ['.tag-suggestion', '.tag-suggestions', '.tag-badge-removable', '.tag-badge-remove', '.tag-input-wrapper', '.tag-input-field']) {
       expect(rules.some(({ selector }) => selector.startsWith(dead))).toBe(false);
     }
+  });
+});
+
+// ── #293 segmented switches and the week streak ─────────────────────────────
+
+describe.each(THEMES)('#293 AC1: the selected pill of the theme toggle and Library switch (%s)', (theme) => {
+  const track = token(theme, '--color-border-light');
+  const fill = token(theme, '--color-primary-fill');
+  it('the fill is 3:1 on the track and the label 4.5:1 on the fill', () => {
+    expect(contrast(fill, track)).toBeGreaterThanOrEqual(3);
+    expect(contrast(token(theme, '--color-on-fill'), fill)).toBeGreaterThanOrEqual(4.5);
+  });
+  it('unselected labels stay 4.5:1 on the track', () => {
+    expect(contrast(token(theme, '--color-text-muted'), track)).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe('#293 AC1: the pill rules', () => {
+  it.each(['.theme-toggle-btn.active', '.library-switch-btn.active'])('%s fills with the fill token, no surface or shadow', (sel) => {
+    const { body } = rule(sel);
+    expect(decl(body, 'background')).toBe('var(--color-primary-fill)');
+    expect(decl(body, 'color')).toBe('var(--color-on-fill)');
+    expect(body).not.toMatch(/box-shadow|--color-surface/);
+  });
+  it('the track, the Library label weight and the 44 px segments are unchanged', () => {
+    expect(decl(rule('.theme-toggle').body, 'background')).toBe('var(--color-border-light)');
+    expect(decl(rule('.library-switch').body, 'background')).toBe('var(--color-border-light)');
+    expect(decl(rule('.library-switch-btn.active').body, 'font-weight')).toBe('700');
+    expect(decl(rule('.library-switch-btn').body, 'min-height')).toBe('44px');
+    expect(decl(rule('.library-switch-btn').body, 'color')).toBe('var(--color-text-muted)');
+  });
+});
+
+describe.each(THEMES)('#293 AC3: segment borders (%s)', (theme) => {
+  it('--color-border-strong is 3:1 on the card, page and raised surfaces', () => {
+    for (const s of SURFACES) {
+      expect(contrast(token(theme, '--color-border-strong'), token(theme, s))).toBeGreaterThanOrEqual(3);
+    }
+  });
+  it('the selected sub-type border (primary-fill) is 3:1 on the card', () => {
+    expect(contrast(token(theme, '--color-primary-fill'), token(theme, '--color-surface'))).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('#293 AC3: segmented button rules', () => {
+  it('unselected sub-type and effort buttons use --color-border-strong', () => {
+    expect(decl(rule('.sub-type-toggle .sub-type-btn').body, 'border')).toContain('var(--color-border-strong)');
+    expect(decl(rule('.effort-btn').body, 'border')).toContain('var(--color-border-strong)');
+  });
+  it('hover still darkens to --color-text-muted', () => {
+    expect(decl(rule('.effort-btn:hover').body, 'border-color')).toBe('var(--color-text-muted)');
+  });
+  it('a selected sub-type button borders in --color-primary-fill and keeps its ring', () => {
+    const r = rule('.sub-type-toggle .sub-type-btn.active');
+    expect(decl(r.body, 'border-color')).toBe('var(--color-primary-fill)');
+    const shared = rule('.effort-toggle-session .effort-btn.active, .sub-type-toggle .sub-type-btn.active');
+    expect(decl(shared.body, 'font-weight')).toBe('700');
+    expect(decl(shared.body, 'box-shadow')).toBe('inset 0 0 0 1px currentColor');
+  });
+  it('the 44 px / 28 px sizes are untouched', () => {
+    expect(decl(rule('.effort-btn').body, 'height')).toBe('28px');
+    expect(decl(rule('.effort-toggle-session .effort-btn, .sub-type-toggle .sub-type-btn').body, 'min-height')).toBe('44px');
+  });
+});
+
+describe.each(THEMES)('#293 AC4: week streak dots on the page (%s)', (theme) => {
+  const bg = token(theme, '--color-bg');
+  it('the solid fill and the hollow outline are each 3:1', () => {
+    expect(contrast(token(theme, '--color-primary-fill'), bg)).toBeGreaterThanOrEqual(3);
+    expect(contrast(token(theme, '--color-border-strong'), bg)).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('#293 AC4: streak dot rules', () => {
+  it('empty is hollow with an inset strong outline', () => {
+    const r = rule('.streak-dot');
+    expect(decl(r.body, 'background')).toBe('transparent');
+    expect(decl(r.body, 'box-shadow')).toBe('inset 0 0 0 2px var(--color-border-strong)');
+    expect(decl(r.body, 'height')).toBe('10px');
+  });
+  it('filled is solid primary-fill', () => {
+    expect(decl(rule('.streak-dot.filled').body, 'background')).toBe('var(--color-primary-fill)');
+    expect(decl(rule('.streak-dot.filled').body, 'box-shadow')).toBe('none');
+  });
+  it('today, empty, is a primary-fill inset outline with no outer ring; today, filled, is just the fill', () => {
+    expect(decl(rule('.streak-dot.today').body, 'box-shadow')).toBe('inset 0 0 0 2px var(--color-primary-fill)');
+    expect(decl(rule('.streak-dot.today.filled').body, 'box-shadow')).toBe('none');
+  });
+  it('no switch, segment or dot rule has gone back to the old tokens', () => {
+    const sels = ['.theme-toggle-btn.active', '.library-switch-btn.active', '.streak-dot', '.streak-dot.filled', '.streak-dot.today'];
+    for (const s of sels) expect(rule(s).body).not.toMatch(/var\(--color-(?:surface|border|primary)\)/);
+  });
+  it('--color-primary stays the brand colour', () => {
+    expect(token('light', '--color-primary')).toBe('#FF6B35');
+    expect(token('dark', '--color-primary')).toBe('#FF6B35');
   });
 });

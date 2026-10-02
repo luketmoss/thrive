@@ -6,6 +6,7 @@ import {
   groupWorkoutsByDate,
   getWorkoutTags,
   getWeekStreak,
+  describeWeekStreak,
   getWeekWorkoutCount,
   getWeekTotalMinutes,
   getLastWeekWorkoutCount,
@@ -108,6 +109,7 @@ export function ActivitiesScreen() {
       </header>
 
       <div class="week-streak-bar">
+        <p class="sr-only">{describeWeekStreak(weekDays)}</p>
         <div class="week-streak-dots" aria-hidden="true">
           {weekDays.map((d) => (
             <div

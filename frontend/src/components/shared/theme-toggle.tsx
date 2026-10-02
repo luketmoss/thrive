@@ -60,11 +60,12 @@ const OPTIONS: { value: ThemeChoice; label: string }[] = [
 
 export function ThemeToggle() {
   return (
-    <div class="theme-toggle">
+    <div class="theme-toggle" role="group" aria-label="Theme">
       {OPTIONS.map(({ value, label }) => (
         <button
           key={value}
           class={`theme-toggle-btn${themeChoice.value === value ? ' active' : ''}`}
+          aria-pressed={themeChoice.value === value}
           onClick={() => setTheme(value)}
         >
           {label}

@@ -115,6 +115,18 @@ export function getWeekStreak(
   });
 }
 
+const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+/**
+ * The week streak as text (#293): the dots are aria-hidden and say nothing to
+ * a screen reader, so the days with a workout are named here, in week order.
+ */
+export function describeWeekStreak(days: WeekDay[]): string {
+  const names = days.flatMap((d, i) => (d.hasWorkout ? [DAY_NAMES[i]] : []));
+  if (names.length === 0) return 'No workouts logged yet this week.';
+  return `Workouts logged on ${names.join(', ')} this week.`;
+}
+
 /**
  * Returns the count of workouts in the Mon–Sun week containing `todayStr`.
  */

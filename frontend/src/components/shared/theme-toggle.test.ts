@@ -89,3 +89,21 @@ describe('theme-toggle — AC4 (indirect): no groundwork references in module', 
     expect(mod.themeChoice).toBeDefined();
   });
 });
+
+describe('theme-toggle — #293 AC2: selection is exposed to assistive tech', () => {
+  it('renders a labelled group with aria-pressed on the chosen option only', async () => {
+    localStorage.setItem('thrive-theme', 'dark');
+    vi.resetModules();
+    const { h } = await import('preact');
+    const { render, cleanup } = await import('@testing-library/preact');
+    const { ThemeToggle } = await import('./theme-toggle');
+    const { container } = render(h(ThemeToggle as any, {}));
+    const group = container.querySelector('.theme-toggle')!;
+    expect(group.getAttribute('role')).toBe('group');
+    expect(group.getAttribute('aria-label')).toBe('Theme');
+    const pressed = [...container.querySelectorAll('button')].map((b) => [b.textContent, b.getAttribute('aria-pressed')]);
+    expect(pressed).toEqual([['Light', 'false'], ['Dark', 'true'], ['System', 'false']]);
+    cleanup();
+    localStorage.clear();
+  });
+});

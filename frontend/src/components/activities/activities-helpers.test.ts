@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   groupWorkoutsByDate,
   getWeekStreak,
+  describeWeekStreak,
   getWeekWorkoutCount,
   getWeekTotalMinutes,
   getLastWeekWorkoutCount,
@@ -873,5 +874,23 @@ describe('pluralExercise (#113)', () => {
   it('pluralises everything else', () => {
     expect(pluralExercise(0)).toBe('0 exercises');
     expect(pluralExercise(5)).toBe('5 exercises');
+  });
+});
+
+describe('describeWeekStreak (#293 AC5)', () => {
+  const today = '2026-03-15'; // Sunday; week is Mon 03-09 to Sun 03-15
+  const w = (date: string) => ({ date } as any);
+
+  it('names the days with a workout, in week order', () => {
+    const days = getWeekStreak([w('2026-03-12'), w('2026-03-09'), w('2026-03-10')], today);
+    expect(describeWeekStreak(days)).toBe('Workouts logged on Monday, Tuesday, Thursday this week.');
+  });
+
+  it('says so when there are none', () => {
+    expect(describeWeekStreak(getWeekStreak([], today))).toBe('No workouts logged yet this week.');
+  });
+
+  it('ignores workouts outside the week', () => {
+    expect(describeWeekStreak(getWeekStreak([w('2026-03-08')], today))).toBe('No workouts logged yet this week.');
   });
 });
