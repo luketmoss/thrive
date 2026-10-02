@@ -85,6 +85,7 @@ const SUPPRESSIONS: Record<string, string> = {
     'replaced by a --color-primary-fill border and halo (#183 AC3)',
   '.day-panel-title:focus:not(:focus-visible)': 'mouse focus only; keyboard keeps the .day-screen ring',
   '.panel-status:focus': 'programmatic focus of a non-control (#256)',
+  '.trends-state:focus': 'programmatic focus of a non-control, held through Try again (#290)',
   '.app-content:focus, [data-route-focus]:focus': 'programmatic focus of a non-control (#256)',
 };
 
