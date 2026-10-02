@@ -133,7 +133,7 @@ describe.each(THEMES)('AC4: every focus ring is 2px and 3:1 on every surface (%s
 describe('AC4: every outline suppression is named', () => {
   it('lists each rule that sets outline none or 0, with its reason', () => {
     const found = rules
-      .filter((r) => /^(none|0)\b/.test(decl(r.body, 'outline') ?? ''))
+      .filter((r) => /^(none|0(px)?\b|transparent)/.test(decl(r.body, 'outline') ?? ''))
       .map((r) => r.selector)
       .sort();
     expect(found).toEqual(Object.keys(SUPPRESSIONS).sort());
@@ -142,17 +142,23 @@ describe('AC4: every outline suppression is named', () => {
 });
 
 describe('AC3/AC4: the cascade keeps Day Training cards on the Day ring', () => {
-  it('.day-screen :focus-visible comes after .workout-card:focus-visible', () => {
-    const order = rules.map((r) => r.selector);
-    expect(order.indexOf('.day-screen :focus-visible')).toBeGreaterThan(
-      order.indexOf('.workout-card:focus-visible'),
+  // Position of the first rule whose selector LIST contains the selector, so a
+  // selector merged into a longer list (the #301 rule) is still found, and
+  // found where it now sits.
+  const position = (selector: string) =>
+    rules.findIndex((r) =>
+      r.selector
+        .split(',')
+        .map((s) => s.trim())
+        .includes(selector),
     );
-  });
 
-  it('they have equal specificity, so source order decides', () => {
-    // (0,2,0) each: a class plus a pseudo-class, and a class plus a pseudo-class.
-    const weight = (s: string) => (s.match(/[.:]/g) ?? []).length;
-    expect(weight('.workout-card:focus-visible')).toBe(weight('.day-screen :focus-visible'));
+  it('.day-screen :focus-visible comes after .workout-card:focus-visible', () => {
+    const workoutCard = position('.workout-card:focus-visible');
+    const day = position('.day-screen :focus-visible');
+    expect(workoutCard, '.workout-card:focus-visible rule not found').toBeGreaterThanOrEqual(0);
+    expect(day, '.day-screen :focus-visible rule not found').toBeGreaterThanOrEqual(0);
+    expect(day).toBeGreaterThan(workoutCard);
   });
 
   it('the Day and Calendar rings stay --color-primary-text at +2px', () => {
