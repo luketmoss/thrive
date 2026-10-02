@@ -116,6 +116,20 @@ test('AC2: a clean run appends one ok row to WithingsSyncLog, none to SyncLog, a
   assert.equal(r.api.body.size, 2);
 });
 
+test('#327 AC5: a retry is a note in the WithingsSyncLog row and a counts-only info line, not a failure', async () => {
+  const api = fakeApi();
+  const note = 'Apps Script served a 404 page on write requests: 1 retried, 1 landed, 0 gave up (upsertBodyMeasurements x1)';
+  api.retryNote = () => note;
+  api.retryCounts = () => ({ retried: 1, landed: 1, gaveUp: 0 });
+  const r = await run([getmeasPage([measureGroup(1, D1, scale)])], { api });
+  assert.equal(r.exitCode, 0, r.text);
+  assert.equal(r.row.status, 'ok');
+  assert.equal(r.row.n_errors, 0);
+  assert.equal(r.row.notes, note);
+  assert.match(r.text, /Apps Script 404 pages on writes: 1 retried, 1 landed, 0 gave up\./);
+  assert.ok(!r.text.includes('upsertBodyMeasurements'));
+});
+
 test('AC2: a re-run counts BodyMeasurements rows changed as n_updated', async () => {
   const api = fakeApi();
   const drive = memoryDrive();

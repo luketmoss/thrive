@@ -126,3 +126,15 @@ export function summaryLine(row) {
     `${row.n_errors} failure(s).`
   );
 }
+
+/**
+ * The public log's one line about write retries (#327): counts only, no
+ * action names. `''` when the API has no tally or nothing was retried. Called
+ * after the SyncLog row is appended, so it also counts that append's retries,
+ * which the row itself can never show.
+ */
+export function retryLine(api) {
+  const c = api?.retryCounts?.();
+  if (!c) return '';
+  return `Apps Script 404 pages on writes: ${c.retried} retried, ${c.landed} landed, ${c.gaveUp} gave up.`;
+}

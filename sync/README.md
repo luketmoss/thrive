@@ -356,7 +356,7 @@ window covers it.
 | `n_enriched` | hand-logged strength rows the run wrote to (#155) |
 | `n_fit_fetched` | FIT requests made, failed ones included (#154). The next run's FIT budget is summed from it |
 | `n_errors`, `status`, `error_detail` | `ok` (exit 0), `partial` (completed with failures, exit 1), `failed` (aborted, exit 1, detail led by the error class, e.g. `CorosGrantDeadError: …`) |
-| `notes` | what the run noted that is not a failure: a strength session left unmatched, with its ID, local start, reason and any candidate workout IDs (#155). Blank when none |
+| `notes` | what the run noted that is not a failure: a strength session left unmatched, with its ID, local start, reason and any candidate workout IDs (#155); and, when a write was retried, `Apps Script served a 404 page on write requests: <N> retried, <M> landed, <K> gave up (<action> x<n>, ...)` (#327). Blank when none |
 
 A row that cannot be written fails the run too.
 
@@ -391,6 +391,7 @@ the auto-disable after 60 days with no activity on a public repo. That layer is
 | `COROS no longer offers …` | A tool was renamed or removed | Check `tools/list` and update `src/ingest.mjs` |
 | `health <date>: not written, unrecognized format in <tool>: …` | COROS changed how it words a value the parser reads | Fix `src/normalize-health.mjs` for the quoted line, then re-run. The archive still holds the text |
 | `THRIVE_API_URL and THRIVE_API_KEY not set`, or `ThriveApiError (config)` in a summary log | The Actions secrets are missing | `gh secret set THRIVE_API_URL` and `gh secret set THRIVE_API_KEY` |
+| `the API returned 404 with a web page instead of JSON` | Apps Script served a 404 page to a write and it stayed that way after 3 retries (2, 6 and 15 s, jittered), or the 90 s retry budget was spent. Only that class is retried, and only for writes that are safe to replay; a retry that landed is a `notes` line, not a failure (#327) | Nothing, if it clears. The next run re-sends the window. If it persists, check that `THRIVE_API_URL` is the `/exec` URL of the web-app deployment |
 | `SyncLog row … was not written` | The API refused or missed the run's row. The rest of the run may have landed | Read the quoted error (a local run shows it). A missing tab means `scripts/migrate-156-sync-log-tab.mjs` has not run |
 | `coros-sync-watchdog`: `has not run for N hours` | No sync has recorded a run within 16 h | Actions → coros-sync: is the schedule enabled, and are runs cancelled or timing out? |
 | `Lock timeout` | Another API caller held the script lock for over 30 s | Nothing, if it clears. The next run re-sends the window |
@@ -735,7 +736,7 @@ layout, made by `scripts/migrate-200-withings-sync-log-tab.mjs`:
 | `n_new`, `n_updated` | `BodyMeasurements` rows appended; rows changed |
 | `n_enriched`, `n_fit_fetched` | always `0` |
 | `n_errors`, `status`, `error_detail` | `ok` (exit 0), `partial` (a group not archived or not normalized, or the sheet write failed; exit 1), `failed` (the fetch was cut short or never began, e.g. `WithingsGrantDeadError: …`; exit 1). Redacted, and led by the error class |
-| `notes` | groups skipped as unattributed, with `grpid` and `attrib`. Not a failure |
+| `notes` | groups skipped as unattributed, with `grpid` and `attrib`; and the same `Apps Script served a 404 page on write requests: …` line as `SyncLog` when a write was retried (#327). Not a failure |
 
 A row that cannot be written fails the run. A re-sent `run_id` is not appended
 twice.

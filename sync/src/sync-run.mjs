@@ -16,7 +16,7 @@ import { googleTokenProvider, loadGoogleCredentials } from './google.mjs';
 import { ingest, REQUIRED_TOOLS } from './ingest.mjs';
 import { connectCoros } from './mcp.mjs';
 import { redact } from './redact.mjs';
-import { buildSyncLogRow, createRunOutput, logModeFor, runIdFor, summaryLine } from './run-log.mjs';
+import { buildSyncLogRow, createRunOutput, logModeFor, retryLine, runIdFor, summaryLine } from './run-log.mjs';
 import { writeSheet } from './sheet.mjs';
 import { createThriveApi, loadThriveApiConfig } from './thrive-api.mjs';
 import { createTokenStore } from './token-store.mjs';
@@ -158,6 +158,11 @@ export async function syncRun({ env = process.env, force = false, now = () => ne
     out.info(fitSummary(fit));
   }
 
+  // Optional, so an API without it (a fake) still works. A retry is not a
+  // failure: it is a note, and status and n_errors never see it (#327).
+  const retryNote = api?.retryNote?.();
+  if (retryNote) notes.push(retryNote);
+
   const row = buildSyncLogRow({
     runId, startedAt, finishedAt: now().toISOString(), window, counts, failures, fatal, notes,
   });
@@ -177,6 +182,8 @@ export async function syncRun({ env = process.env, force = false, now = () => ne
   } else {
     out.logWriteFailed(runId, apiError);
   }
+  const retries = retryLine(api);
+  if (retries) out.info(retries);
   out.info(summaryLine(row));
 
   return { exitCode: row.status === 'ok' && logged ? 0 : 1, row, logged };

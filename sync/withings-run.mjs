@@ -43,7 +43,7 @@ import { createDrive } from './src/drive.mjs';
 import { googleTokenProvider, loadGoogleCredentials } from './src/google.mjs';
 import { normalizeWithingsGroups, skippedNotes } from './src/normalize-withings.mjs';
 import { redact } from './src/redact.mjs';
-import { buildSyncLogRow, createRunOutput, logModeFor, runIdFor } from './src/run-log.mjs';
+import { buildSyncLogRow, createRunOutput, logModeFor, retryLine, runIdFor } from './src/run-log.mjs';
 import { createThriveApi, loadThriveApiConfig } from './src/thrive-api.mjs';
 import { createWithingsTokenStore } from './src/token-store.mjs';
 import { createWithingsArchive } from './src/withings-archive.mjs';
@@ -377,6 +377,11 @@ export async function withingsSyncRun({
     );
   }
 
+  // Optional, so an API without it (a fake) still works. A retry is a note,
+  // never a failure: status and n_errors do not see it (#327).
+  const retryNote = api?.retryNote?.();
+  if (retryNote) notes.push(retryNote);
+
   const row = buildSyncLogRow({
     runId, startedAt, finishedAt: new Date(now()).toISOString(), window, counts, failures, fatal, notes,
   });
@@ -397,6 +402,8 @@ export async function withingsSyncRun({
   } else {
     out.logWriteFailed(runId, apiError);
   }
+  const retries = retryLine(api);
+  if (retries) out.info(retries);
   out.info(withingsSummaryLine(row));
 
   return { exitCode: row.status === 'ok' && logged ? 0 : 1, row, logged, result };
