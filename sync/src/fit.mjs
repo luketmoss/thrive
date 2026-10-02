@@ -19,6 +19,7 @@
 // `docs/data-architecture.md` §4 keeps FIT out of normalization, so a FIT the
 // budget delayed never changes a row's values later.
 
+import { DriveError } from './drive.mjs';
 import { DriveAuthError } from './errors.mjs';
 import { redact } from './redact.mjs';
 
@@ -242,7 +243,7 @@ export function createFitStep({ client, archive, api, startedAt, log = console.l
    */
   async function ensure({ activityId, fileId, record, payloadHash, args, localDate }) {
     if (settled(record, payloadHash)) return fitSheetFields(record);
-    if (record?.status === 'stored') return refetch({ activityId, fileId, record, payloadHash, args });
+    if (record?.status === 'stored') return refetch({ activityId, fileId, record, payloadHash, args, localDate });
 
     const existing = await archive.findFit(activityId);
     if (existing) {
@@ -314,7 +315,7 @@ export function createFitStep({ client, archive, api, startedAt, log = console.l
    * same budget as a first fetch, and a failure of any kind leaves the FIT
    * the row already points at exactly as it was.
    */
-  async function refetch({ activityId, fileId, record, payloadHash, args }) {
+  async function refetch({ activityId, fileId, record, payloadHash, args, localDate }) {
     const refetches = record.refetches ?? 0;
     if (refetches >= FIT_MAX_REFETCHES) {
       // Marked once, so the note is too: a stale record is settled.
@@ -358,22 +359,59 @@ export function createFitStep({ client, archive, api, startedAt, log = console.l
       return fitSheetFields(record);
     }
 
+    // The bytes are in hand. A Drive failure from here on is not COROS's, so
+    // it uses up no attempt; the request still counted.
+    let fileIdNow = record.file_id;
+    let recreated = false;
     try {
       await archive.replaceFit(record.file_id, bytes);
-      const stored = {
-        status: 'stored', file_id: record.file_id, fetched_at: startedAt, attempts: record.attempts ?? 0,
-        bytes: bytes.length, payload_hash: payloadHash, refetches: refetches + 1,
-      };
-      await archive.writeFit(fileId, stored);
-      counts.refetched += 1;
-      log(`  activity ${activityId}: FIT replaced in place (${bytes.length} bytes) as ${record.file_id}`);
-      return fitSheetFields(stored);
     } catch (err) {
       if (err instanceof DriveAuthError) throw err;
-      // Not COROS's failure, so no attempt is used up; the old file is intact.
-      fail(`activity ${activityId}: FIT re-downloaded but not replaced in Drive: ${redact(err.message || String(err))}`);
+      if (!(err instanceof DriveError) || err.status !== 404) {
+        fail(`activity ${activityId}: FIT re-downloaded but not replaced in Drive: ${redact(err.message || String(err))}`);
+        return fitSheetFields(record);
+      }
+      // #310: the stored file is gone. Re-create it from the bytes already
+      // downloaded, so a deleted FIT costs one request, not one a run. A live
+      // tagged file is replaced in place rather than duplicated.
+      try {
+        const live = await archive.findFit(activityId);
+        if (live) {
+          await archive.replaceFit(live.id, bytes);
+          fileIdNow = live.id;
+        } else {
+          fileIdNow = await archive.storeFit({ activityId, localDate, bytes });
+        }
+        recreated = true;
+      } catch (createErr) {
+        if (createErr instanceof DriveAuthError) throw createErr;
+        fail(`activity ${activityId}: FIT re-downloaded, but its stored Drive file ${record.file_id} is gone (404) and a new one could not be created: ${redact(createErr.message || String(createErr))}`);
+        return fitSheetFields(record);
+      }
+    }
+
+    const stored = {
+      status: 'stored', file_id: fileIdNow, fetched_at: startedAt, attempts: record.attempts ?? 0,
+      bytes: bytes.length, payload_hash: payloadHash, refetches: refetches + 1,
+    };
+    try {
+      await archive.writeFit(fileId, stored);
+    } catch (err) {
+      if (err instanceof DriveAuthError) throw err;
+      // The Drive write is good but unrecorded: the record still holds the old
+      // hash, so the next run asks again (one request) and, after a
+      // re-creation, finds the tagged file instead of making a second.
+      fail(`activity ${activityId}: ${recreated ? `FIT stored again in Drive as ${fileIdNow}` : 'FIT replaced in Drive'} but the archive record was not updated, so the next run fetches it again: ${redact(err.message || String(err))}`);
       return fitSheetFields(record);
     }
+    counts.refetched += 1;
+    if (recreated) {
+      notes.push(`FIT ${activityId}: the stored Drive file ${record.file_id} was gone (404); the FIT is stored again as ${fileIdNow}`);
+      log(`  activity ${activityId}: stored FIT ${record.file_id} was gone (404), stored again (${bytes.length} bytes) as ${fileIdNow}`);
+    } else {
+      log(`  activity ${activityId}: FIT replaced in place (${bytes.length} bytes) as ${fileIdNow}`);
+    }
+    return fitSheetFields(stored);
   }
 
   return {

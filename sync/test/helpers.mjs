@@ -1,5 +1,7 @@
 // Shared fakes. No test in sync/ touches the network.
 
+import { DriveError } from '../src/drive.mjs';
+
 /** A fetch that answers from a list, in order, and records every request. */
 export function scriptedFetch(responses) {
   const calls = [];
@@ -119,6 +121,7 @@ export function memoryDrive() {
     },
     async updateBinary(id, bytes) {
       if (drive.failUpdateBinary) throw drive.failUpdateBinary;
+      if (!files.has(id)) throw new DriveError(404, `File not found: ${id}`);
       files.get(id).bytes = Buffer.from(bytes);
       writes.push({ op: 'updateBinary', id });
     },

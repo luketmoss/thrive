@@ -297,10 +297,21 @@ included) has no row to record one on. `src/fit.mjs`:
   as changed, once. The re-fetch spends budget like any request and is
   counted in the `FIT:` line as `refetched`. A failed one (COROS error, or a
   file that fails the FIT check) leaves the stored FIT and the row alone, is a
-  run failure, and counts toward a cap of **3 re-fetches** per activity; a
-  Drive failure on the replace does not count. After 3, a further change makes
-  no request: the record is marked `stale`, the run adds a `SyncLog` note,
-  and later runs are silent. `unavailable` FITs are not retried on a change.
+  run failure, and counts toward a cap of **3 re-fetches** per activity. After
+  3, a further change makes no request: the record is marked `stale`, the run
+  adds a `SyncLog` note, and later runs are silent. `unavailable` FITs are not
+  retried on a change.
+- **Drive failures on a re-fetch (#310).** The bytes are downloaded and checked
+  before anything is written to Drive. A Drive **404** on the replace means the
+  stored file was deleted: the FIT is re-created from those same bytes (a live
+  file tagged for the activity is replaced in place, else a new one is created),
+  the record takes the new `file_id`, and it counts as one re-fetch. The run
+  adds a `SyncLog` note (`FIT <id>: the stored Drive file <old> was gone (404);
+  the FIT is stored again as <new>`), not a failure. Any other Drive failure
+  (5xx, 429, 403, network) recreates nothing, does not count toward the cap, is
+  a run failure, and retries next run. If the Drive write succeeded but the
+  archive record could not be updated, that is a run failure of its own, no
+  attempt is used, and the next run repeats the request (one COROS request).
 
 **The budget** is `50 − sum(n_fit_fetched)` over the `SyncLog` rows that
 started in the 24 hours before this run. It is derived, never stored. COROS's
