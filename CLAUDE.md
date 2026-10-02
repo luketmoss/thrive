@@ -120,6 +120,25 @@ Google Sheet "Groundwork" with these tabs:
   `apps-script/src/types.js` — change both together. Created by
   `scripts/migrate-233-journal-tab.mjs`. There is no Apps Script action for it
   yet (#234).
+- **SyncRequests** (A:I) — on-demand sync requests (#314, #232's route c): one
+  row per vendor per "Sync now" press. request_id, vendor, requested_at,
+  requested_by, status, workflow_run_id, dispatched_at, finished_at, detail.
+  The SPA only ever appends A–E (`sr_` + 8 hex, `coros`|`withings`, ISO UTC,
+  the signed-in email or blank, `requested`; #315). `pollSyncRequests`
+  (`apps-script/src/sync-requests.js`), a 5-minute Apps Script time-driven
+  trigger on the bot account, writes every later value in E–I and never
+  appends, deletes or writes A–D. It dispatches the existing
+  `coros-sync.yml`/`withings-sync.yml` with a fixed `{"ref":"main"}` and the
+  `GITHUB_DISPATCH_TOKEN` script property, and closes each row it started.
+  Statuses: `requested` → `started` → `done`|`cancelled`|`failed`|`not_reported`,
+  or `requested` → `skipped`|`failed`|`expired`; all but `requested`/`started`
+  are final and never touched again. `detail` is words, never the token or
+  GitHub's body. A `workflow_dispatch-<workflow_run_id>-N` row in the vendor's
+  log tab outranks the request's own status. Row mapping mirrors
+  `SYNC_REQUEST_FIELDS`/`_STATUSES`/`_VENDORS` in `apps-script/src/types.js`
+  and `frontend/src/api/sync-requests-api.ts` — change both together. Created
+  by `scripts/migrate-314-sync-requests-tab.mjs`. Later columns are only ever
+  appended.
 
 `Created` on `Exercises`/`Workouts`/`Labels` is written but never read — a
 deliberate forensic trail, not dead weight to be removed.

@@ -153,8 +153,15 @@ export function makeUtilities(uuids: string[] = []) {
       return uuids[nextUuid++] ?? 'uuid-' + ++nextUuid;
     },
     formatDate(date: Date, timeZone: string, format: string) {
+      // 'h:mm a' is the SyncRequests poller's clock (#314): "7:12 AM". Newer
+      // ICU puts a narrow no-break space before AM/PM; Apps Script does not.
+      if (format === 'h:mm a') {
+        return new Intl.DateTimeFormat('en-US', {
+          timeZone, hour: 'numeric', minute: '2-digit', hour12: true,
+        }).format(date).replace(/[  ]/g, ' ');
+      }
       if (format !== 'yyyy-MM-dd') {
-        throw new Error('Utilities.formatDate stub only supports yyyy-MM-dd, got: ' + format);
+        throw new Error('Utilities.formatDate stub only supports yyyy-MM-dd and h:mm a, got: ' + format);
       }
       // 'en-CA' renders YYYY-MM-DD, which is what Apps Script's 'yyyy-MM-dd'
       // produces.
@@ -190,7 +197,7 @@ export function makeContentService() {
  * LockService stub (#156): one script lock, counted so a test can assert a
  * write took it, and refusing re-entry so a nested acquire fails loudly.
  */
-export function makeLockService(state: { acquired: number; held: boolean }) {
+export function makeLockService(state: { acquired: number; held: boolean; tryWaits?: number[] }) {
   return {
     getScriptLock() {
       return {
@@ -198,6 +205,14 @@ export function makeLockService(state: { acquired: number; held: boolean }) {
           if (state.held) throw new Error('Lock timeout: the script lock is already held');
           state.held = true;
           state.acquired += 1;
+        },
+        // #314: the poller's non-blocking acquire. Busy answers false.
+        tryLock(ms: number) {
+          state.tryWaits?.push(ms);
+          if (state.held) return false;
+          state.held = true;
+          state.acquired += 1;
+          return true;
         },
         releaseLock() {
           state.held = false;
@@ -307,12 +322,16 @@ export function makeDriveApp(nodes: Record<string, DriveNode>, calls: string[], 
   };
 }
 
-/** PropertiesService stub backed by a plain object of script properties. */
-export function makePropertiesService(properties: Record<string, string>) {
+/**
+ * PropertiesService stub backed by a plain object of script properties.
+ * `reads`, when given, records every key asked for (#314).
+ */
+export function makePropertiesService(properties: Record<string, string>, reads?: string[]) {
   return {
     getScriptProperties() {
       return {
         getProperty(key: string) {
+          reads?.push(key);
           return Object.prototype.hasOwnProperty.call(properties, key) ? properties[key] : null;
         },
       };
@@ -434,7 +453,8 @@ export function loadApi(
 
   const sandbox = loadSources(
     ['types.js', 'utils.js', 'workouts.js', 'exercises.js', 'templates.js', 'sets.js',
-      'daily-summary.js', 'daily-health.js', 'body-measurements.js', 'sync-log.js', 'payload.js', 'auth.js', 'main.js'],
+      'daily-summary.js', 'daily-health.js', 'body-measurements.js', 'sync-log.js', 'payload.js', 'auth.js',
+      'sync-requests.js', 'main.js'],
     {
       LockService: makeLockService(lock),
       ContentService: makeContentService(),
