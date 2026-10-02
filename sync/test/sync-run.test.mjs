@@ -7,7 +7,8 @@ import assert from 'node:assert/strict';
 import { CorosGrantDeadError, DriveAuthError } from '../src/errors.mjs';
 import { buildSyncLogRow, createRunOutput, runIdFor } from '../src/run-log.mjs';
 import { REQUIRED_TOOLS } from '../src/ingest.mjs';
-import { FIT_TOOL } from '../src/fit.mjs';
+import { DriveError } from '../src/drive.mjs';
+import { FIT_TOOL, fitCrc } from '../src/fit.mjs';
 import { fitBudgetOverride, fitSummary, syncRun } from '../src/sync-run.mjs';
 import { ThriveApiError, fitErrorDetail, createThriveApi, MAX_ENCODED_PAYLOAD } from '../src/thrive-api.mjs';
 import { scriptedFetch } from './helpers.mjs';
@@ -336,4 +337,89 @@ test('#154 AC2: THRIVE_FIT_BUDGET is read as a whole number, or ignored', () => 
   assert.equal(fitBudgetOverride({ THRIVE_FIT_BUDGET: '0' }), 0);
   assert.equal(fitBudgetOverride({ THRIVE_FIT_BUDGET: '2' }), 2);
   for (const v of [undefined, '', '-1', '1.5', 'lots']) assert.equal(fitBudgetOverride({ THRIVE_FIT_BUDGET: v }), undefined);
+});
+
+// --- #310 AC5: FIT notes reach the SyncLog row --------------------------------------
+
+/** A whole synthetic FIT: a 12-byte header, a little data, the file CRC. */
+function tinyFit() {
+  const data = Buffer.from('synthetic record bytes, not a real activity');
+  const header = Buffer.alloc(12);
+  header[0] = 12;
+  header.writeUInt32LE(data.length, 4);
+  header.write('.FIT', 8, 'latin1');
+  const body = Buffer.concat([header, data]);
+  const crc = Buffer.alloc(2);
+  crc.writeUInt16LE(fitCrc(body));
+  return Buffer.concat([body, crc]);
+}
+
+/**
+ * A full syncRun with the real FIT step, over one stored activity whose payload
+ * has changed. `record` is the activity's `fit` record; `archive` is a fake
+ * Drive archive (the step's only boundary).
+ */
+async function runWithFit({ record, archiveOverrides = {}, startedAt = START }) {
+  const writes = [];
+  const archive = {
+    async findFit() { return null; },
+    async storeFit() { return 'new-fit-file'; },
+    async replaceFit() { throw new DriveError(404, 'File not found: old-fit-file'); },
+    async writeFit(fileId, fit) { writes.push({ fileId, fit }); },
+    ...archiveOverrides,
+  };
+  const callTool = async () => ({
+    content: [{ type: 'resource', resource: { uri: 'coros://activity-fit-files/a1.fit', blob: tinyFit().toString('base64') } }],
+  });
+  const { rows } = { rows: [] };
+  const api = {
+    rows,
+    async getSyncLog() { return []; },
+    async appendSyncLog(row) { rows.push(row); return { status: 'appended', run_id: row.run_id }; },
+  };
+  const f = fakes({
+    api,
+    createArchive: () => archive,
+    connectCoros: async () => ({
+      async listTools() { return { tools: [...REQUIRED_TOOLS, FIT_TOOL].map((name) => ({ name })) }; },
+      callTool,
+      async close() {},
+    }),
+    writeSheet: async ({ fit }) => {
+      await fit.ensure({
+        activityId: 'a1', fileId: 'archive-file', record, payloadHash: 'hash-now', args: { labelId: 'a1', sportType: 100 }, localDate: '2026-09-23',
+      });
+      return { activities: { created: 0, updated: 1, unchanged: 0 }, failures: [] };
+    },
+  });
+  const lines = [];
+  const output = createRunOutput('full', { out: (l) => lines.push(l), err: (l) => lines.push(l) });
+  const result = await syncRun({ env: ACTIONS_ENV, now: clock(), deps: f.deps, output });
+  return { ...result, rows, writes };
+}
+
+const storedRecord = (extra = {}) => ({
+  status: 'stored', file_id: 'old-fit-file', fetched_at: START, attempts: 1, bytes: 10, payload_hash: 'hash-then', ...extra,
+});
+
+test('#310 AC5: the stale note reaches the SyncLog row, is not a failure, and the next run has none', async () => {
+  const first = await runWithFit({ record: storedRecord({ refetches: 3 }) });
+  assert.equal(first.rows.length, 1);
+  assert.match(first.rows[0].notes, /FIT a1: changed again after 3 re-fetches/);
+  assert.equal(first.rows[0].status, 'ok', 'not partial');
+  assert.equal(first.rows[0].n_fit_fetched, 0);
+  assert.equal(first.writes[0].fit.stale, true);
+
+  // The following run reads the record the first one wrote.
+  const second = await runWithFit({ record: first.writes[0].fit });
+  assert.equal(second.rows[0].notes, '');
+  assert.equal(second.rows[0].status, 'ok');
+});
+
+test('#310 AC5: the gone-file note reaches the SyncLog row, and the run is not partial', async () => {
+  const r = await runWithFit({ record: storedRecord() });
+  assert.equal(r.rows[0].notes, 'FIT a1: the stored Drive file old-fit-file was gone (404); the FIT is stored again as new-fit-file');
+  assert.equal(r.rows[0].status, 'ok');
+  assert.equal(r.rows[0].n_fit_fetched, 1, 'one COROS request');
+  assert.equal(r.writes[0].fit.file_id, 'new-fit-file');
 });
