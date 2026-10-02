@@ -1188,6 +1188,9 @@ input, select, textarea {
 .exercise-list > .exercise-list-item {
   width: 100%;
   min-height: 44px;
+  /* The explicit min-height replaces the flex item's content-sized minimum, so
+     without this a long list squeezes every row down to 44 px. */
+  flex-shrink: 0;
   margin: 0;
   padding: var(--space-md) var(--space-lg);
   border: 0;

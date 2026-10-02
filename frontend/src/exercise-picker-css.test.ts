@@ -44,6 +44,12 @@ describe('#319 AC5: picker buttons keep their look and size', () => {
     });
   }
 
+  it('never lets the scrolling list squeeze a row below its content', () => {
+    // min-height replaces the flex item's content-sized minimum; without this a
+    // long list shrinks every row to 44 px and the tags overflow the divider.
+    expect(rule('.exercise-list > .exercise-list-item')).toMatch(/flex-shrink:\s*0/);
+  });
+
   it('keeps the row divider and the create row top border', () => {
     expect(rule('.exercise-list > .exercise-list-item')).toMatch(/border-bottom:\s*1px solid var\(--color-border-light\)/);
     expect(rule('.create-new-row')).toMatch(/border-top:\s*1px solid var\(--color-border-light\)/);
