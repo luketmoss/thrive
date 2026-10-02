@@ -9,9 +9,19 @@ import { formatDuration, formatEstimate } from '../../api/duration';
 import { formatDistance, formatElevation, formatHeartRate } from '../../api/units';
 import { provenanceDetail } from '../../api/provenance';
 import { WatchGlyph } from '../shared/provenance-mark';
+import { corosActivityUrl } from '../../api/coros-link';
 
 interface Props {
   workoutId: string;
+}
+
+/** An arrow out of a box: "opens elsewhere". Decorative; sized to the text. */
+function ExternalGlyph() {
+  return (
+    <svg class="detail-coros-link-glyph" viewBox="0 0 12 12" fill="none" aria-hidden="true" focusable="false">
+      <path d="M7 1.5h3.5V5M10.5 1.5 5.5 6.5M9 7.5v2.25c0 .41-.34.75-.75.75h-6a.75.75 0 0 1-.75-.75v-6c0-.41.34-.75.75-.75H4.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+  );
 }
 
 /** Find the most recent previous workout with the same template/name (for "last time" reference). */
@@ -124,6 +134,7 @@ export function WorkoutDetail({ workoutId }: Props) {
 
   const isPlanned = workout.status === 'planned';
   const provenance = provenanceDetail(workout);
+  const corosUrl = corosActivityUrl(workout);
   const estimate = formatEstimate(workout.estimated_seconds);
 
   return (
@@ -202,6 +213,22 @@ export function WorkoutDetail({ workoutId }: Props) {
             <WatchGlyph />
             <span>{provenance}</span>
           </p>
+        )}
+        {/* #260: the activity's page on the COROS web portal, on its own
+            row. Nothing at all when there is nothing to link to (AC8). */}
+        {corosUrl && (
+          <a
+            class="detail-coros-link"
+            href={corosUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {/* The trailing space joins the label to the hidden text in the
+                accessible name; in an inline-flex row it draws nothing. */}
+            {'View on COROS '}
+            <span class="sr-only">(opens in a new tab)</span>
+            <ExternalGlyph />
+          </a>
         )}
         {workout.notes && (
           <p class="detail-notes">{workout.notes}</p>

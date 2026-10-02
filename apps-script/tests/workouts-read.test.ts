@@ -21,14 +21,14 @@ const PRE_128_ROW = [
   '', 'Hard', '', '', '', '',
 ];
 
-describe('AC2: the full 27-column shape', () => {
-  it('returns all 27 columns', () => {
+describe('AC2: the full 28-column shape', () => {
+  it('returns all 28 columns', () => {
     const { sandbox } = loadApi([workoutRow()]);
     const [w] = callDoGet(sandbox, { action: 'getWorkouts' }).data;
     for (const f of sandbox.WORKOUT_FIELDS) {
       expect(w, f).toHaveProperty(f);
     }
-    expect(sandbox.WORKOUT_FIELDS).toHaveLength(27);
+    expect(sandbox.WORKOUT_FIELDS).toHaveLength(28);
   });
 
   it('carries the sheet row so a caller can write back without re-scanning', () => {
@@ -98,7 +98,7 @@ describe('AC2: a pre-#128 row reads identically to a post-#128 one', () => {
     for (const f of SYNC_FIELDS) expect(w[f], f).toBe('');
   });
 
-  it('gives the same keys as a row written with all 27 cells', () => {
+  it('gives the same keys as a row written with all 28 cells', () => {
     const { sandbox: a } = loadApi([PRE_128_ROW]);
     const { sandbox: b } = loadApi([workoutRow({ id: 'w_old' })]);
     const before = callDoGet(a, { action: 'getWorkouts' }).data[0];

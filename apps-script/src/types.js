@@ -6,7 +6,7 @@
 // every consumer arriving later (the COROS sync, the Journal) calls the API
 // instead of adding another copy.
 
-// Column indices for the Workouts sheet (0-based), A:AA after #128/#129/#145.
+// Column indices for the Workouts sheet (0-based), A:AB after #128/#129/#145/#260.
 var COL = {
   ID: 0,                  // A
   DATE: 1,                // B  local calendar date, YYYY-MM-DD
@@ -35,9 +35,11 @@ var COL = {
   STARTED_AT_UTC: 24,     // Y
   CALORIES: 25,           // Z
   ESTIMATED_SECONDS: 26,  // AA planned duration, seconds, typed per plan (#145)
+  SPORT_TYPE: 27,         // AB COROS sport code, digits as text (#260). Sync-owned;
+                          //    blank means unknown, never 0
 };
 
-var WORKOUT_COLUMN_COUNT = 27;
+var WORKOUT_COLUMN_COUNT = 28;
 
 /**
  * The field name for each column, in sheet order. The read and write mappers
@@ -50,7 +52,7 @@ var WORKOUT_FIELDS = [
   'moving_seconds', 'effort', 'distance_m', 'ascent_m', 'descent_m', 'avg_hr',
   'sub_type', 'source', 'source_activity_id', 'raw_ref', 'fit_ref',
   'fit_fetched_at', 'synced_at', 'started_at_utc', 'calories',
-  'estimated_seconds',
+  'estimated_seconds', 'sport_type',
 ];
 
 var WORKOUT_TYPES = ['weight', 'stretch', 'bike', 'hike', 'run', 'walk'];
@@ -68,6 +70,12 @@ var WORKOUT_TYPES = ['weight', 'stretch', 'bike', 'hike', 'run', 'walk'];
  * FIT: `fit_ref` / `fit_fetched_at` (#154) are sync-owned too, but optional:
  * overwritten when the payload sends them (together), untouched when it
  * sends neither. See normalizeSyncedFit in workouts.js.
+ *
+ * Sport code: `sport_type` (#260) is sync-owned and optional the same way:
+ * a top-level `sport_type` overwrites AB, an absent one leaves AB alone, so
+ * a caller that predates it (or a Garmin import) never blanks it. It is the
+ * COROS portal's key, not a fact the user edits, so it is never merged and
+ * never appears in `written` / `edited`.
  *
  * Every other column is never set by the action: `effort`, `notes`,
  * `status`, `template_id`, `copied_from` and `estimated_seconds` (#145) stay
@@ -91,6 +99,8 @@ var SYNC_OWNED_FIELDS = ['source', 'source_activity_id', 'raw_ref', 'synced_at']
  */
 var ENRICH_FIELDS = ['elapsed_seconds', 'moving_seconds', 'avg_hr', 'calories'];
 
+// enrichWorkout also writes an optional top-level `sport_type` (#260) with
+// these, whenever the call writes the row; an `unchanged` call writes nothing.
 var ENRICH_LINK_FIELDS = ['source_activity_id', 'raw_ref', 'synced_at'];
 
 /**

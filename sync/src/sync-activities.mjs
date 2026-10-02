@@ -71,6 +71,21 @@ const sameNormalized = (a, b) =>
  *   `updated` counts rows whose merged fields changed (SyncLog's `n_updated`, #156); the API answers `updated` for every existing row, because
  *   `synced_at` always moves, so a row that held what it already held is `unchanged`.
  */
+/**
+ * The COROS sport code as Workouts!AB `sport_type` (#260): `{ sport_type }`
+ * for a whole-number code, else `{}` so nothing is sent.
+ *
+ * Always a TOP-LEVEL key of upsertSyncedWorkout / enrichWorkout, never inside
+ * `incoming` or `activity`: those are validated strictly, and an API deployed
+ * before #260 would refuse every write that carried an unknown field there.
+ * At the top level it reads only the keys it names, so it ignores this one,
+ * and the nightly write succeeds unchanged.
+ */
+export function sportTypeField(code) {
+  const text = typeof code === 'number' ? String(code) : typeof code === 'string' ? code.trim() : '';
+  return /^\d+$/.test(text) ? { sport_type: text } : {};
+}
+
 export async function syncActivities({ archive, api, activityIds, syncedAt, fit = null, log = console.log }) {
   const out = {
     created: 0, updated: 0, unchanged: 0, deleted: 0, skipped: 0,
@@ -110,17 +125,17 @@ export async function syncActivities({ archive, api, activityIds, syncedAt, fit 
         fail(`activity ${id}: not written, unrecognized format in getActivityDetail: ${err.message}`);
         continue;
       }
-      ready.push({ id, file, incoming, strength, sport });
+      ready.push({ id, file, incoming, strength, sport, sportType: sportTypeField(code) });
     } catch (err) {
       fail(`activity ${id}: ${redact(err.message || String(err))}`);
     }
   }
   ready.sort((a, b) => a.file.data.list_entry.startTimestamp - b.file.data.list_entry.startTimestamp);
 
-  for (const { id, file, incoming, strength, sport } of ready) {
+  for (const { id, file, incoming, strength, sport, sportType } of ready) {
     try {
       if (strength) {
-        await enrich({ id, file, incoming, sport });
+        await enrich({ id, file, incoming, sport, sportType });
         continue;
       }
 
@@ -142,6 +157,7 @@ export async function syncActivities({ archive, api, activityIds, syncedAt, fit 
         raw_ref: file.fileId,
         synced_at: syncedAt,
         ...fitFields,
+        ...sportType,
       });
 
       if (result.status === 'deleted') {
@@ -165,7 +181,7 @@ export async function syncActivities({ archive, api, activityIds, syncedAt, fit 
   return out;
 
   /** One strength session: enrich its hand-logged row, or note why not. */
-  async function enrich({ id, file, incoming, sport }) {
+  async function enrich({ id, file, incoming, sport, sportType }) {
     const activity = strengthActivity(incoming, sport);
     const lastWritten = file.data.normalized?.enrichment ?? null;
     const result = await api.enrichWorkout({
@@ -174,6 +190,7 @@ export async function syncActivities({ archive, api, activityIds, syncedAt, fit 
       last_written: lastWritten,
       raw_ref: file.fileId,
       synced_at: syncedAt,
+      ...sportType,
     });
 
     if (result.status === 'unmatched') {

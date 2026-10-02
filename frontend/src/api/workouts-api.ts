@@ -18,7 +18,7 @@ export class WorkoutRowMismatchError extends Error {
   }
 }
 
-// ── Workouts tab (A:AA) ──────────────────────────────────────────────
+// ── Workouts tab (A:AB) ──────────────────────────────────────────────
 
 // Demo dates are shifted once per page load (#250): a later call must neither
 // re-shift nor recompute against a `now` that has crossed midnight.
@@ -31,13 +31,13 @@ export async function fetchWorkouts(token: string): Promise<WorkoutWithRow[]> {
   }
 
   return withReauth(token, async (t) => {
-    const rows = await sheetsGet('Workouts!A2:AA', t);
+    const rows = await sheetsGet('Workouts!A2:AB', t);
     return rows.map((row, i) => rowToWorkout(row, i + 2));
   });
 }
 
 /**
- * Reads a `Workouts!A:AA` row. The Sheets API drops trailing empty cells, so a
+ * Reads a `Workouts!A:AB` row. The Sheets API drops trailing empty cells, so a
  * short row is normal and every missing cell reads as `''`.
  */
 export function rowToWorkout(row: string[], sheetRow: number): WorkoutWithRow {
@@ -73,6 +73,8 @@ export function rowToWorkout(row: string[], sheetRow: number): WorkoutWithRow {
     // #145 AA. Blank on every row planned before it existed, and on every
     // row nobody estimated.
     estimated_seconds: row[26] || '',
+    // #260 AB. Blank until the sync or the backfill writes it.
+    sport_type: row[27] || '',
     sheetRow,
   };
 }
@@ -90,7 +92,7 @@ export async function findWorkoutRow(workoutId: string, token: string): Promise<
 }
 
 /**
- * Builds a `Workouts!A:AA` row. Both the create and the edit path go through
+ * Builds a `Workouts!A:AB` row. Both the create and the edit path go through
  * here: `sheetsAppend`/`sheetsUpdate` write every value handed to them
  * regardless of the range, so two builders that had to agree — and didn't —
  * is exactly how #100 nearly resurrected a deleted column.
@@ -124,6 +126,7 @@ export function workoutToRow(w: Workout): (string | number)[] {
     w.started_at_utc,
     w.calories,
     w.estimated_seconds,
+    w.sport_type,
   ];
 }
 
@@ -173,11 +176,13 @@ export async function createWorkout(
     calories: '',
     // #145: only a plan carries one, and only when the user typed it.
     estimated_seconds: data.estimated_seconds || '',
+    // #260: sync-owned, like the provenance columns above. Never set here.
+    sport_type: '',
   };
 
   if (!isDemo()) {
     await withReauth(token, (t) =>
-      sheetsAppend('Workouts!A:AA', [workoutToRow(workout)], t),
+      sheetsAppend('Workouts!A:AB', [workoutToRow(workout)], t),
     );
   }
 
@@ -219,7 +224,7 @@ export async function updateWorkout(
   if (isDemo()) return { ...workout, ...patch, id: workout.id, sheetRow };
 
   return withReauth(token, async (t) => {
-    const range = `Workouts!A${sheetRow}:AA${sheetRow}`;
+    const range = `Workouts!A${sheetRow}:AB${sheetRow}`;
     const current = await sheetsGet(range, t);
     if (!current[0] || (current[0][0] || '') !== workout.id) {
       throw new WorkoutRowMismatchError(workout.id);

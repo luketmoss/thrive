@@ -1,4 +1,4 @@
-// Read and write actions for the Workouts tab (A:AA).
+// Read and write actions for the Workouts tab (A:AB).
 
 var WORKOUTS_SHEET = 'Workouts';
 
@@ -117,8 +117,31 @@ function normalizeWorkoutFields(data) {
       out.estimated_seconds + '"'
     );
   }
+  if (out.sport_type !== undefined) out.sport_type = validateSportType('sport_type', out.sport_type);
 
   return out;
+}
+
+/**
+ * A COROS sport code (#260): digits, or '' for unknown. Never 0-defaulted, and
+ * stored through asText() so `204` stays the text "204", not a number.
+ */
+function validateSportType(where, value) {
+  var v = cell(value);
+  if (v !== '' && !/^\d+$/.test(v)) {
+    throw new Error(where + ' must be a COROS sport code (digits only) or "" to clear, got "' + v + '"');
+  }
+  return v;
+}
+
+/**
+ * The optional top-level `sport_type` of a sync write (#260), or undefined
+ * when the payload does not send one, so the caller leaves AB alone. Like
+ * normalizeSyncedFit: sync-owned, overwritten when sent, never merged.
+ */
+function normalizeSyncedSportType(payload) {
+  if (payload.sport_type === undefined) return undefined;
+  return validateSportType('sport_type', payload.sport_type);
 }
 
 /**
@@ -158,7 +181,7 @@ function createWorkout(data) {
  *
  * Only the keys present in `changes` are touched (#130 AC3). This is the
  * difference between an update and an overwrite, and it is why the whole row
- * is read first: a 27-cell write built from `changes` alone would blank every
+ * is read first: a 28-cell write built from `changes` alone would blank every
  * column the caller happened not to mention. #122 is that bug, in the MCP
  * server, and it is worth not shipping twice.
  */
@@ -307,6 +330,8 @@ function upsertSyncedWorkout(payload) {
     owned.fit_ref = fit.fit_ref;
     owned.fit_fetched_at = fit.fit_fetched_at;
   }
+  var sportType = normalizeSyncedSportType(payload);
+  if (sportType !== undefined) owned.sport_type = sportType;
 
   var sheet = getSheet(WORKOUTS_SHEET);
   var rows = getAllRows(sheet);
@@ -415,7 +440,7 @@ function upsertSyncedWorkout(payload) {
  * SPA save no longer does this: the SPA writes only the fields it changed
  * (#172).
  *
- * Only ENRICH_FIELDS and ENRICH_LINK_FIELDS are ever written; `source` stays
+ * Only ENRICH_FIELDS, ENRICH_LINK_FIELDS and a sent `sport_type` (#260) are ever written; `source` stays
  * ''. Two rows carrying the activity ID are refused, naming them.
  *
  * @returns {{ status: 'enriched' | 'unchanged' | 'unmatched', id?: string,
@@ -435,6 +460,7 @@ function enrichWorkout(payload) {
   if (!syncedAt) throw new Error('synced_at is required');
   if (!rawRef) throw new Error('raw_ref is required');
 
+  var sportType = normalizeSyncedSportType(payload);
   var activity = normalizeEnrichActivity(payload.activity);
   var previous = normalizeEnrichLastWritten(payload.last_written);
 
@@ -520,6 +546,7 @@ function enrichWorkout(payload) {
   current.source_activity_id = activityId;
   current.raw_ref = rawRef;
   current.synced_at = syncedAt;
+  if (sportType !== undefined) current.sport_type = sportType;
   sheet.getRange(target.rowNum, 1, 1, WORKOUT_COLUMN_COUNT).setValues([asText(workoutToRow(current))]);
   return {
     status: 'enriched', id: current.id, sheetRow: target.rowNum,

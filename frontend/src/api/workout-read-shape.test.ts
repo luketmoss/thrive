@@ -45,9 +45,15 @@ describe('fetchWorkouts on a pre-migration row', () => {
     sheetsGet.mockResolvedValue([PRE_MIGRATION_ROW]);
   });
 
-  it('reads the tab as A:AA (#145)', async () => {
+  it('reads the tab as A:AB (#260)', async () => {
     await fetchWorkouts('token');
-    expect(sheetsGet).toHaveBeenCalledWith('Workouts!A2:AA', 't');
+    expect(sheetsGet).toHaveBeenCalledWith('Workouts!A2:AB', 't');
+  });
+
+  // #260 AC4: every row written before AB existed has no cell there.
+  it('reads a missing sport_type as blank, never 0', async () => {
+    const [w] = await fetchWorkouts('token');
+    expect(w.sport_type).toBe('');
   });
 
   // #145 AC1: every row written before AA existed has no cell there.

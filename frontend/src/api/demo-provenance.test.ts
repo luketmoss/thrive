@@ -4,6 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import { DEMO_WORKOUTS, DEMO_SETS, DEMO_EXERCISES, demoSyncLog, demoWithingsSyncLog } from './demo-data';
 import { provenanceOf } from './provenance';
+import { corosActivityUrl } from './coros-link';
 import { summarizeSyncLog, syncTone, COROS_STALE_AFTER_HOURS, WITHINGS_STALE_AFTER_HOURS } from './sync-status';
 import { SyncLogNotSetUpError } from './sync-log-errors';
 
@@ -102,5 +103,30 @@ describe('#210 AC4: demo WithingsSyncLog previews each state independently of CO
 
   it('throws a plain error for the error scenario', () => {
     expect(() => demoWithingsSyncLog(now, 'error')).toThrow();
+  });
+});
+
+// #260 AC9: demo mode shows the "View on COROS" link on the synced hike and
+// the enriched Leg Day, and only there.
+describe('#260 AC9: demo COROS rows carry digit IDs and a sport code', () => {
+  const byId = (id: string) => DEMO_WORKOUTS.find((w) => w.id === id)!;
+
+  it('gives w_demo008 (hike, 104) and w_demo009 (strength, 402) a portal link', () => {
+    expect(byId('w_demo008').sport_type).toBe('104');
+    expect(byId('w_demo009').sport_type).toBe('402');
+    for (const id of ['w_demo008', 'w_demo009']) {
+      const w = byId(id);
+      expect(w.source_activity_id, id).toMatch(/^\d+$/);
+      expect(corosActivityUrl(w), id).toBe(
+        `https://t.coros.com/activity-detail?labelId=${w.source_activity_id}&sportType=${w.sport_type}`,
+      );
+    }
+  });
+
+  it('gives every other demo row a blank sport_type, and no link', () => {
+    for (const w of DEMO_WORKOUTS.filter((x) => x.id !== 'w_demo008' && x.id !== 'w_demo009')) {
+      expect(w.sport_type, w.id).toBe('');
+      expect(corosActivityUrl(w), w.id).toBeNull();
+    }
   });
 });

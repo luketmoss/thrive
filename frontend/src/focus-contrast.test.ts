@@ -62,7 +62,7 @@ const ringOf = (selector: string) => {
   return r;
 };
 
-// The nine rings of the #320 audit table.
+// The nine rings of the #320 audit table, and the ones added since.
 const AUDITED = [
   '.workout-card:focus-visible',
   '.trend-table-wrap:focus-visible',
@@ -73,6 +73,8 @@ const AUDITED = [
   '.compact-card-body[role="button"]:focus-visible',
   '.day-screen :focus-visible',
   '.calendar-screen :focus-visible',
+  // #260: the detail screen's "View on COROS" link, --color-text at +2px.
+  '.detail-coros-link:focus-visible',
 ];
 
 // A ring exempt from the 3:1 check. Adding one needs a written reason. Empty on purpose.

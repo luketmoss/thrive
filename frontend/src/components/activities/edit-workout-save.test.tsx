@@ -88,7 +88,7 @@ const SYNCED: WorkoutWithRow = {
   distance_m: '430', ascent_m: '37', descent_m: '41', avg_hr: '128',
   sub_type: 'outdoor', source: 'coros', source_activity_id: 'act_0001',
   raw_ref: 'raw/act_0001.json', fit_ref: 'fit/act_0001.fit', fit_fetched_at: '2026-09-20T13:00:00Z',
-  synced_at: '2026-09-20T13:00:00Z', started_at_utc: '2026-09-20T14:05:00Z', calories: '212', estimated_seconds: '',
+  synced_at: '2026-09-20T13:00:00Z', started_at_utc: '2026-09-20T14:05:00Z', calories: '212', estimated_seconds: '', sport_type: '',
   sheetRow: 2,
 };
 
@@ -99,7 +99,7 @@ const ENRICHED: WorkoutWithRow = {
   copied_from: '', status: '', moving_seconds: '290', effort: 'Medium',
   distance_m: '', ascent_m: '', descent_m: '', avg_hr: '112',
   sub_type: '', source: '', source_activity_id: 'act_0002', raw_ref: 'raw/act_0002.json',
-  fit_ref: '', fit_fetched_at: '', synced_at: '2026-09-21T13:00:00Z', started_at_utc: '', calories: '180', estimated_seconds: '',
+  fit_ref: '', fit_fetched_at: '', synced_at: '2026-09-21T13:00:00Z', started_at_utc: '', calories: '180', estimated_seconds: '', sport_type: '',
   sheetRow: 3,
 };
 

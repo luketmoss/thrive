@@ -358,6 +358,12 @@ SPA between a read and a write cannot be lost. Key only, like every write.
   alone. `fit_ref` must be a Drive file ID (letters, digits, `-`, `_`), so a FIT
   download URL can never land in the sheet, and `fit_fetched_at` an ISO instant.
   `fit_fetched_at` set with `fit_ref` blank means "no FIT will be fetched".
+- **`sport_type`** (#260, `Workouts!AB`) is the COROS sport code, sync-owned and
+  optional the same way: a top-level `"sport_type":"204"` is always written; an
+  absent one leaves AB alone, so a caller that predates it never blanks it.
+  Digits or `""` only, stored as text. Never inside `incoming` and never merged,
+  so it is not in `written` or `edited`. The same rule (digits or `""`) holds
+  on `createWorkout` and `updateWorkout`.
 - **Two rows:** refused, naming both ids.
 - Returns `written`, the merged fields as the sheet now holds them plus
   `edited` (the fields the user changed, which stay kept on every later run),
@@ -390,8 +396,9 @@ match, the fill and the write happen inside the action. Key only.
   `{"status":"unmatched","reason":"no match"|"ambiguous","candidates":[...]}`,
   and nothing is written.
 - A linked row gains `source_activity_id`, `raw_ref` and `synced_at`, and
-  keeps `source = ''`. That is what the UI reads as "enriched". No other
-  column is written.
+  keeps `source = ''`. That is what the UI reads as "enriched". A top-level
+  `sport_type` (#260) is written with them whenever the call writes the row;
+  an `unchanged` call writes nothing. No other column is written.
 - **Two rows carrying the activity ID:** refused, naming both.
 - Returns `filled` (this call's fields), `linked` (whether this call made the
   link) and `written`, which is `{ workout_id, filled }` for the sync to store

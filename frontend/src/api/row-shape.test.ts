@@ -72,7 +72,7 @@ describe('templateRowValues', () => {
 
 // Issue #128 — the Workouts tab was A:Z: eleven original columns, six nullable
 // activity attributes (#101) and nine sync provenance columns. #145 appends
-// AA, estimated_seconds.
+// AA, estimated_seconds, and #260 AB, sport_type.
 describe('workoutToRow', () => {
   const workout: Workout = {
     id: 'w_001',
@@ -101,13 +101,19 @@ describe('workoutToRow', () => {
     synced_at: '',
     started_at_utc: '',
     calories: '',
-    estimated_seconds: '',
+    estimated_seconds: '', sport_type: '',
   };
 
   // AC2: sheetsAppend writes every value it is handed regardless of the range,
   // so a short row would leave stale cells behind on an edit.
-  it('emits exactly twenty-seven cells, spanning A:AA', () => {
-    expect(workoutToRow(workout)).toHaveLength(27);
+  it('emits exactly twenty-eight cells, spanning A:AB', () => {
+    expect(workoutToRow(workout)).toHaveLength(28);
+  });
+
+  // #260 AC4: the COROS sport code is AB, last, and ships blank.
+  it('writes sport_type at AB, and a blank one as an empty cell', () => {
+    expect(workoutToRow(workout)[27]).toBe('');
+    expect(workoutToRow({ ...workout, sport_type: '204' })[27]).toBe('204');
   });
 
   // #145 AC1: the estimate is AA, after calories, and ships blank.

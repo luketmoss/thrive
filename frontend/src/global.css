@@ -3097,6 +3097,36 @@ input, select, textarea {
   margin-top: var(--space-xs);
 }
 
+/* ===== View on COROS (#260) =====
+   A quiet text link on its own row after the provenance line: no fill, no
+   border, so it does not compete with Edit / Copy / Save Template. The 44 px
+   hit area is the anchor's own inline-flex + min-height, and hugs the link,
+   never the full row width, so a tap beside it stays in the app. No margin:
+   the row is the anchor. Underlined, not colour-only; --color-primary-text is
+   5.27:1 light and 6.61:1 dark on the page. The ring is --color-text (#320:
+   --color-primary is never a ring colour). */
+.detail-coros-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: 44px;
+  font-size: var(--text-sm);
+  color: var(--color-primary-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.detail-coros-link-glyph {
+  width: 0.75em;
+  height: 0.75em;
+  flex: none;
+}
+
+.detail-coros-link:focus-visible {
+  outline: 2px solid var(--color-text);
+  outline-offset: 2px;
+}
+
 /* ===== Last Synced (#157) ===== */
 /* Centred, like every other row: .settings-row stacks and centres its label
    and detail. */
