@@ -68,6 +68,11 @@ export interface Workout {
   // zero-minute session. Not time taken: that is `elapsed_seconds`, and
   // starting a plan never copies one into the other.
   estimated_seconds: string;
+  // #260, column AB: the COROS sport code (e.g. '204' mountain bike), which
+  // the COROS web portal needs with `source_activity_id` to open the
+  // activity. Sync-owned like R-Z: the SPA never sets it. Nullable: '' means
+  // unknown (not yet backfilled, or not a COROS row) — never '0'.
+  sport_type: string;
 }
 export interface WorkoutWithRow extends Workout { sheetRow: number; }
 

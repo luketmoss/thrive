@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { createArchive } from '../src/archive.mjs';
 import { writeSheet } from '../src/sheet.mjs';
-import { syncActivities } from '../src/sync-activities.mjs';
+import { syncActivities, sportTypeField } from '../src/sync-activities.mjs';
 import { memoryDrive } from './helpers.mjs';
 
 const DIR = new URL('./fixtures/activities/', import.meta.url);
@@ -363,4 +363,55 @@ test('#155: an API refusal fails the strength session alone', async () => {
   assert.equal(out.failures.length, 1);
   assert.match(out.failures[0], /2 Workouts rows are enriched/);
   assert.equal(out.created, 1);
+});
+
+// #260 AC3: the sport code rides as a TOP-LEVEL `sport_type`, never inside
+// `incoming` / `activity`, which the API validates strictly. An API deployed
+// before #260 reads only the top-level keys it names, so it ignores this one
+// and the nightly write succeeds unchanged.
+test('#260 AC3: every upsert sends sport_type top-level, as the code\'s digits, and nowhere else', async () => {
+  const { archive } = await archiveWith(ALL);
+  const api = fakeApi();
+  await syncActivities({ archive, api, activityIds: allIds, syncedAt: SYNCED, log: () => {} });
+  const upserts = api.calls.filter((c) => c.action === 'upsertSyncedWorkout');
+  const codes = Object.fromEntries(upserts.map((c) => [c.incoming.name, c.sport_type]));
+  assert.deepEqual(codes, { 'Gravel Bike': '203', Walk: '900', Hike: '104', 'Indoor Cycling': '201' });
+  for (const call of upserts) {
+    const { action, ...payload } = call;
+    assert.deepEqual(
+      Object.keys(payload).sort(),
+      ['incoming', 'last_written', 'raw_ref', 'source', 'source_activity_id', 'sport_type', 'synced_at'],
+      'the payload\'s top-level keys are pinned',
+    );
+    assert.ok(!('sport_type' in call.incoming), 'never inside incoming');
+  }
+});
+
+test('#260 AC3: a strength (402) and a Hybrid Fitness (1200) session send sport_type top-level to enrichWorkout', async () => {
+  const { archive } = await archiveWith([STRENGTH, HYBRID]);
+  const api = fakeApi();
+  await syncActivities({
+    archive, api, activityIds: [STRENGTH.activity_id, HYBRID.activity_id], syncedAt: SYNCED, log: () => {},
+  });
+  const calls = enrichCalls(api);
+  assert.equal(calls.length, 2);
+  const byId = Object.fromEntries(calls.map((c) => [c.source_activity_id, c]));
+  assert.equal(byId[STRENGTH.activity_id].sport_type, '402');
+  assert.equal(byId[HYBRID.activity_id].sport_type, '1200');
+  for (const call of calls) {
+    const { action, ...payload } = call;
+    assert.deepEqual(
+      Object.keys(payload).sort(),
+      ['activity', 'last_written', 'raw_ref', 'source_activity_id', 'sport_type', 'synced_at'],
+    );
+    assert.ok(!('sport_type' in call.activity), 'never inside activity');
+  }
+});
+
+test('#260 AC3: sportTypeField sends only a whole-number code', () => {
+  assert.deepEqual(sportTypeField(204), { sport_type: '204' });
+  assert.deepEqual(sportTypeField('1200'), { sport_type: '1200' });
+  for (const bad of [undefined, null, '', 'mtb', 20.5, -1, '2e3', NaN, {}]) {
+    assert.deepEqual(sportTypeField(bad), {}, String(bad));
+  }
 });

@@ -308,10 +308,13 @@ export function createThriveApi({
      * One synced activity, merged into Workouts by vendor ID (#166). The
      * three-way merge runs in the API, so an edit made in Thrive between a
      * read and a write cannot be lost. A 404 page is retried (see
-     * `writeRetrying`).
+     * `writeRetrying`). `sport_type` (#260), the COROS sport code, is a
+     * top-level key, never inside `incoming`: an API older than #260 ignores
+     * it there rather than refusing the write.
      *
      * @param {{ source: string, source_activity_id: string, incoming: object,
-     *   last_written: object | null, raw_ref: string, synced_at: string }} payload
+     *   last_written: object | null, raw_ref: string, synced_at: string,
+     *   sport_type?: string }} payload
      * @returns {Promise<{ status: 'created' | 'updated' | 'deleted', id?: string,
      *   written?: object, kept?: string[] }>}
      */
@@ -326,7 +329,8 @@ export function createThriveApi({
      *
      * @param {{ source_activity_id: string, activity: object,
      *   last_written: { workout_id: string, filled: string[] } | null,
-     *   raw_ref: string, synced_at: string }} payload
+     *   raw_ref: string, synced_at: string, sport_type?: string }} payload
+     *   `sport_type` (#260) is top-level, never inside `activity`.
      * @returns {Promise<{ status: 'enriched' | 'unchanged' | 'unmatched', id?: string,
      *   linked?: boolean, filled?: string[], reason?: string,
      *   candidates?: { id: string, time: string }[],

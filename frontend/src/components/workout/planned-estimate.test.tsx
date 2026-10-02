@@ -48,7 +48,7 @@ function planned(overrides: Partial<WorkoutWithRow> = {}): WorkoutWithRow {
     notes: '', elapsed_seconds: '', created: '', copied_from: '', status: 'planned', moving_seconds: '',
     effort: '', distance_m: '', ascent_m: '', descent_m: '', avg_hr: '', sub_type: '',
     source: '', source_activity_id: '', raw_ref: '', fit_ref: '', fit_fetched_at: '', synced_at: '',
-    started_at_utc: '', calories: '', estimated_seconds: '2820', sheetRow: 2, ...overrides,
+    started_at_utc: '', calories: '', estimated_seconds: '2820', sport_type: '', sheetRow: 2, ...overrides,
   };
 }
 

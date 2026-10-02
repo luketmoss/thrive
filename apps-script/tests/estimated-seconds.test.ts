@@ -23,7 +23,7 @@ describe('AC5: every read returns estimated_seconds', () => {
     const { sandbox } = loadApi([]);
     expect(sandbox.WORKOUT_FIELDS[AA]).toBe('estimated_seconds');
     expect(sandbox.COL.ESTIMATED_SECONDS).toBe(AA);
-    expect(sandbox.WORKOUT_COLUMN_COUNT).toBe(27);
+    expect(sandbox.WORKOUT_COLUMN_COUNT).toBe(28);
   });
 
   it('getWorkouts, getWorkout and getPlannedWorkouts all return the stored seconds', () => {
@@ -78,7 +78,7 @@ describe('AC5: createWorkout and updateWorkout accept it', () => {
 
   it('widens a pre-#145 row on its first write, leaving AA blank', () => {
     const { rows } = update([pre145()], { name: 'Upper Pull B' });
-    expect(rows[0]).toHaveLength(27);
+    expect(rows[0]).toHaveLength(28);
     expect(rows[0][AA]).toBe('');
   });
 

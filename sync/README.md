@@ -181,6 +181,15 @@ idempotent, and a parser fix then re-applies without a replay.
 | 1200 hybrid fitness | as 402, without moving time (below) | |
 | anything else | archived, no row, logged with its ID and code; not a failure | |
 
+**The code itself is stored** (#260) in `Workouts!AB` `sport_type`, as digits,
+for every mapped activity and every 402/1200 enrichment: the COROS web portal
+needs it with `labelId` to open the activity. It rides as a **top-level**
+`sport_type` key of `upsertSyncedWorkout` / `enrichWorkout`, never inside
+`incoming` or `activity`, which the API validates strictly: an API deployed
+before #260 ignores the top-level key, so the run never fails on it. A code
+that is not a whole number is not sent. Rows synced before #260 got theirs from
+their archived files: `scripts/backfill-260-workouts-sport-type.mjs`.
+
 **Numbers from the detail prose** (`src/normalize-activity.mjs`), strictly, as
 in #165: an unused label is ignored, a used label with a value or unit the
 parser does not know fails that activity (no row, the line logged, the run

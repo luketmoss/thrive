@@ -40,10 +40,10 @@ Personal workout tracker: Preact SPA → Google Sheets REST API.
 Google Sheet "Groundwork" with these tabs:
 - **Exercises** (A:E): id, Name, Tags, Notes, Created
 - **Templates** (A:H): template_id, Template Name, Order, exercise_id, Exercise Name, Section, Sets, Reps
-- **Workouts** (A:AA): id, Date, Time, Type, Name, template_id, Notes, Elapsed (s), Created, copied_from, status,
+- **Workouts** (A:AB): id, Date, Time, Type, Name, template_id, Notes, Elapsed (s), Created, copied_from, status,
   Moving (s), Effort, Distance (m), Ascent (m), Descent (m), Avg HR (bpm),
   sub_type, source, source_activity_id, raw_ref, fit_ref, fit_fetched_at, synced_at, started_at_utc, calories,
-  estimated_seconds
+  estimated_seconds, sport_type
 - **Sets** (A:J): workout_id, exercise_id, Exercise Name, Section, Exercise Order, Set #, Planned Reps, Weight (lbs), Reps, Effort
 - **Labels** (A:D): id, name, color_key, created
 - **DailyHealth** (A:S): date, resting_hr, hrv, steps, calories, sleep_total_s,
@@ -155,6 +155,15 @@ the same `duration.ts` boundary. It is not time taken: starting a plan never
 copies it into `Elapsed (s)`, nothing sums it, and the sync never writes it.
 It stays on the row after the workout starts, as the plan's record. Blank
 means nobody estimated it; `0` is refused.
+`Workouts!AB` `sport_type` (#260) is the COROS sport code (e.g. `204`
+mountain bike, `402` strength), digits stored as text. Nullable with R-Z's
+provenance: blank means unknown (not a COROS row, or not yet backfilled),
+never `0`. Sync-owned: written by `upsertSyncedWorkout`/`enrichWorkout` and
+overwritten whenever the sync sends it, left alone when it does not; the SPA
+never sets it and the user cannot edit it. The SPA builds the "View on COROS"
+portal link from it and `source_activity_id` (`frontend/src/api/coros-link.ts`).
+Added by `scripts/migrate-260-workouts-sport-type.mjs`; rows synced earlier
+were filled by `scripts/backfill-260-workouts-sport-type.mjs`.
 
 ### Workout Types
 - `weight` — structured weight training with exercises, sets, reps, effort
