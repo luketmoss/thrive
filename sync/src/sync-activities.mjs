@@ -61,17 +61,6 @@ const sameNormalized = (a, b) =>
   JSON.stringify(a.edited ?? []) === JSON.stringify(b.edited ?? []);
 
 /**
- * @param {{ archive: object, api: object, activityIds: string[], syncedAt: string,
- *   log?: (line: string) => void }} opts
- * @returns {Promise<{ created: number, updated: number, unchanged: number, deleted: number,
- *   skipped: number, enriched: number, unmatched: number, notes: string[], failures: string[] }>}
- *   `failures` fails the run; a skip, a deleted row or an unmatched strength
- *   session (`notes`) does not. `enriched` counts hand-logged rows written to
- *   (SyncLog's `n_enriched`); an enriched row with nothing new is `unchanged`.
- *   `updated` counts rows whose merged fields changed (SyncLog's `n_updated`, #156); the API answers `updated` for every existing row, because
- *   `synced_at` always moves, so a row that held what it already held is `unchanged`.
- */
-/**
  * The COROS sport code as Workouts!AB `sport_type` (#260): `{ sport_type }`
  * for a whole-number code, else `{}` so nothing is sent.
  *
@@ -86,6 +75,17 @@ export function sportTypeField(code) {
   return /^\d+$/.test(text) ? { sport_type: text } : {};
 }
 
+/**
+ * @param {{ archive: object, api: object, activityIds: string[], syncedAt: string,
+ *   log?: (line: string) => void }} opts
+ * @returns {Promise<{ created: number, updated: number, unchanged: number, deleted: number,
+ *   skipped: number, enriched: number, unmatched: number, notes: string[], failures: string[] }>}
+ *   `failures` fails the run; a skip, a deleted row or an unmatched strength
+ *   session (`notes`) does not. `enriched` counts hand-logged rows written to
+ *   (SyncLog's `n_enriched`); an enriched row with nothing new is `unchanged`.
+ *   `updated` counts rows whose merged fields changed (SyncLog's `n_updated`, #156); the API answers `updated` for every existing row, because
+ *   `synced_at` always moves, so a row that held what it already held is `unchanged`.
+ */
 export async function syncActivities({ archive, api, activityIds, syncedAt, fit = null, log = console.log }) {
   const out = {
     created: 0, updated: 0, unchanged: 0, deleted: 0, skipped: 0,
