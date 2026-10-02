@@ -8,6 +8,7 @@
 
 import { useEffect } from 'preact/hooks';
 import { currentRoute, onRouteChange, type RouteChange } from './router';
+import { useDocumentTitle } from './document-title';
 
 /** How a control is found again: its `data-focus-key`, its `id`, or an `<a>`'s `href`. */
 export interface FocusKey {
@@ -170,6 +171,7 @@ function arrive(p: Pending): void {
 /** Rendered once, beside `<Router />` inside `main`. Renders nothing. */
 export function RouteFocus(): null {
   const route = currentRoute.value;
+  useDocumentTitle();
   useEffect(() => onRouteChange(capture), []);
   useEffect(() => {
     const p = pending;

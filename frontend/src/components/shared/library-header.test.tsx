@@ -3,11 +3,11 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { render, cleanup, fireEvent } from '@testing-library/preact';
 import { h } from 'preact';
 import { LibraryHeader } from './library-header';
-import { currentRoute } from '../../router/router';
+import { currentRoute, type RouteName } from '../../router/router';
 
 afterEach(cleanup);
 
-function renderAt(name: string) {
+function renderAt(name: RouteName) {
   currentRoute.value = { name, params: {}, hash: '/' };
   return render(h(LibraryHeader, {}));
 }
@@ -24,7 +24,7 @@ describe('LibraryHeader', () => {
   });
 
   it('marks the current section with aria-current="page"', () => {
-    for (const [route, label] of [['templates', 'Templates'], ['exercises', 'Exercises']]) {
+    for (const [route, label] of [['templates', 'Templates'], ['exercises', 'Exercises']] as [RouteName, string][]) {
       const { container } = renderAt(route);
       const current = [...container.querySelectorAll('[aria-current="page"]')];
       expect(current.map((b) => b.textContent)).toEqual([label]);
