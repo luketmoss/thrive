@@ -3169,6 +3169,19 @@ input, select, textarea {
   color: var(--color-text-secondary);
 }
 
+.sync-now-btn {
+  width: 100%;
+  margin-bottom: var(--space-sm);
+}
+
+.sync-now-btn[aria-disabled='true'] {
+  cursor: default;
+}
+
+.sync-request-line {
+  margin-top: 2px;
+}
+
 .sync-tone-danger {
   color: var(--color-danger-text);
   font-weight: 600;

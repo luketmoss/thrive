@@ -1,9 +1,11 @@
 import { batch } from '@preact/signals';
-import { journalEntries, journalSaveSeq, journalSavedSince, exercises, labels, templates, workouts, sets, loading, activeWorkoutId, activeWorkoutSets, activeWarmupExercises, isEditMode, showToast, syncLog, withingsSyncLog, dailyHealth, bodyMeasurements, dailySummary } from './store';
+import { journalEntries, journalSaveSeq, journalSavedSince, exercises, labels, templates, workouts, sets, loading, activeWorkoutId, activeWorkoutSets, activeWarmupExercises, isEditMode, showToast, syncLog, withingsSyncLog, syncRequests, syncAsk, demoSyncPressedAt, dailyHealth, bodyMeasurements, dailySummary } from './store';
 import type { HealthTabState } from './store';
 import type { JournalEntry } from '../api/types';
 import { fetchJournal } from '../api/journal-api';
 import { isNoteLocked } from '../panels/journal/drafts';
+import { fetchSyncRequests, appendSyncRequests, type SyncRequestVendor } from '../api/sync-requests-api';
+import { demoSyncNowScenario } from '../api/sync-now-demo';
 import { fetchSyncLog, fetchWithingsSyncLog } from '../api/sync-log-api';
 import { fetchDailyHealth, fetchBodyMeasurements, fetchDailySummary } from '../api/health-api';
 import { SyncLogNotSetUpError } from '../api/sync-log-errors';
@@ -1282,6 +1284,48 @@ export async function loadWithingsSyncLog(token: string): Promise<void> {
     console.error('Failed to read WithingsSyncLog:', err);
     withingsSyncLog.value = { state: 'error' };
   }
+}
+
+// ── Sync now (#315) ──────────────────────────────────────────────────
+
+/** Re-read the request rows. A failed read keeps what is on screen: the next poll tries again. */
+export async function loadSyncRequests(token: string): Promise<void> {
+  try {
+    syncRequests.value = await fetchSyncRequests(token);
+  } catch (err) {
+    if (isReauthFailure(err)) return; // auth-provider handles this
+    console.error('Failed to read SyncRequests:', err);
+  }
+}
+
+/**
+ * Ask for a sync for `vendors` (the ones with no open request). Demo mode
+ * starts the simulated request and writes nothing. A failed append is shown
+ * in words (`syncAsk: 'failed'`), never as a toast.
+ */
+export async function requestSyncNow(
+  token: string,
+  email: string,
+  vendors: readonly SyncRequestVendor[],
+): Promise<void> {
+  if (vendors.length === 0 || syncAsk.value === 'asking') return;
+  if (isDemo()) {
+    if (demoSyncNowScenario() === 'append-failed') { syncAsk.value = 'failed'; return; }
+    syncAsk.value = 'idle';
+    demoSyncPressedAt.value = Date.now();
+    return;
+  }
+  syncAsk.value = 'asking';
+  try {
+    await appendSyncRequests(vendors, email, token);
+  } catch (err) {
+    if (isReauthFailure(err)) { syncAsk.value = 'idle'; return; }
+    console.error('Failed to append SyncRequests:', err);
+    syncAsk.value = 'failed';
+    return;
+  }
+  syncAsk.value = 'idle';
+  await loadSyncRequests(token);
 }
 
 // ── Health data (#236) ───────────────────────────────────────────────

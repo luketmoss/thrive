@@ -3,9 +3,11 @@ import { ThemeToggle } from '../shared/theme-toggle';
 import { workouts, exercises, templates, labels } from '../../state/store';
 import { navigate } from '../../router/router';
 import { CorosSyncStatusRow, WithingsSyncStatusRow } from './sync-status-row';
+import { useSyncNow, SyncNowButton } from './sync-now';
 
 export function SettingsScreen() {
   const { user, token, logout } = useAuth();
+  const sync = useSyncNow(token, user?.email ?? '');
 
   return (
     <div class="screen settings-screen">
@@ -50,8 +52,9 @@ export function SettingsScreen() {
 
         <div class="settings-section">
           <h2>Sync status</h2>
-          <CorosSyncStatusRow token={token} />
-          <WithingsSyncStatusRow token={token} />
+          <SyncNowButton sync={sync} />
+          <CorosSyncStatusRow token={token} requestLine={sync.lines.coros} />
+          <WithingsSyncStatusRow token={token} requestLine={sync.lines.withings} />
         </div>
 
         <div class="settings-section">
