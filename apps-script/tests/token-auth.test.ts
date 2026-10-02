@@ -341,6 +341,8 @@ const KEY_ONLY_ACTIONS = [
   'appendSyncLog', 'upsertBodyMeasurements', 'reconcileBodyMeasurements',
   // A read, but key-only (#179): no token caller needs raw vendor text.
   'getWorkoutPayload',
+  // Journal text is personal and nothing needs it by token (#234): a read, key-only.
+  'getJournal', 'upsertJournal',
 ];
 
 const READ_PARAMS: Record<string, Record<string, string>> = {
@@ -392,6 +394,8 @@ describe('AC4: token callers run only the named reads', () => {
     },
     reconcileBodyMeasurements: { from: '2026-09-01', to: '2026-09-30', present_grpids: [], max_deletions: 5 },
     getWorkoutPayload: {},
+    getJournal: {},
+    upsertJournal: { date: '2026-09-15', note: 'hello' },
   };
 
   for (const action of KEY_ONLY_ACTIONS) {

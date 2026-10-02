@@ -155,6 +155,8 @@ export const fetchDailyHealth = (from, to) => apiGet('getDailyHealth', { from, t
 export const fetchDailySummary = (from, to) => apiGet('getDailySummary', { from, to });
 /** BodyMeasurements rows in an inclusive date range, oldest first (#201). */
 export const fetchBodyMeasurements = (from, to, kind) => apiGet('getBodyMeasurements', { from, to, kind });
+/** Journal notes in an inclusive date range, oldest first (#234). */
+export const fetchJournal = (from, to) => apiGet('getJournal', { from, to });
 /**
  * One page of a synced workout's archived COROS payload text (#179), by
  * workout id: the API finds the file from the row, never from us.
@@ -166,6 +168,22 @@ export const fetchWorkoutPayload = (id, offset) => apiGet('getWorkoutPayload', {
 export const createWorkout = (workout) => apiWrite('createWorkout', { data: workout });
 export const updateWorkout = (id, changes) => apiWrite('updateWorkout', { id, changes });
 export const deleteWorkout = (id) => apiWrite('deleteWorkout', { id });
+
+/**
+ * Create, replace or (blank note) delete one day's journal note (#234). The
+ * note rides in the URL like every write, so an over-long one is refused here
+ * rather than truncated in transit.
+ */
+export function upsertJournal(date, note) {
+  const size = encodeURIComponent(JSON.stringify({ date, note })).length;
+  if (size > MAX_ENCODED_PAYLOAD) {
+    throw new Error(
+      `That note is too long to send (${size} encoded characters, limit ${MAX_ENCODED_PAYLOAD}). ` +
+      'Writes travel in the URL: shorten the note.',
+    );
+  }
+  return apiWrite('upsertJournal', { date, note });
+}
 
 export const createExercise = (data) => apiWrite('createExercise', { data });
 export const updateExercise = (id, changes) => apiWrite('updateExercise', { id, changes });
