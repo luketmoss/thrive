@@ -184,6 +184,29 @@ test('AC2: failures before the abort are kept in the row after the fatal error',
   assert.equal(rows[0].error_detail, 'Error: boom\nactivity a1: timed out');
 });
 
+test('#327 AC5: a retry is one note line and one counts-only info line; status and n_errors are untouched', async () => {
+  const note = 'Apps Script served a 404 page on write requests: 2 retried, 2 landed, 0 gave up (upsertSyncedWorkout x1, appendSyncLog x1)';
+  const rows = [];
+  const api = {
+    async appendSyncLog(row) { rows.push(row); return { status: 'appended', run_id: row.run_id }; },
+    retryNote: () => note,
+    retryCounts: () => ({ retried: 2, landed: 2, gaveUp: 0 }),
+  };
+  const { exitCode, text } = await run({ api });
+  assert.equal(exitCode, 0);
+  assert.equal(rows[0].status, 'ok');
+  assert.equal(rows[0].n_errors, 0);
+  assert.equal(rows[0].notes, note);
+  assert.match(text, /Apps Script 404 pages on writes: 2 retried, 2 landed, 0 gave up\./);
+  assert.ok(!text.includes('upsertSyncedWorkout'), 'the public log has counts, no action names');
+});
+
+test('#327 AC5: a run with no retry has notes exactly as today, and no retry line', async () => {
+  const { rows, text } = await run();
+  assert.equal(rows[0].notes, '');
+  assert.ok(!text.includes('404 pages on writes'));
+});
+
 test('AC2: a SyncLog row that cannot be written fails a clean run, and says so', async () => {
   const api = { async appendSyncLog() { throw new ThriveApiError('appendSyncLog', 'Sheet "SyncLog" not found'); } };
   const { exitCode, logged, row, text } = await run({ api });

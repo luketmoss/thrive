@@ -26,7 +26,18 @@ export class ThriveApiError extends Error {
 }
 
 /** A response that was a Google page, not the script's JSON. */
-class NotReachedError extends ThriveApiError {}
+class NotReachedError extends ThriveApiError {
+  /** `status` is the HTTP status of the page; absent when `fetch` itself rejected. */
+  constructor(action, message, status) {
+    super(action, message);
+    this.status = status;
+  }
+}
+
+/** Base delays before each retry of a write that got a 404 page (#327), in ms. */
+export const WRITE_RETRY_DELAYS_MS = [2000, 6000, 15000];
+/** Most time, in ms, one client spends waiting to retry writes in all. */
+export const WRITE_RETRY_BUDGET_MS = 90000;
 
 /**
  * `THRIVE_API_URL` and `THRIVE_API_KEY`: the deployed web app's `/exec` URL
@@ -104,7 +115,13 @@ export function fitErrorDetail(row, limit = MAX_ENCODED_PAYLOAD) {
 export function createThriveApi({
   url, key, fetchImpl = fetch, readRetryDelaysMs = [1000, 3000],
   wait = (ms) => new Promise((r) => setTimeout(r, ms)),
+  writeRetryDelaysMs = WRITE_RETRY_DELAYS_MS, writeRetryBudgetMs = WRITE_RETRY_BUDGET_MS,
+  random = Math.random,
 }) {
+  // One client serves one process, so these are per-process (#327 AC4/AC5).
+  let budgetLeftMs = writeRetryBudgetMs;
+  const tally = { retried: 0, landed: 0, gaveUp: 0, byAction: new Map() };
+
   /** One request. Every API response is `{ success, data?, error? }`. */
   async function call(action, params = {}, payload) {
     const target = new URL(url);
@@ -131,6 +148,7 @@ export function createThriveApi({
         `the API returned ${res.status} with a web page instead of JSON, so the request never ` +
         'reached the script. Check that THRIVE_API_URL is the /exec URL of the web-app ' +
         'deployment. Apps Script also serves these briefly under load.',
+        res.status,
       );
     }
     if (!parsed.success) throw new ThriveApiError(action, redact(parsed.error || 'failed'));
@@ -150,10 +168,72 @@ export function createThriveApi({
   }
 
   /**
-   * A write, sent once. A page instead of JSON does not prove it did not
-   * land; the nightly window re-sends everything, so the next run heals it.
+   * A write, sent once, whatever comes back. A page instead of JSON does not
+   * prove it did not land; the nightly window re-sends everything, so the next
+   * run heals it. Retry is opted into per call, by `writeRetrying`.
    */
   const write = (action, payload) => call(action, {}, payload);
+
+  /**
+   * A write that is re-sent, byte for byte, when Google answers HTTP 404 with
+   * a page instead of JSON (#327). Apps Script serves these briefly under
+   * load; two runs lost an activity or their SyncLog row to one.
+   *
+   * Only that class. Nothing proves a 404 page means the script never ran, so
+   * the gate is narrower than NotReachedError: a `fetch` rejection or any
+   * other page (a 200 sign-in, a 5xx or timeout) is exactly where a write may
+   * have applied, and a JSON answer, `Lock timeout` included, proves the
+   * script ran. None of those is retried. And only calls whose replay of a
+   * request that did land converges, which is what makes the gate safe to
+   * lean on:
+   *  - upsertSyncedWorkout is keyed on (source, source_activity_id); a replay
+   *    finds the row with every field already equal, keeps nothing, flags no
+   *    edit, and answers `updated`.
+   *  - upsertDailyHealth (by date) and upsertBodyMeasurements (by grpid)
+   *    carry the same synced_at and rewrite the same row.
+   *  - rebuildDailySummary is a pure function of its sources and computed_at.
+   *  - appendSyncLog answers `exists` for a run_id already in the tab.
+   *  - enrichWorkout is not strictly idempotent: if the first call landed,
+   *    the replay answers `unchanged` with `filled` missing what the first
+   *    call filled, so a field cleared in Thrive in between is refilled once.
+   *    That needs a 404 page that nonetheless ran the script; accepted.
+   *  - reconcileBodyMeasurements is excluded: a replay finds nothing left to
+   *    delete and answers `deleted: []`, so the client's archive marking
+   *    would be skipped.
+   *
+   * Up to three retries after 2, 6 and 15 s, each scaled by 0.75-1.25, and at
+   * most 90 s of waiting per process: once spent, a 404 page fails at once
+   * with the message it always had.
+   */
+  async function writeRetrying(action, payload) {
+    let retries = 0;
+    const finish = (ok) => {
+      if (!retries) return;
+      tally.retried += 1;
+      tally[ok ? 'landed' : 'gaveUp'] += 1;
+      tally.byAction.set(action, (tally.byAction.get(action) ?? 0) + 1);
+    };
+    for (;;) {
+      let data;
+      try {
+        data = await call(action, {}, payload);
+      } catch (err) {
+        const retryable = err instanceof NotReachedError && err.status === 404;
+        const base = writeRetryDelaysMs[retries];
+        const delay = retryable && base !== undefined ? Math.round(base * (0.75 + random() * 0.5)) : null;
+        if (delay === null || delay > budgetLeftMs) {
+          finish(false);
+          throw err;
+        }
+        budgetLeftMs -= delay;
+        retries += 1;
+        await wait(delay);
+        continue;
+      }
+      finish(true);
+      return data;
+    }
+  }
 
   /**
    * `{ rows, synced_at }` upserts, chunked so each call fits the payload
@@ -167,7 +247,7 @@ export function createThriveApi({
     let written = 0;
     for (const [i, chunk] of chunks.entries()) {
       try {
-        const data = await write(action, { rows: chunk, synced_at: syncedAt });
+        const data = await writeRetrying(action, { rows: chunk, synced_at: syncedAt });
         totals.appended += data?.appended ?? 0;
         totals.updated += data?.updated ?? 0;
       } catch (err) {
@@ -186,6 +266,23 @@ export function createThriveApi({
   return {
     get,
     write,
+
+    /**
+     * What the write retries did, for the run's notes (#327): `null` when
+     * none happened.
+     * @returns {{ retried: number, landed: number, gaveUp: number } | null}
+     */
+    retryCounts() {
+      return tally.retried ? { retried: tally.retried, landed: tally.landed, gaveUp: tally.gaveUp } : null;
+    },
+
+    /** The SyncLog `notes` line for those retries, or `''` when there were none. */
+    retryNote() {
+      if (!tally.retried) return '';
+      const by = [...tally.byAction].map(([a, n]) => `${a} x${n}`).join(', ');
+      return `Apps Script served a 404 page on write requests: ${tally.retried} retried, ` +
+        `${tally.landed} landed, ${tally.gaveUp} gave up (${by})`;
+    },
 
     /**
      * DailyHealth rows by date (#165 AC4), batched under the payload limit.
@@ -210,7 +307,8 @@ export function createThriveApi({
     /**
      * One synced activity, merged into Workouts by vendor ID (#166). The
      * three-way merge runs in the API, so an edit made in Thrive between a
-     * read and a write cannot be lost. Sent once, like every write.
+     * read and a write cannot be lost. A 404 page is retried (see
+     * `writeRetrying`).
      *
      * @param {{ source: string, source_activity_id: string, incoming: object,
      *   last_written: object | null, raw_ref: string, synced_at: string }} payload
@@ -218,13 +316,13 @@ export function createThriveApi({
      *   written?: object, kept?: string[] }>}
      */
     upsertSyncedWorkout(payload) {
-      return write('upsertSyncedWorkout', payload);
+      return writeRetrying('upsertSyncedWorkout', payload);
     },
 
     /**
      * One COROS strength session, offered to its hand-logged weight row
      * (#155). The match, the fill and the write run in the API, in one
-     * execution. Sent once, like every write.
+     * execution. A 404 page is retried (see `writeRetrying`).
      *
      * @param {{ source_activity_id: string, activity: object,
      *   last_written: { workout_id: string, filled: string[] } | null,
@@ -235,14 +333,14 @@ export function createThriveApi({
      *   written?: { workout_id: string, filled: string[] } }>}
      */
     enrichWorkout(payload) {
-      return write('enrichWorkout', payload);
+      return writeRetrying('enrichWorkout', payload);
     },
 
     /**
      * Delete the BodyMeasurements rows in `from`..`to` whose grpid is not in
      * `present_grpids` (#215): readings deleted in Withings. The compare and
      * the delete run in the API, under its lock, capped at `max_deletions`.
-     * Sent once, like every write; the run sizes `present_grpids` to fit.
+     * Sent once, never retried (see `writeRetrying`); the run sizes `present_grpids` to fit.
      *
      * @param {{ from: string, to: string, present_grpids: string[],
      *   max_deletions: number, allow_empty?: boolean }} payload
@@ -254,7 +352,7 @@ export function createThriveApi({
 
     /** Recompute DailySummary for `from`..`to`, inclusive, stamped `computedAt`. */
     rebuildDailySummary(from, to, computedAt) {
-      return write('rebuildDailySummary', { from, to, computed_at: computedAt });
+      return writeRetrying('rebuildDailySummary', { from, to, computed_at: computedAt });
     },
 
     /**
@@ -269,10 +367,10 @@ export function createThriveApi({
      * @returns {Promise<{ status: 'appended' | 'exists', run_id: string }>}
      */
     appendSyncLog(row, { log } = {}) {
-      if (!log) return write('appendSyncLog', { row: fitErrorDetail(row) });
+      if (!log) return writeRetrying('appendSyncLog', { row: fitErrorDetail(row) });
       // The `log` field is sent too, so the cut leaves room for it.
       const room = encodeURIComponent(`,"log":${JSON.stringify(log)}`).length;
-      return write('appendSyncLog', { row: fitErrorDetail(row, MAX_ENCODED_PAYLOAD - room), log });
+      return writeRetrying('appendSyncLog', { row: fitErrorDetail(row, MAX_ENCODED_PAYLOAD - room), log });
     },
 
     /**
