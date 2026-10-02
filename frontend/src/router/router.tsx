@@ -2,8 +2,22 @@ import { signal } from '@preact/signals';
 import { validPlanDate } from '../components/workout/plan-date';
 import { isIsoMonth } from '../calendar/dates';
 
+/**
+ * Every route name, in one list (#291). `ParsedRoute.name` is typed against it,
+ * and `titleFor` switches over it exhaustively, so a route cannot be added
+ * without a document title.
+ */
+export const ROUTE_NAMES = [
+  'day', 'calendar', 'trends', 'activities',
+  'workout-new', 'workout-active', 'workout-detail', 'workout-edit',
+  'templates', 'template-new', 'template-detail', 'template-edit',
+  'exercises', 'settings', 'manage-labels',
+] as const;
+
+export type RouteName = (typeof ROUTE_NAMES)[number];
+
 export interface ParsedRoute {
-  name: string;
+  name: RouteName;
   params: Record<string, string>;
   hash: string;
   /** A `#/day…` hash that names no real date (#237): shown as today, URL replaced with `#/`. */
