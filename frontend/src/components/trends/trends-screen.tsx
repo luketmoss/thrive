@@ -5,6 +5,7 @@
 // control then redraws from the rows already in memory, with no sheet read.
 
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import type { ComponentChildren } from 'preact';
 import { signal } from '@preact/signals';
 import { useAuth } from '../../auth/auth-context';
 import { loadHealth } from '../../state/actions';
@@ -21,7 +22,8 @@ import { GroupSwitcher } from './group-switcher';
 import { TrendCharts } from './trend-chart';
 import { TrendTable } from './trend-table';
 import { openDay } from './open-day';
-import { isRestoringFocus } from '../../router/route-focus';
+import { isRestoringFocus, ROUTE_FOCUS_ATTR } from '../../router/route-focus';
+import { useFocusHandoff } from '../focus-handoff';
 import { today as todaySignal, watchToday } from '../../day/today';
 
 interface SegmentedProps<T extends string> {
@@ -97,6 +99,26 @@ export function captionText(avgDays: number, hasBand: boolean): string {
  */
 export function groupHasBand(metrics: readonly TrendMetric[], series: readonly MetricSeries[]): boolean {
   return metrics.some((m, i) => m.band && series[i].band !== null && series[i].points.length > 0);
+}
+
+/**
+ * One container for the error and loading states (#290), so it is the same node
+ * through error, loading, error again. Try again focuses it at the press (the
+ * button is replaced by "Loading…" at once); when the data lands and it goes,
+ * focus passes to the screen's heading, not the charts (focusing them selects a day).
+ */
+function TrendsState({ children }: { children: ComponentChildren }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useFocusHandoff(
+    ref,
+    (el) => el.closest('.trends-screen')?.querySelector<HTMLElement>('h1'),
+    // The heading is not a control: no ring, as #256's route focus.
+    (h) => {
+      h.setAttribute(ROUTE_FOCUS_ATTR, '');
+      h.addEventListener('blur', () => h.removeAttribute(ROUTE_FOCUS_ATTR), { once: true });
+    },
+  );
+  return <div class="trends-state" tabIndex={-1} ref={ref}>{children}</div>;
 }
 
 export function TrendsScreen() {
@@ -202,15 +224,25 @@ export function TrendsScreen() {
   let content;
   if (states.includes('error')) {
     content = (
-      <div class="trends-error" role="alert">
-        <p>Couldn't load your health data.</p>
-        <button type="button" class="btn btn-secondary trends-retry" onClick={() => token && void loadHealth(token)}>
-          Try again
-        </button>
-      </div>
+      <TrendsState>
+        <div class="trends-error" role="alert">
+          <p>Couldn't load your health data.</p>
+          <button
+            type="button"
+            class="btn btn-secondary trends-retry"
+            onClick={(e) => {
+              // Before the button is replaced by "Loading…" (#290).
+              (e.currentTarget as HTMLElement).closest<HTMLElement>('.trends-state')?.focus();
+              if (token) void loadHealth(token);
+            }}
+          >
+            Try again
+          </button>
+        </div>
+      </TrendsState>
     );
   } else if (states.some((s) => s !== 'loaded')) {
-    content = <p class="trends-loading" role="status">Loading…</p>;
+    content = <TrendsState><p class="trends-loading" role="status">Loading…</p></TrendsState>;
   } else if (isCustom && group.metrics.length === 0) {
     content = <p class="trends-custom-empty">Pick up to 4 metrics to see them here.</p>;
   } else if (built) {
@@ -292,7 +324,7 @@ export function TrendsScreen() {
   return (
     <div class="screen trends-screen">
       <header class="screen-header">
-        <h1>Trends</h1>
+        <h1 tabIndex={-1}>Trends</h1>
       </header>
       <div class="screen-body">
         <GroupSwitcher groups={TREND_GROUPS} value={group.id} onChange={clearing(setGroupId)} />

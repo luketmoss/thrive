@@ -1183,8 +1183,26 @@ input, select, textarea {
   transition: background var(--transition-fast);
 }
 
+/* The picker's rows are <button>s (#319): reset the UA button so they look as
+   the divs did. Scoped to the picker; the Exercises screen's rows differ. */
 .exercise-list > .exercise-list-item {
+  width: 100%;
+  min-height: 44px;
+  /* The explicit min-height replaces the flex item's content-sized minimum, so
+     without this a long list squeezes every row down to 44 px. */
+  flex-shrink: 0;
+  margin: 0;
   padding: var(--space-md) var(--space-lg);
+  border: 0;
+  border-bottom: 1px solid var(--color-border-light);
+  border-radius: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  align-items: stretch;
+  appearance: none;
+  -webkit-appearance: none;
   cursor: pointer;
 }
 
@@ -1254,16 +1272,27 @@ input, select, textarea {
   color: var(--color-text-muted);
 }
 
+/* A <button> since #319: width, font and border reset to match the old div. */
 .create-new-row {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
   padding: var(--space-md) var(--space-lg);
+  background: none;
+  font: inherit;
   color: var(--color-primary-text);
   font-weight: 600;
+  text-align: left;
+  appearance: none;
+  -webkit-appearance: none;
   cursor: pointer;
   transition: background var(--transition-fast);
+  border: 0;
   border-top: 1px solid var(--color-border-light);
+  border-radius: 0;
 }
 
 .create-new-row:hover {
@@ -4357,6 +4386,24 @@ a.training-card {
   justify-content: center;
 }
 
+/* ===== Exercise picker keyboard access (#319) =====
+   The picker's rows and "+ Create New Exercise" are buttons. Same ring as #301:
+   --color-text, inset on the rows because they are flush and the list scrolls
+   and clips. The tag chips and Close have room, so they sit outside at +2px; the
+   chip rule is scoped to the modal because .tag-filter-row is shared with the
+   Activities and Exercises screens. :focus-visible only, no ring on a click. */
+.exercise-list > .exercise-list-item:focus-visible,
+.create-new-row:focus-visible {
+  outline: 2px solid var(--color-text);
+  outline-offset: -2px;
+}
+
+.modal-content .tag-filter-row .tag-badge:focus-visible,
+.modal-close:focus-visible {
+  outline: 2px solid var(--color-text);
+  outline-offset: 2px;
+}
+
 /* ===== Editor controls: 44 px reorder and remove (#321) =====
    The editable card (template editor and workout planner) holds Move up, Move
    down and Remove at 44x44, side by side so the row does not grow. The
@@ -4377,4 +4424,12 @@ a.training-card {
   text-overflow: clip;
   overflow-wrap: anywhere;
   min-width: 0;
+}
+
+/* ===== Trends retry container (#290) =====
+   div.trends-state holds focus (tabindex -1) while Try again reloads, so it is
+   programmatic focus of a non-control: no ring, as .panel-status. The Trends h1
+   uses #256's [data-route-focus] no-ring rule. */
+.trends-state:focus {
+  outline: none;
 }

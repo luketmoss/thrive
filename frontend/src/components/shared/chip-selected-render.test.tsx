@@ -64,3 +64,39 @@ describe('AC2: label chips', () => {
     expect(container.querySelectorAll('.chip-check')).toHaveLength(1);
   });
 });
+
+// #319 AC3 — LabelBadge reports aria-pressed whenever it is a toggle button, so
+// the Activities and Exercises tag filters gain it with the picker's.
+import { LabelBadge } from './label-badge';
+
+describe('#319: LabelBadge aria-pressed', () => {
+  it('a toggle chip reports its state', () => {
+    const on = render(h(LabelBadge as any, { name: 'Core', active: true, onClick: () => {} })).container.firstElementChild!;
+    const off = render(h(LabelBadge as any, { name: 'Legs', active: false, onClick: () => {} })).container.firstElementChild!;
+    expect(on.tagName).toBe('BUTTON');
+    expect(on.getAttribute('aria-pressed')).toBe('true');
+    expect(off.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('a static badge, or a button with no active state, has none', () => {
+    const span = render(h(LabelBadge as any, { name: 'Core' })).container.firstElementChild!;
+    const btn = render(h(LabelBadge as any, { name: 'Core', onClick: () => {} })).container.firstElementChild!;
+    expect(span.tagName).toBe('SPAN');
+    expect(span.hasAttribute('aria-pressed')).toBe(false);
+    expect(btn.hasAttribute('aria-pressed')).toBe(false);
+  });
+
+  it('the Activities tag filter chips report aria-pressed', () => {
+    labels.value = [
+      { id: '1', name: 'Heavy', color_key: 'red', created: '', sheetRow: 2 },
+      { id: '2', name: 'Light', color_key: 'blue', created: '', sheetRow: 3 },
+    ];
+    filterTags.value = ['Light'];
+    const { container } = render(h(ActivitiesFilters as any, {}));
+    const chips = [...container.querySelectorAll('.tag-filter-row .tag-badge')];
+    expect(chips.map((c) => [c.textContent, c.getAttribute('aria-pressed')])).toEqual([
+      ['Heavy', 'false'],
+      ['Light', 'true'],
+    ]);
+  });
+});

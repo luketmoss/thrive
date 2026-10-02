@@ -17,6 +17,8 @@ export interface DayCells {
   value: string;
   /** The point's `partial` sentence, when it has one. */
   partial?: string;
+  /** The readout's short form of `partial`, "(1 of 2)" (#303); the table and announcement keep `partial`. */
+  partialShort?: string;
   /** The average as formatted, or BLANK; null when the average is Off. */
   average: string | null;
 }
@@ -45,6 +47,7 @@ export function dayCells(
   return {
     value: p ? metric.format(p.value) : BLANK,
     partial: p?.partial || undefined,
+    partialShort: p?.partialShort || undefined,
     average: avgDays > 0 ? (avg !== undefined ? metric.format(avg) : BLANK) : null,
   };
 }
@@ -59,10 +62,11 @@ export function averageText(metric: TrendMetric, c: DayCells, avgDays: number): 
   return `${avgDays}-day avg ${c.average === BLANK ? BLANK : withUnit(c.average, metric.unit)}`;
 }
 
-/** Line 2 of a card's readout: "53 bpm · 7-day avg 52 bpm", with any partial sentence. */
+/** Line 2 of a card's readout: "53 bpm · 7-day avg 52 bpm", with any partial coverage, short form (#303). */
 export function readoutLine(metric: TrendMetric, c: DayCells, avgDays: number): string {
   const parts = [valueText(metric, c)];
-  if (c.partial) parts[0] += ` ${c.partial}`;
+  const partial = c.partialShort ?? c.partial;
+  if (partial) parts[0] += ` ${partial}`;
   const avg = averageText(metric, c, avgDays);
   if (avg) parts.push(avg);
   return parts.join(' · ');

@@ -2,7 +2,7 @@
 // loading, empty and failed states.
 
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/preact';
+import { render, cleanup, fireEvent, waitFor, act } from '@testing-library/preact';
 import { h } from 'preact';
 import { effect } from '@preact/signals';
 
@@ -366,5 +366,89 @@ describe('#256 AC5: Back restores the charts without selecting a day', () => {
     await go(() => goBack(), 'trends');
     expect(document.activeElement!.tagName).toBe('H1');
     expect(document.activeElement!.textContent).toBe('Trends');
+  });
+});
+
+// #290 — Try again keeps focus in a stable container and hands it to the h1.
+describe('#290: Try again focus', () => {
+  const state = (c: Element) => c.querySelector('.trends-state') as HTMLElement | null;
+  const asError = () => {
+    dailyHealth.value = { state: 'error' } as never;
+    bodyMeasurements.value = { state: 'loaded', rows: [] };
+    dailySummary.value = { state: 'loaded', rows: [] };
+  };
+  const flush = () => act(async () => { await Promise.resolve(); });
+
+  it('the press focuses the container; error, loading, error keeps node and focus', async () => {
+    asError();
+    const { container } = renderScreen();
+    const holder = state(container)!;
+    expect(holder.getAttribute('tabindex')).toBe('-1');
+    expect(holder.querySelector('[role="alert"]')).not.toBeNull();
+    const btn = container.querySelector('.trends-retry') as HTMLElement;
+    btn.focus();
+    fireEvent.click(btn);
+    expect(document.activeElement).toBe(holder);
+    act(() => { dailyHealth.value = { state: 'loading' }; });
+    expect(state(container)).toBe(holder);
+    expect(holder.querySelector('[role="status"]')!.textContent).toBe('Loading…');
+    expect(document.activeElement).toBe(holder);
+    act(() => { dailyHealth.value = { state: 'error' } as never; });
+    await flush();
+    expect(state(container)).toBe(holder);
+    expect(document.activeElement).toBe(holder);
+    expect(holder.querySelector('[role="alert"]')).not.toBeNull();
+    fireEvent.click(container.querySelector('.trends-retry')!);
+    expect(loadHealth).toHaveBeenCalledTimes(2);
+    expect(document.activeElement).toBe(holder);
+  });
+
+  it('loaded: focus goes to the h1 with no ring marker, not the charts', async () => {
+    asError();
+    const { container } = renderScreen();
+    fireEvent.click(container.querySelector('.trends-retry')!);
+    act(() => { dailyHealth.value = { state: 'loading' }; });
+    act(() => { loaded(rows(100)); });
+    await flush();
+    const h1 = container.querySelector('h1')!;
+    expect(h1.getAttribute('tabindex')).toBe('-1');
+    expect(document.activeElement).toBe(h1);
+    expect(h1.hasAttribute('data-route-focus')).toBe(true);
+    expect(document.activeElement).not.toBe(container.querySelector('.trend-charts'));
+    expect(selectedDay.value).toBeNull();
+  });
+
+  it('leaves focus where the user moved it', async () => {
+    asError();
+    const { container } = renderScreen();
+    fireEvent.click(container.querySelector('.trends-retry')!);
+    act(() => { dailyHealth.value = { state: 'loading' }; });
+    const control = container.querySelector('.sub-type-btn') as HTMLElement;
+    control.focus();
+    act(() => { loaded(rows(100)); });
+    await flush();
+    expect(document.activeElement).toBe(control);
+  });
+
+  it('an unmount mid-retry focuses nothing and throws nothing', async () => {
+    asError();
+    const { container, unmount } = renderScreen();
+    fireEvent.click(container.querySelector('.trends-retry')!);
+    unmount();
+    await flush();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('a load with no press takes no focus, on first load or a refresh', async () => {
+    dailyHealth.value = { state: 'loading' };
+    bodyMeasurements.value = { state: 'loading' };
+    dailySummary.value = { state: 'loading' };
+    const { container } = renderScreen();
+    expect(state(container)).not.toBeNull();
+    act(() => { loaded(rows(100)); });
+    await flush();
+    expect(document.activeElement).toBe(document.body);
+    act(() => { asError(); });
+    expect(document.activeElement).toBe(document.body);
   });
 });

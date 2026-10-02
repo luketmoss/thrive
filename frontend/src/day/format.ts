@@ -34,6 +34,11 @@ export function fullDate(date: string): string {
   return fmt(date, { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
+/** "Sat 12 Sep 2026" (#291: the document title's date) */
+export function shortDate(date: string): string {
+  return `${fmt(date, { weekday: 'short' })} ${dayOfMonth(date)} ${fmt(date, { month: 'short' })} ${date.slice(0, 4)}`;
+}
+
 /** "Saturday, September 12, 2026" */
 export function weekdayFullDate(date: string): string {
   return `${weekdayName(date)}, ${fullDate(date)}`;

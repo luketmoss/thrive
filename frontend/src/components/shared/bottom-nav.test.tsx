@@ -4,11 +4,11 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { render, cleanup } from '@testing-library/preact';
 import { h } from 'preact';
 import { BottomNav } from './bottom-nav';
-import { currentRoute } from '../../router/router';
+import { currentRoute, type RouteName } from '../../router/router';
 
 afterEach(cleanup);
 
-function renderAt(name: string) {
+function renderAt(name: RouteName) {
   currentRoute.value = { name, params: {}, hash: '/' };
   return render(h(BottomNav, {}));
 }
@@ -42,7 +42,7 @@ describe('BottomNav', () => {
     expect(tabs(container).filter((b) => b.hasAttribute('aria-current'))).toHaveLength(1);
   });
 
-  const map: Record<string, string[]> = {
+  const map: Record<string, RouteName[]> = {
     Day: ['day', 'calendar'],
     Trends: ['trends'],
     Activities: ['activities', 'workout-detail', 'workout-edit', 'workout-new', 'workout-active'],
