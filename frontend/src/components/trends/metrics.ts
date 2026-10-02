@@ -16,6 +16,8 @@ export interface TrendPoint {
   value: number;
   /** A sentence for the table; the chart draws the day as a hollow dot (#245's coverage). */
   partial?: string;
+  /** The readout's form of `partial`: the coverage count alone, "(1 of 2)", so the value line stays one line at 320 px (#303). */
+  partialShort?: string;
 }
 
 /** The health tab a metric's `points()` reads; Trends waits on, and reports errors from, exactly these. */
@@ -316,7 +318,10 @@ export function dailySummaryPoints(
     if (coverage) {
       const n = parse(row[coverage.withdata] ?? '');
       const m = parse(row[coverage.of] ?? '');
-      if (n !== null && m !== null && m > 0 && n < m) point.partial = `${n} of ${m} ${coverage.what}`;
+      if (n !== null && m !== null && m > 0 && n < m) {
+        point.partial = `${n} of ${m} ${coverage.what}`;
+        point.partialShort = `(${n} of ${m})`;
+      }
     }
     out.push(point);
   }

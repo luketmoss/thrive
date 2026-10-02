@@ -1,6 +1,8 @@
 // #247 AC2 — one formatter for the table's row and the chart's readout.
 
 import { describe, it, expect, afterEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { render, cleanup } from '@testing-library/preact';
 import { h } from 'preact';
 import { announceText, dayCells, pointsByDate, readoutLine, readoutDate, valueText } from './readout';
@@ -128,5 +130,51 @@ describe('dayAtX', () => {
       expect(i).toBeGreaterThanOrEqual(prev);
       prev = i;
     }
+  });
+});
+
+describe('#303: the readout prints the short coverage, everything else the sentence', () => {
+  const sentence = '1 of 2 outdoor activities recorded distance';
+  const dist = metric(
+    [{ date: TODAY, value: 6.1, partial: sentence, partialShort: '(1 of 2)' }],
+    { id: 'distance', label: 'Distance', unit: 'mi', format: (v) => v.toFixed(1) },
+  );
+  const series = (avg: number) => metricSeries(dist, from, to, avg, TODAY);
+  const cells = (avg: number) => {
+    const s = series(avg);
+    return dayCells(dist, s, pointsByDate(s), TODAY, avg);
+  };
+
+  it('prints value, (n of m), average', () => {
+    expect(readoutLine(dist, cells(7), 7)).toBe('6.1 mi (1 of 2) · 7-day avg —');
+    expect(readoutLine(dist, cells(0), 0)).toBe('6.1 mi (1 of 2)');
+  });
+
+  it('falls back to the sentence for a point with no short form', () => {
+    const c = { value: '5', partial: 'partial day', average: null };
+    expect(readoutLine(dist, c, 0)).toBe('5 mi partial day');
+  });
+
+  it('keeps the full sentence in the table and the announcement, byte for byte', () => {
+    const group: TrendGroup = { id: 'g', label: 'Activity', metrics: [dist] };
+    const t = render(h(TrendTable, { group, series: [series(7)], range: '1W', avgDays: 7, today: TODAY }));
+    expect(t.container.querySelector('.trend-partial')!.textContent!.trim()).toBe(sentence);
+    expect(announceText(TODAY, TODAY, [{ metric: dist, series: series(7) }], 7))
+      .toBe(`${readoutDate(TODAY, TODAY)}. Distance 6.1 mi ${sentence}, 7-day avg —.`);
+  });
+
+  it('fits one 256 px line for the worst realistic data (<= 42 characters)', () => {
+    const worst = metric(
+      [{ date: TODAY, value: 12345, partial: 'x', partialShort: '(10 of 12)' }],
+      { unit: 'ft', format: (v) => v.toLocaleString('en-US') },
+    );
+    const s = metricSeries(worst, from, to, 30, TODAY);
+    const line = readoutLine(worst, dayCells(worst, s, pointsByDate(s), TODAY, 30), 30);
+    expect(line.length).toBeLessThanOrEqual(42);
+  });
+
+  it('keeps the readout cell reserving two lines, 44 px at least', () => {
+    const css = readFileSync(resolve(__dirname, '../../global.css'), 'utf-8');
+    expect(css).toMatch(/\.trend-readout-cell \{[^}]*min-height: max\(2lh, 44px\);/);
   });
 });
