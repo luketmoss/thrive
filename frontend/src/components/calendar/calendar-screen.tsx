@@ -142,6 +142,23 @@ export function CalendarScreen() {
   if (journal.state === 'loaded') for (const e of journal.entries) notes.set(e.date, e.note);
 
   const health = dailyHealth.value;
+
+  // #297 — a retry the user asked for keeps the status mounted through
+  // `loading`, so a retry that fails again updates the same container (and
+  // the focus on it). Latched on Try again, so a first load or a throttled
+  // refresh never shows "Loading…". Cleared once health leaves `loading`
+  // (or lands `loaded`); `sawLoading` keeps the press itself, while health is
+  // still `error`, from clearing it.
+  const [retrying, setRetrying] = useState(false);
+  const sawLoading = useRef(false);
+  useEffect(() => {
+    if (health.state === 'loading') sawLoading.current = true;
+    else if (retrying && (sawLoading.current || health.state === 'loaded')) {
+      sawLoading.current = false;
+      setRetrying(false);
+    }
+  }, [health.state, retrying]);
+  const statusOn = shade.metric !== null && (health.state === 'error' || (retrying && health.state === 'loading'));
   const series = shade.metric && health.state === 'loaded'
     ? seriesOf(health.rows, shade.metric.field)
     : new Map<string, number>();
@@ -189,8 +206,8 @@ export function CalendarScreen() {
             </button>
           ))}
         </div>
-        {shade.metric && health.state === 'error' && (
-          <PanelStatus status="error" what="your health data" onRetry={() => { if (token) void loadHealth(token); }} returnFocusTo={() => shadeRef.current?.querySelector<HTMLElement>('[aria-pressed="true"]')} />
+        {statusOn && (
+          <PanelStatus status={health.state === 'error' ? 'error' : 'loading'} what="your health data" onRetry={() => { if (token) { sawLoading.current = false; setRetrying(true); void loadHealth(token); } }} returnFocusTo={() => shadeRef.current?.querySelector<HTMLElement>('[aria-pressed="true"]')} />
         )}
       </div>
 
