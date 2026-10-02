@@ -3,12 +3,11 @@
 // switches, early and late in the day), because the history moves with today.
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { todayInDenver } from '../day/dates';
+import { addDays, todayInDenver } from '../day/dates';
 import {
   demoDailyHealth,
   demoBodyMeasurements,
   demoDailySummary,
-  addDaysToDateStr,
   shiftDemoWorkouts,
   DEMO_HEALTH_DAYS,
 } from './demo-data';
@@ -26,7 +25,7 @@ const n = (s: string) => (s === '' ? null : Number(s));
 
 function windowOf(now: Date) {
   const today = todayInDenver(now);
-  return { today, first: addDaysToDateStr(today, -(DEMO_HEALTH_DAYS - 1)) };
+  return { today, first: addDays(today, -(DEMO_HEALTH_DAYS - 1)) };
 }
 
 afterEach(() => vi.restoreAllMocks());
@@ -80,7 +79,7 @@ describe.each(NOWS.map((now) => [now.toISOString(), now] as const))('demo health
   it('has days with no DailyHealth row, including a run of at least 3', () => {
     let run = 0;
     let longest = 0;
-    for (let d = first; d <= today; d = addDaysToDateStr(d, 1)) {
+    for (let d = first; d <= today; d = addDays(d, 1)) {
       run = healthByDate.has(d) ? 0 : run + 1;
       longest = Math.max(longest, run);
     }
@@ -131,7 +130,7 @@ describe.each(NOWS.map((now) => [now.toISOString(), now] as const))('demo health
     expect(health.some((h) => h.stress_avg === '' && h.steps !== '' && h.resting_hr !== '')).toBe(true);
     expect(healthByDate.get(today)!.stress_avg).not.toBe('');
     let run = 0, longest = 0;
-    for (let d = first; d <= today; d = addDaysToDateStr(d, 1)) {
+    for (let d = first; d <= today; d = addDays(d, 1)) {
       run = (healthByDate.get(d)?.stress_avg ?? '') === '' ? run + 1 : 0;
       longest = Math.max(longest, run);
     }
@@ -139,8 +138,8 @@ describe.each(NOWS.map((now) => [now.toISOString(), now] as const))('demo health
   });
 
   it('gives resting_hr, hrv, sleep, steps and stress 14+ values in every 30-day window ending in the last 30 days', () => {
-    for (let end = addDaysToDateStr(today, -29); end <= today; end = addDaysToDateStr(end, 1)) {
-      const win = selectDailyRange(health, addDaysToDateStr(end, -29), end);
+    for (let end = addDays(today, -29); end <= today; end = addDays(end, 1)) {
+      const win = selectDailyRange(health, addDays(end, -29), end);
       for (const f of ['resting_hr', 'hrv', 'sleep_total_s', 'steps', 'stress_avg'] as const) {
         expect(win.filter((h) => h[f] !== '').length, `${f} in window ending ${end}`).toBeGreaterThanOrEqual(14);
       }
@@ -155,7 +154,7 @@ describe.each(NOWS.map((now) => [now.toISOString(), now] as const))('demo health
   const scales = (d: string) => selectBodyMeasurementRange(bodyByDate.get(d) ?? [], d, d).filter((m) => m.kind === 'scale');
   const bps = (d: string) => (bodyByDate.get(d) ?? []).filter((m) => m.kind === 'bp');
   const pastDays: string[] = [];
-  for (let d = first; d < today; d = addDaysToDateStr(d, 1)) pastDays.push(d);
+  for (let d = first; d < today; d = addDays(d, 1)) pastDays.push(d);
 
   it('has mornings with no scale reading', () => {
     expect(pastDays.some((d) => scales(d).length === 0)).toBe(true);
@@ -253,7 +252,7 @@ describe.each(NOWS.map((now) => [now.toISOString(), now] as const))('demo health
     const done = shiftDemoWorkouts(now).filter((w) => w.status !== 'planned');
     const bySum = new Map(summary.map((s) => [s.date, s]));
     for (let i = 0; i < 7; i++) {
-      const d = addDaysToDateStr(today, -i);
+      const d = addDays(today, -i);
       const count = done.filter((w) => w.date === d).length;
       expect(bySum.get(d)?.activity_count ?? '', d).toBe(count ? String(count) : '');
     }
