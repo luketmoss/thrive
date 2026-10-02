@@ -275,6 +275,7 @@ describe('#293 AC4: streak dot rules', () => {
   });
   it('filled is solid primary-fill', () => {
     expect(decl(rule('.streak-dot.filled').body, 'background')).toBe('var(--color-primary-fill)');
+    expect(decl(rule('.streak-dot.filled').body, 'box-shadow')).toBe('none');
   });
   it('today, empty, is a primary-fill inset outline with no outer ring; today, filled, is just the fill', () => {
     expect(decl(rule('.streak-dot.today').body, 'box-shadow')).toBe('inset 0 0 0 2px var(--color-primary-fill)');

@@ -1980,6 +1980,7 @@ input, select, textarea {
 
 .streak-dot.filled {
   background: var(--color-primary-fill);
+  box-shadow: none;
 }
 
 .streak-dot.today {
