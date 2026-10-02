@@ -31,6 +31,27 @@ function windowOf(now: Date) {
 
 afterEach(() => vi.restoreAllMocks());
 
+// An indoor-only day (#308): at least one `:indoor` label, and no outdoor cardio
+// label. A bare, venue-less cardio label (`run`) counts as outdoor.
+const indoorOnly = (types: string) => {
+  const ts = types.split(',');
+  return ts.some((t) => t.endsWith(':indoor'))
+    && ts.every((t) => t.endsWith(':indoor') || !/^(bike|hike|run|walk)\b/.test(t));
+};
+
+describe('indoorOnly', () => {
+  it('is true for an indoor session, alone or beside strength work', () => {
+    expect(indoorOnly('bike:indoor')).toBe(true);
+    expect(indoorOnly('weight,bike:indoor')).toBe(true);
+  });
+
+  it('is false for a mixed indoor/outdoor day, a bare cardio label, or no indoor label', () => {
+    expect(indoorOnly('bike:indoor,hike:outdoor')).toBe(false);
+    expect(indoorOnly('bike:indoor,run')).toBe(false);
+    expect(indoorOnly('weight')).toBe(false);
+  });
+});
+
 describe.each(NOWS.map((now) => [now.toISOString(), now] as const))('demo health at %s', (_label, now) => {
   const { today, first } = windowOf(now);
   const health = demoDailyHealth(now, 'ok');
@@ -204,11 +225,6 @@ describe.each(NOWS.map((now) => [now.toISOString(), now] as const))('demo health
     expect(summary.some((s) => s.total_distance_m === '0' && s.distance_withdata !== '0')).toBe(true);
     // Indoor only: F/G blank, and H blank too — the rebuild writes no count of
     // zero outdoor sessions (buildDaySummary), so neither does the demo.
-    const indoorOnly = (types: string) => {
-      const ts = types.split(',');
-      return ts.some((t) => t.endsWith(':indoor'))
-        && ts.every((t) => t.endsWith(':indoor') || !/^(bike|hike|run|walk)/.test(t));
-    };
     const indoor = summary.find((s) => indoorOnly(s.activity_types));
     expect(indoor, 'an indoor-only day').toBeDefined();
     expect(indoor!.total_distance_m).toBe('');
