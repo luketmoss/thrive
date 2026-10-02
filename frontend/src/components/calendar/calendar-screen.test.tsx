@@ -279,17 +279,104 @@ describe('AC3 — shading by one metric', () => {
       expect(document.activeElement!.getAttribute('aria-pressed')).toBe('true');
     });
 
-    // The Calendar shows the status only while health is in `error`, so a retry's
-    // `loading` unmounts it and focus goes to the pressed button, never to body.
-    it('a retry that fails again leaves focus on the pressed button, not body', async () => {
+    // #297 AC1/AC5 — one persistent container through error -> loading -> error.
+    it('a retry that fails again keeps the same container, and the focus on it', async () => {
+      const { getByRole } = open();
+      const before = document.querySelector('.panel-status')!;
+      act(() => { dailyHealth.value = { state: 'loading' }; });
+      await settle();
+      const during = document.querySelector('.panel-status')!;
+      expect(during).toBe(before);
+      expect(during.textContent).toBe('Loading…');
+      expect(during.querySelector('button')).toBeNull();
+      expect(document.activeElement).toBe(before);
+      act(() => { dailyHealth.value = { state: 'error' }; });
+      await settle();
+      const after = document.querySelector('.panel-status')!;
+      expect(after).toBe(before);
+      expect(after.textContent).toContain("Couldn't load your health data.");
+      expect(after.querySelector('button')).not.toBeNull();
+      expect(document.activeElement).toBe(before);
+      expect(document.activeElement).not.toBe(getByRole('button', { name: 'Sleep' }));
+
+      // A second press works the same way (no stale latch).
+      fireEvent.click(getByRole('button', { name: 'Try again' }));
+      act(() => { dailyHealth.value = { state: 'loading' }; });
+      await settle();
+      expect(document.querySelector('.panel-status')).toBe(before);
+      expect(before.textContent).toBe('Loading…');
+      act(() => { dailyHealth.value = { state: 'error' }; });
+      await settle();
+      expect(document.querySelector('.panel-status')).toBe(before);
+      expect(document.activeElement).toBe(before);
+    });
+
+    it('a retry that succeeds after loading hands focus to the pressed button', async () => {
       const { getByRole } = open();
       act(() => { dailyHealth.value = { state: 'loading' }; });
       await settle();
+      expect(document.activeElement).toBe(document.querySelector('.panel-status'));
+      act(() => { dailyHealth.value = { state: 'loaded', rows: [] }; });
+      await settle();
+      expect(document.querySelector('.panel-status')).toBeNull();
       expect(document.activeElement).toBe(getByRole('button', { name: 'Sleep' }));
+    });
+
+    it('leaves focus alone when the user moved on mid-retry', async () => {
+      const { getByRole } = open();
+      act(() => { dailyHealth.value = { state: 'loading' }; });
+      await settle();
+      const back = getByRole('button', { name: 'Back to Day' });
+      back.focus();
+      act(() => { dailyHealth.value = { state: 'loaded', rows: [] }; });
+      await settle();
+      expect(document.activeElement).toBe(back);
+    });
+
+    // AC3 — only a Try again press shows "Loading…".
+    it('shows no Loading status for a loading the user did not ask for, even after a past retry', async () => {
+      const { getByRole } = open();
+      act(() => { dailyHealth.value = { state: 'loading' }; });
       act(() => { dailyHealth.value = { state: 'error' }; });
       await settle();
+      act(() => { dailyHealth.value = { state: 'loaded', rows: [] }; });
+      await settle();
+      act(() => { dailyHealth.value = { state: 'loading' }; }); // throttled refresh
+      await settle();
+      expect(document.querySelector('.panel-status')).toBeNull();
+      expect(getByRole('button', { name: 'Sleep' })).toBeTruthy();
+    });
+
+    it('with Nothing chosen the status never shows, and choosing it mid-retry removes it', async () => {
+      const { getByRole } = open();
+      act(() => { dailyHealth.value = { state: 'loading' }; });
+      await settle();
       expect(document.querySelector('.panel-status')).not.toBeNull();
-      expect(document.activeElement).toBe(getByRole('button', { name: 'Sleep' }));
+      fireEvent.click(getByRole('button', { name: 'Nothing' }));
+      expect(document.querySelector('.panel-status')).toBeNull();
+      act(() => { dailyHealth.value = { state: 'error' }; });
+      await settle();
+      expect(document.querySelector('.panel-status')).toBeNull();
+    });
+
+    // AC4 — the status belongs to the screen, not the month.
+    it('keeps the same status through a month change, and moves no focus', async () => {
+      const { getByRole } = open();
+      const before = document.querySelector('.panel-status')!;
+      act(() => { dailyHealth.value = { state: 'loading' }; });
+      fireEvent.click(getByRole('button', { name: 'Next month' }));
+      await settle();
+      expect(document.querySelector('.panel-status')).toBe(before);
+      expect(document.activeElement).toBe(before);
+    });
+
+    it('unmounting mid-retry is clean and moves no focus', async () => {
+      const r = open();
+      act(() => { dailyHealth.value = { state: 'loading' }; });
+      await settle();
+      r.unmount();
+      await settle();
+      expect(document.activeElement).toBe(document.body);
     });
 
     it('leaves focus alone when the user moved on', async () => {
