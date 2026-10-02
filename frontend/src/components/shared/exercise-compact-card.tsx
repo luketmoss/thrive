@@ -12,6 +12,8 @@ interface Props {
   onMoveUp?: () => void;
   onMoveDown?: () => void;
   onClick?: () => void;
+  /** Whether the row's panel is open; reflected as aria-expanded when the row is a button. */
+  expanded?: boolean;
   onRemove?: () => void;
 }
 
@@ -26,6 +28,7 @@ export function ExerciseCompactCard({
   onMoveUp,
   onMoveDown,
   onClick,
+  expanded,
   onRemove,
 }: Props) {
   const setsReps =
@@ -60,7 +63,25 @@ export function ExerciseCompactCard({
         </div>
       )}
 
-      <div class="compact-card-body" onClick={onClick} role={onClick ? 'button' : undefined}>
+      <div
+        class="compact-card-body"
+        onClick={onClick}
+        role={onClick ? 'button' : undefined}
+        tabIndex={onClick ? 0 : undefined}
+        aria-expanded={onClick && expanded !== undefined ? expanded : undefined}
+        onKeyDown={
+          onClick
+            ? (e) => {
+                if (e.target !== e.currentTarget) return;
+                if (e.key === 'Enter' || e.key === ' ') {
+                  // Space must not scroll the page.
+                  e.preventDefault();
+                  onClick();
+                }
+              }
+            : undefined
+        }
+      >
         <div class="compact-card-top">
           <span class={sectionBadgeClass(section)}>{section}</span>
           <span class="compact-card-name">{exerciseName}</span>

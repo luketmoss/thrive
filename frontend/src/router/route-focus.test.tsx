@@ -225,6 +225,28 @@ describe('AC2: moves that do not take focus', () => {
 });
 
 describe('AC3: Back restores the opener', () => {
+  it('#301: Back from a template lands on its Library card (a real button with data-focus-key)', async () => {
+    screens['template-detail'] = () => [h('h1', {}, 'Detail')];
+    const { router } = await boot('#/activities');
+    const { templates } = await import('../state/store');
+    const { TemplatesScreen } = await import('../components/templates/templates-screen');
+    templates.value = [
+      { id: 't1', name: 'Push Day', exercises: [], sheetRow: 2 },
+      { id: 't2', name: 'Pull Day', exercises: [], sheetRow: 3 },
+    ] as never;
+    screens.templates = () => h(TemplatesScreen, {});
+    await go(router, () => router.navigate('/templates'), 'templates');
+    const card = document.querySelector<HTMLElement>('[data-focus-key="template:t2"]')!;
+    expect(card.tagName).toBe('BUTTON');
+    card.focus();
+    card.click();
+    await waitFor(() => expect(router.currentRoute.value.name).toBe('template-detail'));
+    await new Promise((r) => setTimeout(r, 120));
+    expect(active().tagName).toBe('H1');
+    await go(router, () => router.goBack(), 'templates');
+    expect(active()).toBe(document.querySelector('[data-focus-key="template:t2"]'));
+  });
+
   beforeEach(() => {
     screens.activities = () => [
       h('h1', {}, 'Activities'),

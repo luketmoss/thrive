@@ -209,6 +209,7 @@ export function TemplateEditor({ templateId }: Props) {
               onMoveUp={() => moveUp(i)}
               onMoveDown={() => moveDown(i)}
               onClick={() => setEditingIndex(editingIndex === i ? -1 : i)}
+              expanded={editingIndex === i}
               onRemove={() => removeExercise(i)}
             />
 
