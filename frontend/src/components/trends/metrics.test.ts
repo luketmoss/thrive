@@ -160,7 +160,7 @@ describe('Activity points', () => {
     ]);
     expect(MOVING_TIME.points()).toEqual([
       { date: '2026-09-01', value: 60 },
-      { date: '2026-09-02', value: 30, partial: '2 of 3 activities recorded moving time' },
+      { date: '2026-09-02', value: 30, partial: '2 of 3 activities recorded moving time', partialShort: '(2 of 3)' },
     ]);
   });
   it('distance in miles and ascent in feet, with outdoor coverage', () => {
@@ -168,13 +168,13 @@ describe('Activity points', () => {
       day({ cardio_activity_count: '2', total_distance_m: '16093', distance_withdata: '2', total_ascent_m: '304.8', ascent_withdata: '1' }, 1),
     ]);
     expect(DISTANCE.points()).toEqual([{ date: '2026-09-01', value: 10 }]);
-    expect(ASCENT.points()).toEqual([{ date: '2026-09-01', value: 1000, partial: '1 of 2 outdoor activities recorded ascent' }]);
+    expect(ASCENT.points()).toEqual([{ date: '2026-09-01', value: 1000, partial: '1 of 2 outdoor activities recorded ascent', partialShort: '(1 of 2)' }]);
     expect(DISTANCE.format(10)).toBe('10.0');
     expect(ASCENT.format(1000)).toBe('1,000');
   });
   it('partial distance says N of M outdoor activities', () => {
     load([day({ cardio_activity_count: '3', total_distance_m: '1609', distance_withdata: '2' })]);
-    expect(DISTANCE.points()).toEqual([{ date: '2026-09-01', value: 1, partial: '2 of 3 outdoor activities recorded distance' }]);
+    expect(DISTANCE.points()).toEqual([{ date: '2026-09-01', value: 1, partial: '2 of 3 outdoor activities recorded distance', partialShort: '(2 of 3)' }]);
   });
   it('an indoor-only day (H = 0) has no point and no sentence, even if a value leaked in', () => {
     load([
