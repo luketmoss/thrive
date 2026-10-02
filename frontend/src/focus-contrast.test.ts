@@ -62,7 +62,7 @@ const ringOf = (selector: string) => {
   return r;
 };
 
-// The nine rings of the #320 audit table.
+// The rings of the #320 audit table, and the four #319 added.
 const AUDITED = [
   '.workout-card:focus-visible',
   '.trend-table-wrap:focus-visible',
@@ -73,6 +73,11 @@ const AUDITED = [
   '.compact-card-body[role="button"]:focus-visible',
   '.day-screen :focus-visible',
   '.calendar-screen :focus-visible',
+  // #319: the exercise picker.
+  '.exercise-list > .exercise-list-item:focus-visible',
+  '.create-new-row:focus-visible',
+  '.modal-content .tag-filter-row .tag-badge:focus-visible',
+  '.modal-close:focus-visible',
 ];
 
 // A ring exempt from the 3:1 check. Adding one needs a written reason. Empty on purpose.
@@ -175,5 +180,22 @@ describe('AC3/AC4: the cascade keeps Day Training cards on the Day ring', () => 
     expect(decl(ringOf('.trend-table-wrap:focus-visible').body, 'outline-offset')).toBe('2px');
     expect(decl(ringOf('.trends-group-scroll:focus-visible').body, 'outline-offset')).toBe('2px');
     expect(decl(ringOf('.trend-row-link:focus-visible').body, 'outline-offset')).toBe('-2px');
+  });
+});
+
+describe('#319 AC5: the exercise picker rings', () => {
+  it('insets the flush rows and puts the chip and Close rings outside', () => {
+    for (const s of ['.exercise-list > .exercise-list-item:focus-visible', '.create-new-row:focus-visible']) {
+      expect(decl(ringOf(s).body, 'outline')).toBe('2px solid var(--color-text)');
+      expect(decl(ringOf(s).body, 'outline-offset')).toBe('-2px');
+    }
+    for (const s of ['.modal-content .tag-filter-row .tag-badge:focus-visible', '.modal-close:focus-visible']) {
+      expect(decl(ringOf(s).body, 'outline')).toBe('2px solid var(--color-text)');
+      expect(decl(ringOf(s).body, 'outline-offset')).toBe('2px');
+    }
+  });
+
+  it('leaves the shared chip row unringed outside the modal', () => {
+    expect(rings.some((r) => r.selector.startsWith('.tag-filter-row'))).toBe(false);
   });
 });

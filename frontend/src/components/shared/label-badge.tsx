@@ -22,7 +22,14 @@ export function LabelBadge({ name, active, onClick }: LabelBadgeProps) {
   }
 
   const Tag = onClick ? 'button' : 'span';
-  const extraProps = onClick ? { type: 'button' as const, onClick } : {};
+  // A toggle chip (a button with `active` given) reports its state (#319).
+  const extraProps = onClick
+    ? {
+        type: 'button' as const,
+        onClick,
+        ...(active !== undefined ? { 'aria-pressed': active ? 'true' : 'false' } : {}),
+      }
+    : {};
 
   return (
     <Tag
