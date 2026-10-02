@@ -4373,3 +4373,32 @@ a.training-card {
 [data-route-focus]:focus {
   outline: none;
 }
+
+/* ===== Library keyboard access (#301) =====
+   Template cards are <button>s and the editor's exercise rows are focusable
+   buttons. The ring is --color-text (14.70:1 light, 15.54:1 dark), not
+   --color-primary (2.53:1 on light, WCAG 1.4.11; the Activities card is #320),
+   and inset, because neither list has a gap for an outset ring. No ring on a
+   mouse click: :focus-visible only. */
+.template-card {
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.template-card:focus-visible,
+.compact-card-body[role="button"]:focus-visible {
+  outline: 2px solid var(--color-text);
+  outline-offset: -2px;
+}
+
+.compact-card-body[role="button"] {
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}

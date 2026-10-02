@@ -4,6 +4,7 @@ import { currentRoute } from '../../router/router';
 import { TemplateEditor } from './template-editor';
 import { TemplateDetail } from './template-detail';
 import { LibraryHeader } from '../shared/library-header';
+import { pluralExercise } from '../activities/activities-helpers';
 
 function sectionSummary(tpl: { exercises: Array<{ section: string }> }): string {
   const sections = new Set(tpl.exercises.map((e) => e.section));
@@ -30,18 +31,19 @@ function TemplateList() {
         ) : (
           <div class="template-list">
             {templates.value.map((t) => (
-              <div
+              <button
+                type="button"
                 key={t.id}
                 data-focus-key={`template:${t.id}`}
                 class="template-card"
                 onClick={() => navigate(`/templates/${t.id}`)}
               >
-                <div class="template-card-body">
+                <span class="template-card-body">
                   <span class="template-name">{t.name}</span>
                   <span class="template-summary">{sectionSummary(t)}</span>
-                </div>
-                <span class="template-count">{t.exercises.length} exercises</span>
-              </div>
+                </span>
+                <span class="template-count">{pluralExercise(t.exercises.length)}</span>
+              </button>
             ))}
           </div>
         )}
