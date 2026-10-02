@@ -2171,9 +2171,12 @@ input, select, textarea {
   cursor: pointer;
 }
 
+/* Edited in place, not merged into the #301 rule near the end of the file: Day
+   Training cards are .workout-card too and keep their outset --color-primary-text
+   ring only because .day-screen :focus-visible comes later (same specificity). */
 .workout-card:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
+  outline: 2px solid var(--color-text);
+  outline-offset: -2px;
 }
 
 [data-theme="dark"] .workout-card {
@@ -3337,7 +3340,7 @@ input, select, textarea {
 }
 
 .trend-table-wrap:focus-visible {
-  outline: 2px solid var(--color-primary);
+  outline: 2px solid var(--color-text);
   outline-offset: 2px;
 }
 
@@ -4140,7 +4143,7 @@ a.training-card {
 }
 
 .trends-group-scroll:focus-visible {
-  outline: 2px solid var(--color-primary);
+  outline: 2px solid var(--color-text);
   outline-offset: 2px;
 }
 
@@ -4208,8 +4211,11 @@ a.training-card {
   color: var(--color-text);
 }
 
-/* Not .workout-card:focus-visible: its --color-primary ring is 2.53:1 on the
-   light background (WCAG 1.4.11). --color-text is 14.70:1 light, 15.54:1 dark. */
+/* Focus rings (#320): 2px solid, in a token that clears 3:1 on every surface
+   (focus-contrast.test.ts pins it). --color-text: Activities, Trends, Library.
+   --color-primary-text: Day, Calendar. --color-primary is never a ring colour:
+   2.53:1 on the light page. Outset when there is room, inset when neighbours
+   abut or a clip would hide it. */
 .trend-charts:focus-visible {
   outline: 2px solid var(--color-text);
   outline-offset: 2px;
@@ -4360,7 +4366,7 @@ a.training-card {
 
 /* Inside the cell, so the region's overflow-x never clips it. */
 .trend-row-link:focus-visible {
-  outline: 2px solid var(--color-primary);
+  outline: 2px solid var(--color-text);
   outline-offset: -2px;
 }
 
