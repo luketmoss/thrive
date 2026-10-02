@@ -1,9 +1,9 @@
 // #239 AC4, AC5 — the demo health data the Day view's panels need.
 import { describe, it, expect } from 'vitest';
-import { demoDailyHealth, demoBodyMeasurements, demoDailySummary, addDaysToDateStr } from './demo-data';
+import { demoDailyHealth, demoBodyMeasurements, demoDailySummary } from './demo-data';
 import { selectBodyMeasurementRange } from './health-api';
 import { bodyDayOf } from './body-day';
-import { todayInDenver } from '../day/dates';
+import { addDays, todayInDenver } from '../day/dates';
 import { HEALTH_METRICS, rangeCaption, seriesOf } from '../components/day/health-rows';
 
 const NOWS = [
@@ -22,7 +22,7 @@ describe.each(NOWS.map((now) => [now.toISOString(), now] as const))('demo at %s'
       const metric = HEALTH_METRICS.find((m) => m.key === key)!;
       const series = seriesOf(rows, metric.field);
       for (let i = 0; i < 30; i++) {
-        const date = addDaysToDateStr(today, -i);
+        const date = addDays(today, -i);
         const v = series.get(date);
         if (v === undefined) continue;
         const c = rangeCaption(metric, v, series, date);
@@ -40,7 +40,7 @@ describe.each(NOWS.map((now) => [now.toISOString(), now] as const))('demo at %s'
     const series = seriesOf(rows, metric.field);
     let found = false;
     for (let i = 0; i < 30; i++) {
-      const date = addDaysToDateStr(today, -i);
+      const date = addDays(today, -i);
       const v = series.get(date);
       if (v === undefined) continue;
       const c = rangeCaption(metric, v, series, date);

@@ -2,8 +2,8 @@
 // page load at the fetchWorkouts read boundary. The raw fixture never changes.
 
 import { describe, it, expect, vi } from 'vitest';
-import { todayInDenver } from '../day/dates';
-import { DEMO_WORKOUTS, DEMO_ANCHOR_DATE, shiftDemoWorkouts, addDaysToDateStr } from './demo-data';
+import { addDays, dayNumber, todayInDenver } from '../day/dates';
+import { DEMO_WORKOUTS, DEMO_ANCHOR_DATE, shiftDemoWorkouts, addDaysToIso } from './demo-data';
 
 vi.mock('./sheets', () => ({
   sheetsGet: vi.fn(), sheetsAppend: vi.fn(), sheetsUpdate: vi.fn(), sheetsDeleteRow: vi.fn(),
@@ -31,7 +31,7 @@ describe('AC1: shiftDemoWorkouts', () => {
   });
 
   it('crosses a year boundary', () => {
-    expect(addDaysToDateStr('2025-12-31', 1)).toBe('2026-01-01');
+    expect(addDays('2025-12-31', 1)).toBe('2026-01-01');
     const out = shiftDemoWorkouts(at('2026-01-02'));
     expect(out.find((w) => w.id === 'w_demo004')!.date).toBe('2025-12-26');
   });
@@ -107,5 +107,42 @@ describe('AC2: fetchWorkouts shifts exactly once per page load', () => {
       vi.useRealTimers();
       vi.doUnmock('./demo-data');
     }
+  });
+});
+
+// #304 — the private copies this file's neighbour used to keep, retained here
+// as the reference the one implementation in day/dates.ts must match.
+describe('#304 AC2: day/dates.ts matches the removed demo-data copies', () => {
+  const MS = 86_400_000;
+  const oldDayNumber = (ymd: string): number => {
+    const [y, m, d] = ymd.split('-').map(Number);
+    return Date.UTC(y, m - 1, d) / MS;
+  };
+  const oldAddDays = (ymd: string, days: number): string =>
+    new Date((oldDayNumber(ymd) + days) * MS).toISOString().slice(0, 10);
+
+  it('agrees for every day from 1970-01-01 to 2100-12-31', () => {
+    const start = Date.UTC(1970, 0, 1) / MS;
+    const end = Date.UTC(2100, 11, 31) / MS;
+    for (let n = start; n <= end; n++) {
+      const ymd = new Date(n * MS).toISOString().slice(0, 10);
+      if (dayNumber(ymd) !== oldDayNumber(ymd)) throw new Error(`dayNumber differs on ${ymd}`);
+      for (const k of [-30, -1, 0, 1, 45]) {
+        if (addDays(ymd, k) !== oldAddDays(ymd, k)) throw new Error(`addDays differs on ${ymd} ${k}`);
+      }
+    }
+  });
+});
+
+describe('#304 AC3: addDaysToIso shifts an instant, not a date', () => {
+  it('moves a valid instant by whole days, keeping time-of-day', () => {
+    expect(addDaysToIso('2025-01-14T12:17:04.000Z', 3)).toBe('2025-01-17T12:17:04.000Z');
+    expect(addDaysToIso('2025-01-14T12:17:04.000Z', -14)).toBe('2024-12-31T12:17:04.000Z');
+  });
+  it('leaves a blank string blank', () => {
+    expect(addDaysToIso('', 5)).toBe('');
+  });
+  it('returns an unparseable string unchanged', () => {
+    expect(addDaysToIso('not a date', 5)).toBe('not a date');
   });
 });

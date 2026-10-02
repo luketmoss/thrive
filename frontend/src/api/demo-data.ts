@@ -5,7 +5,7 @@ import type { DailyHealthRow, BodyMeasurementRow, DailySummaryRow } from './heal
 import { colorKeyFromName } from './label-colors';
 import type { SyncLogEntryWithRow } from './sync-log-api';
 import { SyncLogNotSetUpError } from './sync-log-errors';
-import { todayInDenver } from '../day/dates'; // the one copy of the Denver date rule (#262)
+import { addDays, dayNumber, todayInDenver } from '../day/dates'; // the one copy of the Denver date rule (#262)
 
 let _isDemo: boolean | null = null;
 
@@ -138,16 +138,6 @@ export const DEMO_ANCHOR_DATE = '2025-01-14';
 
 const MS_PER_DAY = 86_400_000;
 
-function dayNumber(ymd: string): number {
-  const [y, m, d] = ymd.split('-').map(Number);
-  return Date.UTC(y, m - 1, d) / MS_PER_DAY;
-}
-
-/** Adds whole days to a YYYY-MM-DD string using UTC arithmetic (DST-proof). */
-export function addDaysToDateStr(ymd: string, days: number): string {
-  return new Date((dayNumber(ymd) + days) * MS_PER_DAY).toISOString().slice(0, 10);
-}
-
 /** Shifts an ISO-8601 timestamp by whole days, preserving time-of-day. Blank stays blank. */
 export function addDaysToIso(iso: string, days: number): string {
   if (!iso) return iso;
@@ -164,7 +154,7 @@ export function shiftDemoWorkouts(now: Date, fixture: WorkoutWithRow[] = DEMO_WO
   const delta = dayNumber(todayInDenver(now)) - dayNumber(DEMO_ANCHOR_DATE);
   return fixture.map((w) => ({
     ...w,
-    date: w.date ? addDaysToDateStr(w.date, delta) : w.date,
+    date: w.date ? addDays(w.date, delta) : w.date,
     created: addDaysToIso(w.created, delta),
     synced_at: addDaysToIso(w.synced_at, delta),
     started_at_utc: addDaysToIso(w.started_at_utc, delta),
@@ -191,7 +181,7 @@ export function shiftDemoJournal(now: Date, fixture: JournalEntryWithRow[] = DEM
   const delta = dayNumber(todayInDenver(now)) - dayNumber(DEMO_ANCHOR_DATE);
   return fixture.map((e) => ({
     ...e,
-    date: addDaysToDateStr(e.date, delta),
+    date: addDays(e.date, delta),
     created: addDaysToIso(e.created, delta),
     updated: addDaysToIso(e.updated, delta),
   }));
@@ -446,14 +436,14 @@ function demoHealthDays(now: Date): { date: string; day: number; isToday: boolea
   const todayNum = dayNumber(today);
   const days = [];
   for (let i = DEMO_HEALTH_DAYS - 1; i >= 0; i--) {
-    days.push({ date: addDaysToDateStr(today, -i), day: todayNum - i, isToday: i === 0 });
+    days.push({ date: addDays(today, -i), day: todayNum - i, isToday: i === 0 });
   }
   return days;
 }
 
 /** Sheet order after a backfill: the oldest days' rows were appended last. */
 function asBackfilled<T extends { date: string; sheetRow: number }>(rows: Omit<T, 'sheetRow'>[], oldestDate: string): T[] {
-  const cutoff = addDaysToDateStr(oldestDate, DEMO_BACKFILLED_DAYS);
+  const cutoff = addDays(oldestDate, DEMO_BACKFILLED_DAYS);
   const recent = rows.filter((r) => r.date >= cutoff);
   const backfilled = rows.filter((r) => r.date < cutoff);
   return [...recent, ...backfilled].map((r, i) => ({ ...r, sheetRow: i + 2 }) as T);
@@ -509,7 +499,7 @@ function buildDemoDailyHealth(now: Date, presync = false): DailyHealthRow[] {
       bed_time: sleep(hhmm(bedMin)),
       wake_time: sleep(hhmm(bedMin + sleepMin)),
       raw_ref: `demo/health/${date}.json`,
-      synced_at: notAfter(Date.parse(`${addDaysToDateStr(date, isToday ? 0 : 1)}T12:17:04.000Z`), now),
+      synced_at: notAfter(Date.parse(`${addDays(date, isToday ? 0 : 1)}T12:17:04.000Z`), now),
       stress_avg: stressBlank ? '' : String(stress),
     });
   }
