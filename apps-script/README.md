@@ -32,6 +32,7 @@ added to a tab is added in both.
 | `src/daily-health.js` | `DailyHealth` upsert by date, for the COROS sync (#165) |
 | `src/body-measurements.js` | `BodyMeasurements` upsert by Withings `grpid`, for the Withings sync (#198) |
 | `src/sync-log.js` | `SyncLog` append and newest-first read, one row per sync run (#156) |
+| `src/sync-requests.js` | The `SyncRequests` poller: a time-driven trigger that dispatches the sync workflows, and its install/remove functions (#314). Not a web-app action |
 | `src/auth.js` | Who is calling: the key, the Google-token check, its cache, the token read allow-list (#144) |
 | `src/main.js` | `doGet`/`doPost` dispatch, response envelope |
 
@@ -459,6 +460,10 @@ sync overlapping a scheduled one cannot interleave a read-then-write. A caller
 that waits over 30 s gets `Lock timeout`, and nothing is written. The SPA
 writes Sheets directly and is not covered.
 
+`pollSyncRequests` (#314) takes the same lock with `tryLock(5000)` instead,
+and skips its tick when the lock is busy. It holds it for at most a GitHub call
+or two per vendor, well inside a writer's 30 s.
+
 ## The shaping principle
 
 **The API accepts domain objects. It never accepts sheet rows or row
@@ -490,6 +495,102 @@ errors need it, but `describeSetState` and `describeLoad` — which format MCP
 tool output for an agent to read — remain in `mcp-server/`. They are a
 presentation concern, not a data one.
 
+## SyncRequests poller (#314)
+
+On-demand sync, server half (#232 `## Results`, route c). The SPA (#315)
+appends one `requested` row per vendor to the `SyncRequests` tab.
+`pollSyncRequests`, an **installable time-driven trigger** running as
+luketmossbot, reads the open rows every **5 minutes** and starts the existing
+`coros-sync.yml` / `withings-sync.yml` through GitHub's workflow-dispatch API.
+It then closes every row it started: from the run's own
+`workflow_dispatch-<run id>-N` row in `SyncLog` / `WithingsSyncLog`, else from
+GitHub's run status, else after 20 minutes as `not_reported`. Each final
+status gets its own sentence in column I.
+
+**It is not a web-app action.** `main.js` has no `case` for
+`pollSyncRequests`, `installSyncRequestTrigger` or `removeSyncRequestTrigger`:
+a key caller gets `Unknown action`, a token caller `read_only`. **A trigger runs
+the project's latest pushed code, not a deployment.** `clasp push` changes what
+the trigger runs at once; `@2` matters only to the web app.
+
+What reaches GitHub is fixed in `sync-requests.js`: owner `luketmoss`, repo
+`thrive`, the workflow file per vendor, and a body of exactly `{"ref":"main"}`
+with **no `inputs` key**, so `force_refresh`, `backfill` and `max_deletions`
+keep their defaults. No cell of the row is sent. One dispatch per vendor per
+tick, none while that vendor has a request open or ran in the last 10 minutes
+(the newest `dispatched_at` here, or `started_at` in its log tab, scheduled
+runs included), and **no retries**: a refused dispatch is recorded `failed`, in
+words, and the user asks again. The whole tick runs under the script lock,
+taken with `tryLock(5000)`; when the lock is busy the tick does nothing.
+
+### The token, and everything it can do
+
+`GITHUB_DISPATCH_TOKEN`, a script property on this project set as
+luketmossbot, is read only by `sync-requests.js` and only sent in the
+`Authorization` header. It is a **fine-grained personal access token**:
+resource owner `luketmoss`, **Only select repositories → `luketmoss/thrive`**,
+repository permission **Actions: Read and write** and nothing else (Metadata:
+Read is added automatically), with an expiry date.
+
+Its full reach is more than "start a sync" (#232):
+- dispatch **every** `workflow_dispatch` workflow, with any inputs and any
+  branch or tag: `deploy.yml`, both watchdogs, `coros-sync.yml` with
+  `force_refresh: true`, and `withings-sync.yml` with `backfill: true` or a
+  raised `max_deletions` (the input that lets a run delete more than 5
+  `BodyMeasurements` rows);
+- cancel, re-run and delete runs and their logs;
+- **disable and enable workflows**, the syncs and their watchdogs included —
+  a silent stop that only Settings' "Sync may have stopped" line would catch;
+- delete artifacts and caches.
+
+It cannot read or set secrets or variables, push code, or send
+`repository_dispatch` (that needs Contents: write, which can push to `main`,
+which deploys the SPA: never grant it here).
+
+When it expires, every request fails with "GitHub refused the token (401)"
+and nothing else says so. Rotate it before then.
+
+### Owner's steps, in order
+
+1. **Create the token** (above): GitHub → Settings → Developer settings →
+   Fine-grained tokens. Put the rotation date in your calendar.
+2. **Store it** as the script property `GITHUB_DISPATCH_TOKEN`: open this
+   Apps Script project signed in as luketmossbot → Project Settings → Script
+   Properties.
+3. **Install the trigger**: in the editor, as luketmossbot, choose
+   `installSyncRequestTrigger`, **Run**, and allow the new permission ("Allow
+   this application to run when you are not present"). If Google first shows
+   "Google hasn't verified this app", choose Advanced → Go to the project. The
+   log should read `Installed 1 trigger: pollSyncRequests every 5 minutes
+   (replaced 0).` This is what grants `script.scriptapp`: `doGet` alone would
+   grant nothing. If the token is not set yet, a second line says so.
+4. **Deploy a new version of `@2`**: Deploy → Manage deployments → `@2` → edit
+   → New version → Deploy. The URL stays the same. The trigger already runs the
+   pushed code; this keeps the web app's version in step with `main`.
+5. Optional: GitHub → Settings → Notifications → Actions, to choose between an
+   email for every completed run and failed runs only. Dispatched runs notify
+   the token's owner.
+
+Running `installSyncRequestTrigger` again is safe: it replaces its own trigger
+(`(replaced 1)`) and leaves exactly one.
+
+### Stopping it
+
+Run `removeSyncRequestTrigger` from the editor. It deletes only
+`pollSyncRequests` triggers and logs `Removed N pollSyncRequests trigger(s).
+Other triggers untouched.` Rows left `requested` stay as they are; the first
+tick after a reinstall expires any older than 20 minutes.
+
+### The interval
+
+`SYNC_POLL_MINUTES = 5`, the quota-safe start: the bot's time-driven triggers
+share 90 minutes of runtime a day across every script it owns, Hive's
+included. Only 1 or 5 is accepted. #331 measures the first week from the
+Executions dashboard (idle tick runtime, and trigger jitter from
+`dispatched_at − requested_at`); move to 1 minute only if idle ticks average
+under ~2 s, by changing the constant, pushing, and running
+`installSyncRequestTrigger` again.
+
 ## Setup
 
 1. Create the Apps Script project and push `src/` to it (`clasp push`).
@@ -507,8 +608,9 @@ presentation concern, not a data one.
    is what makes the API key and the token check load-bearing — "anyone with a
    Google account" would answer a browser `fetch` with a login page.
    `appsscript.json` **pins its scopes** (#179): `spreadsheets`,
-   `script.external_request` (the token check's `UrlFetchApp`) and
-   `drive.readonly` (`getWorkoutPayload`). Pinned, so `DriveApp` cannot widen
+   `script.external_request` (the token check's and the poller's `UrlFetchApp`),
+   `drive.readonly` (`getWorkoutPayload`) and `script.scriptapp` (#314:
+   `installSyncRequestTrigger`). Pinned, so `DriveApp` cannot widen
    Drive access to full `drive` by inference. `drive.file` would not do: it
    covers only files the script's own OAuth client created, and the archive
    was created by the sync's client.

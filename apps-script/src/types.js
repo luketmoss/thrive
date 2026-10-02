@@ -282,6 +282,39 @@ var JOURNAL_FIELDS = [
 var JOURNAL_COLUMN_COUNT = 4;
 
 
+// --- SyncRequests (A:I) — #314 --------------------------------------
+//
+// One row per vendor per "Sync now" press. The SPA appends A-E with status
+// `requested` (#315); pollSyncRequests (sync-requests.js), an Apps Script
+// time-driven trigger, writes every later value in E-I. The poller never
+// appends, never deletes, and never writes A-D. Mirrored by
+// frontend/src/api/sync-requests-api.ts; change both together. Its test fails
+// if any of the three lists below drifts. Later columns are only ever appended.
+var SYNC_REQUEST_FIELDS = [
+  'request_id',      // A  sr_ + 8 hex, written by the SPA
+  'vendor',          // B  coros | withings
+  'requested_at',    // C  ISO 8601 instant, UTC
+  'requested_by',    // D  the signed-in email; may be blank. The poller never reads it
+  'status',          // E  SPA writes `requested`; the poller every later value
+  'workflow_run_id', // F  GitHub's numeric run id; blank until dispatched
+  'dispatched_at',   // G  ISO instant GitHub accepted the dispatch
+  'finished_at',     // H  ISO instant the poller recorded a final status
+  'detail',          // I  words; blank while requested / started
+];
+
+var SYNC_REQUEST_COLUMN_COUNT = 9;
+
+/**
+ * `requested` and `started` are open; every other status is final, and the
+ * poller never touches a row in a final status.
+ */
+var SYNC_REQUEST_STATUSES = [
+  'requested', 'started', 'done', 'cancelled', 'failed', 'not_reported', 'skipped', 'expired',
+];
+
+var SYNC_REQUEST_VENDORS = ['coros', 'withings'];
+
+
 // --- SyncLog (A:N) — #156, #155 -------------------------------------
 //
 // One row per sync run, appended by the COROS sync through appendSyncLog, read
