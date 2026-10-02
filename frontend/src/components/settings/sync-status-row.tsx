@@ -7,6 +7,7 @@ import {
   COROS_STALE_AFTER_HOURS, WITHINGS_STALE_AFTER_HOURS,
 } from '../../api/sync-status';
 import { formatLocalStamp } from '../../api/provenance';
+import type { RequestView } from '../../api/sync-request-state';
 
 const MINUTE = 60 * 1000;
 
@@ -18,6 +19,8 @@ interface SyncStatusRowProps {
   log: SyncLogState;
   staleAfterHours: number;
   loadFn: (token: string) => Promise<void>;
+  /** Where this vendor's Sync now request is, in words (#315). Shares the status region, so a change is announced once. */
+  requestLine?: RequestView | null;
 }
 
 /**
@@ -28,7 +31,7 @@ interface SyncStatusRowProps {
  * shown. Rendered twice — once per vendor — each with its own log, threshold
  * and load, so one vendor's read failing never blanks the other's row.
  */
-export function SyncStatusRow({ id, label, token, log, staleAfterHours, loadFn }: SyncStatusRowProps) {
+export function SyncStatusRow({ id, label, token, log, staleAfterHours, loadFn, requestLine }: SyncStatusRowProps) {
   // A one-minute tick, so "just now" does not sit there for an hour.
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -85,13 +88,18 @@ export function SyncStatusRow({ id, label, token, log, staleAfterHours, loadFn }
       <span id={id}>{label}</span>
       <span class="sync-status" role="status" aria-labelledby={id}>
         {body}
+        {requestLine && (
+          <span class={`sync-status-line sync-request-line${requestLine.tone === 'neutral' ? '' : ` sync-tone-${requestLine.tone}`}`}>
+            {requestLine.text}
+          </span>
+        )}
       </span>
     </div>
   );
 }
 
 /** COROS's row: `SyncLog`, stale past 16 h. */
-export function CorosSyncStatusRow({ token }: { token: string | null }) {
+export function CorosSyncStatusRow({ token, requestLine }: { token: string | null; requestLine?: RequestView | null }) {
   return (
     <SyncStatusRow
       id="sync-status-coros"
@@ -100,12 +108,13 @@ export function CorosSyncStatusRow({ token }: { token: string | null }) {
       log={syncLog.value}
       staleAfterHours={COROS_STALE_AFTER_HOURS}
       loadFn={loadSyncLog}
+      requestLine={requestLine}
     />
   );
 }
 
 /** Withings's row: `WithingsSyncLog`, stale past 14 h (#200, #210). */
-export function WithingsSyncStatusRow({ token }: { token: string | null }) {
+export function WithingsSyncStatusRow({ token, requestLine }: { token: string | null; requestLine?: RequestView | null }) {
   return (
     <SyncStatusRow
       id="sync-status-withings"
@@ -114,6 +123,7 @@ export function WithingsSyncStatusRow({ token }: { token: string | null }) {
       log={withingsSyncLog.value}
       staleAfterHours={WITHINGS_STALE_AFTER_HOURS}
       loadFn={loadWithingsSyncLog}
+      requestLine={requestLine}
     />
   );
 }

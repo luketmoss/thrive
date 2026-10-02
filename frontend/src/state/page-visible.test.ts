@@ -82,6 +82,15 @@ describe('throttled', () => {
     expect(load).toHaveBeenCalledTimes(1);
   });
 
+  it('invalidate lifts the interval for the next run (#315)', async () => {
+    const load = vi.fn().mockResolvedValue(undefined);
+    const t = throttled(load);
+    await t.run('a');
+    t.invalidate();
+    await t.run('a');
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
   it('honours a custom interval', async () => {
     const load = vi.fn().mockResolvedValue(undefined);
     const t = throttled(load, { minIntervalMs: 1000 });

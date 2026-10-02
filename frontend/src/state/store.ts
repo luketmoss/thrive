@@ -1,6 +1,7 @@
 import { signal, computed } from '@preact/signals';
 import type { JournalEntry, ExerciseWithRow, LabelWithRow, Template, WorkoutWithRow, SetWithRow, WorkoutType } from '../api/types';
 import type { SyncLogEntryWithRow } from '../api/sync-log-api';
+import type { SyncRequestWithRow } from '../api/sync-requests-api';
 import type { DailyHealthRow, BodyMeasurementRow, DailySummaryRow } from '../api/health-api';
 import { sortPlannedWorkouts } from '../components/activities/activities-helpers';
 
@@ -102,6 +103,13 @@ export type SyncLogState =
   | { state: 'loaded'; entries: SyncLogEntryWithRow[] };
 export const syncLog = signal<SyncLogState>({ state: 'idle' });
 export const withingsSyncLog = signal<SyncLogState>({ state: 'idle' });
+
+// Sync now (#315): the SyncRequests rows as last read, and the append's own state.
+export const syncRequests = signal<SyncRequestWithRow[]>([]);
+export type SyncAskState = 'idle' | 'asking' | 'failed';
+export const syncAsk = signal<SyncAskState>('idle');
+/** Demo mode only: when the simulated request was pressed (real time), or null. */
+export const demoSyncPressedAt = signal<number | null>(null);
 
 // Health data (#236): DailyHealth, BodyMeasurements and DailySummary, each
 // read whole by `loadHealth` and held here in sheet order; consumers select a

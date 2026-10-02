@@ -31,6 +31,8 @@ export interface Throttled {
   run(token: string): Promise<void>;
   /** Stamp the clock as if a run had just started (for loaders that do not go through `run`). */
   markStarted(): void;
+  /** Forget the last start, so the next `run` is not held back by the interval (#315). A run in flight still blocks. */
+  invalidate(): void;
 }
 
 /**
@@ -58,6 +60,9 @@ export function throttled(
     },
     markStarted() {
       lastStart = Date.now();
+    },
+    invalidate() {
+      lastStart = null;
     },
   };
 }

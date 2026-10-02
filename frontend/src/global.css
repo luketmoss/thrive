@@ -1564,7 +1564,6 @@ input, select, textarea {
 }
 
 .sync-status-bar:disabled {
-  opacity: 0.7;
   cursor: default;
 }
 
@@ -3167,6 +3166,19 @@ input, select, textarea {
   text-align: center;
   font-size: var(--text-sm);
   color: var(--color-text-secondary);
+}
+
+.sync-now-btn {
+  width: 100%;
+  margin-bottom: var(--space-sm);
+}
+
+.sync-now-btn[aria-disabled='true'] {
+  cursor: default;
+}
+
+.sync-request-line {
+  margin-top: 2px;
 }
 
 .sync-tone-danger {
