@@ -308,3 +308,91 @@ describe('lock and unload guard', () => {
     expect(add.mock.calls.filter((c) => c[0] === 'beforeunload')).toHaveLength(0);
   });
 });
+
+describe('#299 whitespace edge cases', () => {
+  async function failedWhitespace() {
+    upsert.mockRejectedValueOnce(new Error('500'));
+    setNoteFocus(D);
+    editNote(D, ' ');
+    flushAllNotes(); // page hidden: the delete of a stored note is forced out
+    await flush();
+    expect(noteDrafts.value[D]).toEqual({ text: ' ', status: 'failed' });
+  }
+
+  it('AC1: online leaves a focused whitespace failed draft failed, then blur sends it once', async () => {
+    const add = vi.spyOn(window, 'addEventListener');
+    await failedWhitespace();
+    upsert.mockClear();
+    window.dispatchEvent(new Event('online'));
+    await flush();
+    expect(upsert).not.toHaveBeenCalled();
+    expect(noteDrafts.value[D]).toEqual({ text: ' ', status: 'failed' });
+    expect(guardCalls(add, 'beforeunload')).toBeGreaterThanOrEqual(1);
+    setNoteFocus(null);
+    flushNote(D);
+    expect(upsert).toHaveBeenCalledTimes(1);
+    expect(upsert).toHaveBeenCalledWith(D, ' ', 'tok');
+    await flush();
+  });
+
+  it('AC1: a failed whitespace draft whose box is not focused is resent by online', async () => {
+    await failedWhitespace();
+    setNoteFocus(null);
+    upsert.mockClear();
+    window.dispatchEvent(new Event('online'));
+    expect(upsert).toHaveBeenCalledTimes(1);
+    await flush();
+  });
+
+  it('AC2: a blur flush of whitespace over no note drops the draft, or reads Saved after a save that day', async () => {
+    setNoteFocus(E);
+    editNote(E, '  ');
+    setNoteFocus(null);
+    flushNote(E);
+    expect(noteDrafts.value[E]).toBeUndefined();
+    editNote(E, 'real');
+    flushNote(E);
+    await flush();
+    journalEntries.value = { state: 'loaded', entries: [entry(D, 'old')] };
+    editNote(E, '  ');
+    flushNote(E);
+    expect(noteDrafts.value[E]).toEqual({ text: null, status: 'saved' });
+    expect(upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it('AC3: whitespace typed during an in-flight save goes idle on landing; the delete waits', async () => {
+    const first = deferred<ReturnType<typeof entry>>();
+    upsert.mockReturnValueOnce(first.promise);
+    setNoteFocus(D);
+    editNote(D, 'new');
+    flushNote(D);
+    editNote(D, ' ');
+    first.resolve(entry(D, 'new'));
+    await flush();
+    expect(noteDrafts.value[D]).toEqual({ text: ' ', status: 'idle' });
+    expect(upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it('AC4: no token, whitespace over no note: dropped on blur, nothing sent, no failed', () => {
+    setNoteToken(null);
+    setNoteFocus(E);
+    editNote(E, ' ');
+    setNoteFocus(null);
+    flushNote(E);
+    expect(noteDrafts.value[E]).toBeUndefined();
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it('AC4: no token still fails real text, and whitespace over a stored note', () => {
+    setNoteToken(null);
+    editNote(E, 'text');
+    flushNote(E);
+    expect(noteDrafts.value[E]).toEqual({ text: 'text', status: 'failed' });
+    setNoteFocus(D);
+    editNote(D, ' ');
+    setNoteFocus(null);
+    flushNote(D);
+    expect(noteDrafts.value[D]).toEqual({ text: ' ', status: 'failed' });
+    expect(upsert).not.toHaveBeenCalled();
+  });
+});

@@ -6,7 +6,7 @@ vi.mock('../api/journal-api', () => ({ fetchJournal: (t: string) => fetchJournal
 
 import { loadJournal } from './actions';
 import { journalEntries, applyJournalSave } from './store';
-import { editNote, setNoteFocus, resetNoteDrafts } from '../panels/journal/drafts';
+import { editNote, setNoteFocus, resetNoteDrafts, heldNote, noteDrafts } from '../panels/journal/drafts';
 
 const row = (date: string, note: string) => ({ date, note, created: 'c', updated: 'u', sheetRow: 2 });
 const entry = (date: string, note: string) => ({ date, note, created: 'c', updated: 'u' });
@@ -76,5 +76,27 @@ describe('loadJournal', () => {
     await p;
     const tab = journalEntries.value;
     expect(tab.state === 'loaded' && tab.entries[0].note).toBe('saved');
+  });
+
+  it('#299 AC5: a refresh landing on an idle whitespace draft keeps it and its local entry', async () => {
+    const notesOf = () => {
+      const tab = journalEntries.value;
+      return tab.state === 'loaded' ? Object.fromEntries(tab.entries.map((e) => [e.date, e.note])) : {};
+    };
+    for (const stillFocused of [true, false]) {
+      resetNoteDrafts();
+      journalEntries.value = { state: 'loaded', entries: [entry('2026-09-20', 'mine'), entry('2026-09-22', 'x')] };
+      let resolve!: (v: unknown) => void;
+      fetchJournal.mockReturnValue(new Promise((r) => { resolve = r; }));
+      const p = loadJournal('tok'); // begun before the edit
+      setNoteFocus('2026-09-20');
+      editNote('2026-09-20', '  ');
+      if (!stillFocused) setNoteFocus(null);
+      resolve([row('2026-09-20', 'theirs'), row('2026-09-22', 'y')]);
+      await p;
+      expect(heldNote('2026-09-20')).toBe('  ');
+      expect(noteDrafts.value['2026-09-20'].status).toBe('idle');
+      expect(notesOf()).toEqual({ '2026-09-20': 'mine', '2026-09-22': 'y' });
+    }
   });
 });
