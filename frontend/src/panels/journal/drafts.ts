@@ -16,6 +16,10 @@
 // Across dates, saves run one at a time too (`sequential`): `upsertJournalEntry`
 // finds a row number and then writes to it, and a delete shifts every row below,
 // so two saves overlapping could write into another day's row.
+// Accepted limit (#299): if the page is hidden while a save is in flight and
+// whitespace was then typed over a stored note, that draft goes idle when the
+// save lands and the delete is sent on blur or the next hide, not on landing.
+// Nothing typed is lost; the stored note simply stays until then.
 
 import { batch, signal } from '@preact/signals';
 import { upsertJournalEntry } from '../../api/journal-api';
@@ -109,7 +113,14 @@ function install(): void {
 }
 
 function retryFailed(): void {
-  for (const [date, d] of Object.entries(noteDrafts.value)) if (d.status === 'failed') flushNote(date);
+  for (const [date, d] of Object.entries(noteDrafts.value)) {
+    if (d.status !== 'failed') continue;
+    // #299: a failed whitespace draft in the focused box stays failed (Not
+    // saved, unload prompt armed). Resending would rewrite the textarea under
+    // the caret; blur, Try again or pagehide still send it.
+    if (d.text != null && isIdleText(date, d.text)) continue;
+    flushNote(date);
+  }
 }
 
 /** Send every held edit now (the page is going away). */
@@ -166,16 +177,16 @@ export function flushNote(date: string, force = false): void {
     put(date, everSaved.has(date) ? { text: null, status: 'saved' } : null);
     return;
   }
-  if (!token) {
-    put(date, { text, status: 'failed' });
+  if (text.trim() === '' && committed(date) === '') {
+    // Only spaces or Enter in a note that does not exist: nothing to delete,
+    // so nothing to send and nothing to fail (#299: before the token check).
+    // A focused flush never gets here: it left the draft idle above, and
+    // `force` is only passed for a day with a stored note.
+    put(date, everSaved.has(date) ? { text: null, status: 'saved' } : null);
     return;
   }
-  if (text.trim() === '' && committed(date) === '') {
-    // Only spaces or Enter in a note that does not exist: nothing to delete.
-    // While it is still being typed, dropping the draft would reset the box
-    // under the caret; blur or leaving the day flushes it, and then it goes.
-    if (focused === date) return;
-    put(date, everSaved.has(date) ? { text: null, status: 'saved' } : null);
+  if (!token) {
+    put(date, { text, status: 'failed' });
     return;
   }
   inFlight.set(date, text);
