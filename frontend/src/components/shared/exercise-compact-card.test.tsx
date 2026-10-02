@@ -47,3 +47,51 @@ describe('ExerciseCompactCard body', () => {
     expect(body().hasAttribute('aria-expanded')).toBe(false);
   });
 });
+
+// #321 — editable controls: disabled ends and exercise-bearing names.
+describe('ExerciseCompactCard editable controls (#321)', () => {
+  const btns = (name: string) => ({
+    up: document.querySelector<HTMLButtonElement>(`button[aria-label="Move ${name} up"]`)!,
+    down: document.querySelector<HTMLButtonElement>(`button[aria-label="Move ${name} down"]`)!,
+    remove: document.querySelector<HTMLButtonElement>(`button[aria-label="Remove ${name}"]`)!,
+  });
+  const props = { section: 'primary', exerciseName: 'Row BB', sets: '3', reps: '8', editable: true };
+
+  it('names all three controls after the exercise, as type=button, glyphs hidden', () => {
+    render(<ExerciseCompactCard {...props} index={1} total={3} />);
+    const b = btns('Row BB');
+    for (const el of [b.up, b.down, b.remove]) {
+      expect(el).toBeTruthy();
+      expect(el.getAttribute('type')).toBe('button');
+      expect(el.querySelector('[aria-hidden="true"]')).toBeTruthy();
+    }
+    expect(document.querySelector('.compact-card')!.classList.contains('compact-card-editable')).toBe(true);
+  });
+
+  it('first: up disabled; middle: both enabled; last: down disabled; only: both disabled', () => {
+    const cases: [number, number, boolean, boolean][] = [
+      [0, 3, true, false],
+      [1, 3, false, false],
+      [2, 3, false, true],
+      [0, 1, true, true],
+    ];
+    for (const [index, total, upOff, downOff] of cases) {
+      const { unmount } = render(<ExerciseCompactCard {...props} index={index} total={total} />);
+      const b = btns('Row BB');
+      expect(b.up.disabled).toBe(upOff);
+      expect(b.down.disabled).toBe(downOff);
+      expect(b.remove.disabled).toBe(false);
+      unmount();
+    }
+  });
+
+  it('controls are not inside the row body; read-only cards have none', () => {
+    const { unmount } = render(<ExerciseCompactCard {...props} index={1} total={3} onClick={() => {}} />);
+    const b = btns('Row BB');
+    for (const el of [b.up, b.down, b.remove]) expect(el.closest('.compact-card-body')).toBeNull();
+    unmount();
+    render(<ExerciseCompactCard {...props} editable={false} />);
+    expect(document.querySelector('.reorder-btn')).toBeNull();
+    expect(document.querySelector('.compact-card-editable')).toBeNull();
+  });
+});

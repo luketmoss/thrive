@@ -41,24 +41,26 @@ export function ExerciseCompactCard({
           : '';
 
   return (
-    <div class="compact-card">
+    <div class={editable ? 'compact-card compact-card-editable' : 'compact-card'}>
       {editable && (
         <div class="compact-card-reorder">
           <button
             class="reorder-btn"
             onClick={onMoveUp}
             disabled={index === 0}
-            aria-label="Move up"
+            type="button"
+            aria-label={`Move ${exerciseName} up`}
           >
-            ▲
+            <span aria-hidden="true">▲</span>
           </button>
           <button
             class="reorder-btn"
             onClick={onMoveDown}
             disabled={index === total - 1}
-            aria-label="Move down"
+            type="button"
+            aria-label={`Move ${exerciseName} down`}
           >
-            ▼
+            <span aria-hidden="true">▼</span>
           </button>
         </div>
       )}
@@ -97,9 +99,10 @@ export function ExerciseCompactCard({
         <button
           class="compact-card-remove"
           onClick={onRemove}
+          type="button"
           aria-label={`Remove ${exerciseName}`}
         >
-          ✕
+          <span aria-hidden="true">✕</span>
         </button>
       )}
     </div>

@@ -1313,48 +1313,13 @@ input, select, textarea {
   margin-top: var(--space-md);
 }
 
-.template-exercise-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-md);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-bottom: none;
-}
-
-.template-exercise-row:last-child,
-.template-exercise-row:has(+ .template-exercise-config) {
-  border-bottom: none;
-}
-
-.template-exercise-list > div:last-child > .template-exercise-row,
-.template-exercise-list > div:last-child > .template-exercise-config {
-  border-bottom: 1px solid var(--color-border);
-}
-
-.template-exercise-list > div:first-child > .template-exercise-row {
-  border-radius: var(--radius-md) var(--radius-md) 0 0;
-}
-
-.template-exercise-list > div:last-child > .template-exercise-row:not(:has(+ .template-exercise-config)),
-.template-exercise-list > div:last-child > .template-exercise-config {
-  border-radius: 0 0 var(--radius-md) var(--radius-md);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.template-exercise-row-reorder {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
 .reorder-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 22px;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
   border-radius: var(--radius-sm);
   font-size: var(--text-xs);
   color: var(--color-text-muted);
@@ -1369,53 +1334,6 @@ input, select, textarea {
 .reorder-btn:disabled {
   opacity: 0.25;
   cursor: default;
-}
-
-.template-exercise-row-body {
-  flex: 1;
-  cursor: pointer;
-  padding: var(--space-xs) 0;
-  min-width: 0;
-}
-
-.template-exercise-row-top {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-}
-
-.template-exercise-row-name {
-  font-weight: 600;
-  font-size: var(--text-sm);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.template-exercise-row-meta {
-  display: flex;
-  gap: var(--space-sm);
-  margin-top: 2px;
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-}
-
-.template-exercise-row-remove {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-full);
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  transition: background var(--transition-fast), color var(--transition-fast);
-  flex-shrink: 0;
-}
-
-.template-exercise-row-remove:hover {
-  background: var(--color-danger-fill);
-  color: var(--color-on-fill);
 }
 
 .template-exercise-config {
@@ -1483,8 +1401,8 @@ input, select, textarea {
 
 .compact-card-reorder {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-direction: row;
+  flex-shrink: 0;
 }
 
 .compact-card-body {
@@ -1523,8 +1441,8 @@ input, select, textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border-radius: var(--radius-full);
   color: var(--color-text-muted);
   font-size: var(--text-sm);
@@ -4407,4 +4325,26 @@ a.training-card {
   display: flex;
   flex-direction: column;
   justify-content: center;
+}
+
+/* ===== Editor controls: 44 px reorder and remove (#321) =====
+   The editable card (template editor and workout planner) holds Move up, Move
+   down and Remove at 44x44, side by side so the row does not grow. The
+   modifier trims the card padding (the box already insets the glyph) and lets
+   the name wrap at 320 px instead of ellipsizing. Read-only cards are
+   untouched. No outline here: focus rings are owned by #320. */
+.compact-card-editable {
+  padding: var(--space-sm) var(--space-xs);
+}
+
+.compact-card-editable .compact-card-top {
+  flex-wrap: wrap;
+}
+
+.compact-card-editable .compact-card-name {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
