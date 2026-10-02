@@ -333,6 +333,28 @@ delete are this one call, under the script lock. **Key only**, like every write.
 - An API deployed before #215 answers `Unknown action`. The sync treats that
   as a failure of its deletion step alone; deploy to enable it.
 
+### Journal (#234)
+
+| Action | Parameters / payload |
+|---|---|
+| `getJournal` | `from`, `to` (optional, inclusive) — oldest first |
+| `upsertJournal` | `{"date":"2026-09-23","note":"Slept badly."}` |
+
+One free-text note per local date, A:D (`JOURNAL_FIELDS` in `src/types.js`).
+`getJournal` returns `{date, note, created, updated}` per day, no `sheetRow`,
+and `[]` for a missing tab. `from`/`to` are validated as `getDailyHealth`'s are.
+**Both are key-only**: `getJournal` is a read but is deliberately *not* on
+`TOKEN_READ_ACTIONS` (journal text is personal, and the one token caller, almanac,
+is retired); adding it later is one line plus an entry in `token-auth.test.ts`.
+
+`upsertJournal` mirrors the SPA's write path, under the script lock: no row for
+the date appends one (`created` = `updated` = now); a row is rewritten in place,
+keeping `created`; a blank or whitespace-only `note` deletes the row, and is a
+no-op when there is none. It answers `{result, entry}` with `result` one of
+`created`, `updated`, `deleted`, `unchanged`. The payload may carry only `date`
+and `note`; `note` is stored as given, as literal text, and bounded only by the
+payload ceiling.
+
 ### Synced workouts (#166)
 
 | Action | Payload |

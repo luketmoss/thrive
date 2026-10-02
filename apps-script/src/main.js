@@ -39,6 +39,10 @@
 //   ?action=upsertDailyHealth&key=...&payload={"rows":[{"date":"2026-09-23",
 //     "steps":"2617","raw_ref":"<drive id>"}],"synced_at":"2026-09-24T13:25:32.000Z"}
 //
+// Journal: one note per local date (#234). Key-only. A blank note deletes the day:
+//   ?action=getJournal&key=...&from=2026-09-01&to=2026-09-30   — oldest first
+//   ?action=upsertJournal&key=...&payload={"date":"2026-09-23","note":"Slept badly."}
+//
 // BodyMeasurements rows are read by local date range and optional kind (#201):
 //   ?action=getBodyMeasurements&key=...&from=2026-09-01&to=2026-09-30&kind=scale
 //
@@ -425,6 +429,23 @@ function dispatch(action, params) {
       result = {
         success: true,
         data: withScriptLock(function () { return upsertDailyHealth(payload.rows, payload.synced_at); }),
+      };
+      break;
+
+    // --- Journal (#234) ---
+    // A read: from/to exactly as getDailyHealth, a missing tab is []. Key-only:
+    // journal text is personal and no token caller needs it, so it is NOT on
+    // TOKEN_READ_ACTIONS.
+    case 'getJournal':
+      result = { success: true, data: getJournalRows({ from: params.from, to: params.to }) };
+      break;
+
+    // One day's note: create, replace in place, or (blank note) delete. A
+    // write, so key-only.
+    case 'upsertJournal':
+      result = {
+        success: true,
+        data: withScriptLock(function () { return upsertJournal(payload); }),
       };
       break;
 

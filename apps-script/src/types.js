@@ -279,8 +279,8 @@ var DAILY_HEALTH_COLUMN_COUNT = 19;
 //
 // One free-text note per local calendar day, keyed by `date`. Written by the
 // SPA directly (frontend/src/api/journal-api.ts, which mirrors this list;
-// change both together). No API action reads or writes it yet: getJournal and
-// upsertJournal arrive with #234. A day with no note has no row, never a row
+// change both together) and through the getJournal/upsertJournal API actions
+// (journal.js, #234), both key-only. A day with no note has no row, never a row
 // with a blank `note`. DailySummary never reads this tab.
 var JOURNAL_FIELDS = [
   'date',    // A  PK, local YYYY-MM-DD

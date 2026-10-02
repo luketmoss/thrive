@@ -178,3 +178,34 @@ test('appendSets with nothing to write makes no request', async () => {
   assert.equal(await api.appendSets([]), 0);
   assert.equal(urls.length, 0);
 });
+
+// --- #234 ---------------------------------------------------------------
+
+test('fetchJournal sends action, from and to (#234)', async () => {
+  const urls = stubFetch(() => ({ body: { success: true, data: [] } }));
+  await api.fetchJournal('2026-09-01', '2026-09-30');
+  assert.equal(urls[0].searchParams.get('action'), 'getJournal');
+  assert.equal(urls[0].searchParams.get('from'), '2026-09-01');
+  assert.equal(urls[0].searchParams.get('to'), '2026-09-30');
+});
+
+test('upsertJournal sends date and note as a payload, once, and passes a blank note through (#234)', async () => {
+  const urls = stubFetch(() => ({ body: { success: true, data: { result: 'deleted', entry: null } } }));
+  const res = await api.upsertJournal('2026-09-23', '');
+  assert.equal(urls.length, 1);
+  assert.equal(urls[0].searchParams.get('action'), 'upsertJournal');
+  assert.deepEqual(JSON.parse(urls[0].searchParams.get('payload')), { date: '2026-09-23', note: '' });
+  assert.deepEqual(res, { result: 'deleted', entry: null });
+});
+
+test('upsertJournal refuses a note too long for the URL, sending nothing (#234)', async () => {
+  const urls = stubFetch(() => ({ body: { success: true, data: {} } }));
+  await assert.rejects(async () => api.upsertJournal('2026-09-23', 'x'.repeat(MAX_ENCODED_PAYLOAD)), /too long to send/);
+  assert.equal(urls.length, 0);
+});
+
+test('a failed upsertJournal is not retried (#234)', async () => {
+  const urls = stubFetch(() => ({ status: 404, body: '<html>Not found</html>' }));
+  await assert.rejects(api.upsertJournal('2026-09-23', 'hi'));
+  assert.equal(urls.length, 1);
+});

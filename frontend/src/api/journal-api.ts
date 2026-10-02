@@ -3,7 +3,8 @@
 // A day with a note has exactly one row; a day without has none, never a row
 // with a blank note. `JOURNAL_FIELDS` mirrors JOURNAL_FIELDS in
 // apps-script/src/types.js (CLAUDE.md: change both together); journal-api.test.ts
-// fails if they drift. The Journal API actions arrive with #234.
+// fails if they drift. The API reaches this tab too, through getJournal and
+// upsertJournal (apps-script/src/journal.js, #234), which mirror upsertJournalEntry.
 
 import type { JournalEntry, JournalEntryWithRow } from './types';
 import { sheetsGet, sheetsAppend, sheetsUpdate, sheetsDeleteRow, getSheetId, withReauth } from './sheets';

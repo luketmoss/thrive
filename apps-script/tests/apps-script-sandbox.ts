@@ -373,6 +373,8 @@ export interface LoadedApi {
   bodyRows?: CellValue[][];
   /** WithingsSyncLog's backing array, or undefined when the tab does not exist (#200). */
   withingsSyncLogRows?: CellValue[][];
+  /** Journal's backing array, or undefined when the tab does not exist (#234). */
+  journalRows?: CellValue[][];
   /** How many times the script lock was taken, and whether it is held now. */
   lock: { acquired: number; held: boolean };
   /** The script cache's live backing map (#144). */
@@ -398,6 +400,8 @@ export interface Fixtures {
   bodyMeasurements?: CellValue[][];
   /** As dailyHealth: omit to model the tab not existing yet (#200). */
   withingsSyncLog?: CellValue[][];
+  /** As dailyHealth: omit to model the tab not existing (#234). */
+  journal?: CellValue[][];
 }
 
 /**
@@ -453,7 +457,7 @@ export function loadApi(
 
   const sandbox = loadSources(
     ['types.js', 'utils.js', 'workouts.js', 'exercises.js', 'templates.js', 'sets.js',
-      'daily-summary.js', 'daily-health.js', 'body-measurements.js', 'sync-log.js', 'payload.js', 'auth.js',
+      'daily-summary.js', 'daily-health.js', 'journal.js', 'body-measurements.js', 'sync-log.js', 'payload.js', 'auth.js',
       'sync-requests.js', 'main.js'],
     {
       LockService: makeLockService(lock),
@@ -487,6 +491,9 @@ export function loadApi(
   if (fixtures.bodyMeasurements) {
     sheets.BodyMeasurements = makeSheet(fixtures.bodyMeasurements, sandbox.BODY_MEASUREMENT_COLUMN_COUNT);
   }
+  if (fixtures.journal) {
+    sheets.Journal = makeSheet(fixtures.journal, sandbox.JOURNAL_COLUMN_COUNT);
+  }
   if (fixtures.withingsSyncLog) {
     sheets.WithingsSyncLog = makeSheet(fixtures.withingsSyncLog, sandbox.SYNC_LOG_COLUMN_COUNT);
   }
@@ -505,7 +512,8 @@ export function loadApi(
   return {
     sandbox, rows: workoutRows, exerciseRows, templateRows, setRows, summaryRows,
     healthRows: fixtures.dailyHealth, syncLogRows: fixtures.syncLog,
-    bodyRows: fixtures.bodyMeasurements, withingsSyncLogRows: fixtures.withingsSyncLog, lock, cache, fetches,
+    bodyRows: fixtures.bodyMeasurements, withingsSyncLogRows: fixtures.withingsSyncLog,
+    journalRows: fixtures.journal, lock, cache, fetches,
     driveCalls,
   };
 }

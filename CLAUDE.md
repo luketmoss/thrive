@@ -118,8 +118,14 @@ Google Sheet "Groundwork" with these tabs:
   updated. Written by the SPA through `frontend/src/api/journal-api.ts`; saving a
   blank note deletes the day's row. Row mapping mirrors `JOURNAL_FIELDS` in
   `apps-script/src/types.js` — change both together. Created by
-  `scripts/migrate-233-journal-tab.mjs`. There is no Apps Script action for it
-  yet (#234).
+  `scripts/migrate-233-journal-tab.mjs`. The API reaches it through `getJournal`
+  (a date range, oldest first) and `upsertJournal` (`{date, note}`: create,
+  replace in place keeping `created`, or a blank note deletes the row), both
+  **key-only** (`apps-script/src/journal.js`, #234; neither is on
+  `TOKEN_READ_ACTIONS`: journal text is personal and nothing needs it by token).
+  The MCP server exposes them as `thrive_journal` (default 30 days) and
+  `thrive_set_journal_entry` (clearing an existing note is dry-run until
+  `confirm: true`).
 - **SyncRequests** (A:I) — on-demand sync requests (#314, #232's route c): one
   row per vendor per "Sync now" press. request_id, vendor, requested_at,
   requested_by, status, workflow_run_id, dispatched_at, finished_at, detail.

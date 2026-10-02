@@ -101,6 +101,7 @@ The server exits at startup with a message naming whichever is missing.
 | `thrive_daily_health` | `DailyHealth` for a date range (default: the 7 days ending today): resting HR, HRV, average stress, steps, calories, sleep and its stages, sleep score, bed and wake time, VO2max, recovery, training load |
 | `thrive_daily_summary` | `DailySummary` for a date range: the per-day rollup of activities and health. Derived, and its distance and ascent are **outdoor only** |
 | `thrive_body_measurements` | Withings weight, body composition and blood pressure readings for a date range (default: the 30 days ending today), grouped by local date. Mass shown in kg and lb; filter by `kind` (`scale` / `bp`) |
+| `thrive_journal` | The user's own journal for a date range (default: the 30 days ending today): one free-text note per day, oldest first, with days that have no note listed as having none |
 | `thrive_list_exercises` | The exercise library, filterable by search text or tag |
 | `thrive_list_templates` | Templates with their exercises, sections, sets and reps |
 | `thrive_exercise_history` | Progression for one exercise over time — the tool for deciding whether to add weight or volume |
@@ -123,13 +124,15 @@ The server exits at startup with a message naming whichever is missing.
 | `thrive_update_sets` | Correct many sets of one workout in one call. All entries are validated first (any problem writes nothing), each request is atomic, and each updated set's resulting state is echoed |
 | `thrive_update_exercise` | Rename or retag an exercise |
 | `thrive_update_template` | Replace a template's exercise list wholesale |
+| `thrive_set_journal_entry` | Write the journal note for a day: a non-blank note is saved at once (a replaced note is quoted back); a blank note clears the day and is dry-run until `confirm: true` |
 | `thrive_delete_workout` | Delete a workout and cascade to its sets |
 | `thrive_delete_exercise` | Delete a library entry |
 
 ## Safety model
 
-Destructive tools — `thrive_delete_workout`, `thrive_delete_exercise` and
-`thrive_update_template` — are **dry-run by default**. Called without `confirm: true`
+Destructive tools — `thrive_delete_workout`, `thrive_delete_exercise`,
+`thrive_update_template` and clearing a day's note with `thrive_set_journal_entry` —
+are **dry-run by default**. Called without `confirm: true`
 they report exactly what they would change and write nothing. The preview is built from
 API reads, so the API's delete and replace actions only ever run once confirmed:
 
