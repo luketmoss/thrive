@@ -80,7 +80,11 @@ export async function sheetsAppend(range: string, values: any[][], token: string
   if (!res.ok) throw new SheetsApiError(res.status, await res.text());
 }
 
-export async function sheetsDeleteRow(sheetId: number, rowIndex: number, token: string): Promise<void> {
+/**
+ * One `spreadsheets:batchUpdate` call. Sheets applies the requests in order
+ * and atomically: if any one fails, none of them is applied (#349).
+ */
+export async function sheetsBatchUpdate(requests: object[], token: string): Promise<void> {
   const url = `${BASE}/${SPREADSHEET_ID}:batchUpdate`;
   const res = await fetch(url, {
     method: 'POST',
@@ -88,21 +92,23 @@ export async function sheetsDeleteRow(sheetId: number, rowIndex: number, token: 
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      requests: [{
-        deleteDimension: {
-          range: {
-            sheetId,
-            dimension: 'ROWS',
-            startIndex: rowIndex - 1, // 0-based
-            endIndex: rowIndex,
-          },
-        },
-      }],
-    }),
+    body: JSON.stringify({ requests }),
   });
   if (res.status === 401) throw new SheetsApiError(401, 'Token expired');
   if (!res.ok) throw new SheetsApiError(res.status, await res.text());
+}
+
+export async function sheetsDeleteRow(sheetId: number, rowIndex: number, token: string): Promise<void> {
+  await sheetsBatchUpdate([{
+    deleteDimension: {
+      range: {
+        sheetId,
+        dimension: 'ROWS',
+        startIndex: rowIndex - 1, // 0-based
+        endIndex: rowIndex,
+      },
+    },
+  }], token);
 }
 
 /**

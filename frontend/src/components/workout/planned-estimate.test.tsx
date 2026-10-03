@@ -11,12 +11,16 @@ import type { WorkoutWithRow, SetWithRow } from '../../api/types';
 
 const saveWorkoutForLater = vi.fn(async (_data: unknown, _token: string) => undefined);
 const deleteWorkout = vi.fn(async (_id: string, _token: string) => undefined);
+const savePlannedWorkoutEdits = vi.fn(async (_id: string, _patch: unknown, _exercises: unknown, _token: string) => undefined);
 const navigate = vi.fn();
+const goBack = vi.fn();
 
 vi.mock('../../state/actions', () => ({
   startWorkout: vi.fn(),
   saveWorkoutForLater: (data: unknown, token: string) => saveWorkoutForLater(data, token),
   deleteWorkout: (id: string, token: string) => deleteWorkout(id, token),
+  savePlannedWorkoutEdits: (id: string, patch: unknown, exercises: unknown, token: string) =>
+    savePlannedWorkoutEdits(id, patch, exercises, token),
   enterEditMode: vi.fn(),
   exitEditMode: vi.fn(),
   startPlannedWorkout: vi.fn(),
@@ -24,7 +28,7 @@ vi.mock('../../state/actions', () => ({
   saveWorkoutAsTemplate: vi.fn(),
 }));
 vi.mock('../../auth/auth-context', () => ({ useAuth: () => ({ token: 'test-token' }) }));
-vi.mock('../../router/router', () => ({ navigate: (p: string) => navigate(p) }));
+vi.mock('../../router/router', () => ({ navigate: (p: string) => navigate(p), goBack: (p?: string) => goBack(p) }));
 vi.mock('./workout-tracker', () => ({
   WorkoutTracker: ({ workoutId }: { workoutId: string }) => h('div', { 'data-testid': 'tracker' }, workoutId),
 }));
@@ -153,15 +157,33 @@ describe('AC3: the planned-workout editor changes the estimate and never loses i
     expect(estimateInput().value).toBe('47');
   });
 
-  it('keeps the estimate through a name-only edit (delete and recreate)', async () => {
+  // #349: the editor saves in place, patching only what changed.
+  const lastPatch = () => savePlannedWorkoutEdits.mock.calls[savePlannedWorkoutEdits.mock.calls.length - 1][1];
+
+  it('a name-only edit patches { name } alone: the estimate is not re-sent', async () => {
     render(<WorkoutEdit workoutId="w_plan" />);
     type(nameInput(), 'Upper Pull B');
     await tap('Save Workout');
     await Promise.resolve();
-    expect(deleteWorkout).toHaveBeenCalledWith('w_plan', 'test-token');
-    expect(saveWorkoutForLater.mock.calls[0][0]).toMatchObject({
-      name: 'Upper Pull B', date: '2099-12-31', estimated_seconds: '2820',
-    });
+    expect(savePlannedWorkoutEdits).toHaveBeenCalledTimes(1);
+    expect(savePlannedWorkoutEdits.mock.calls[0][0]).toBe('w_plan');
+    expect(lastPatch()).toEqual({ name: 'Upper Pull B' });
+    expect(savePlannedWorkoutEdits.mock.calls[0][2]).toEqual([
+      { exercise_id: 'ex_row', exercise_name: 'Row BB', section: 'primary', sets: 3, planned_reps: '8' },
+    ]);
+    expect(deleteWorkout).not.toHaveBeenCalled();
+    expect(saveWorkoutForLater).not.toHaveBeenCalled();
+    expect(goBack).toHaveBeenCalledWith('/activities');
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('an untouched off-minute estimate is not rounded and re-sent', async () => {
+    workouts.value = [planned({ estimated_seconds: '2830' })];
+    render(<WorkoutEdit workoutId="w_plan" />);
+    type(nameInput(), 'Upper Pull B');
+    await tap('Save Workout');
+    await Promise.resolve();
+    expect(lastPatch()).toEqual({ name: 'Upper Pull B' });
   });
 
   it('changes it: 50 minutes saves as 3000', async () => {
@@ -169,7 +191,7 @@ describe('AC3: the planned-workout editor changes the estimate and never loses i
     type(estimateInput(), '50');
     await tap('Save Workout');
     await Promise.resolve();
-    expect(savedEstimate()).toBe('3000');
+    expect(lastPatch()).toEqual({ estimated_seconds: '3000' });
   });
 
   it('clears it: a blanked field saves as blank', async () => {
@@ -177,7 +199,7 @@ describe('AC3: the planned-workout editor changes the estimate and never loses i
     type(estimateInput(), '');
     await tap('Save Workout');
     await Promise.resolve();
-    expect(savedEstimate()).toBe('');
+    expect(lastPatch()).toEqual({ estimated_seconds: '' });
   });
 
   it('a plan with no estimate stays without one', async () => {
@@ -186,7 +208,20 @@ describe('AC3: the planned-workout editor changes the estimate and never loses i
     expect(estimateInput().value).toBe('');
     await tap('Save Workout');
     await Promise.resolve();
-    expect(savedEstimate()).toBe('');
+    expect(lastPatch()).toEqual({});
+  });
+
+  it('a rejected save stays on the editor: no goBack, no navigate, Save enabled again', async () => {
+    savePlannedWorkoutEdits.mockRejectedValueOnce(new Error('boom'));
+    render(<WorkoutEdit workoutId="w_plan" />);
+    type(nameInput(), 'Upper Pull B');
+    await tap('Save Workout');
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(goBack).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+    expect((button('Save Workout') as HTMLButtonElement).disabled).toBe(false);
+    expect(nameInput().value).toBe('Upper Pull B');
   });
 
   it('an estimate-only change counts as unsaved, so Back asks first', async () => {

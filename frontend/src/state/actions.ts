@@ -15,7 +15,8 @@ import { throttled } from './page-visible';
 import { fetchExercises, createExercise, updateExercise as updateExerciseApi, deleteExercise as deleteExerciseApi } from '../api/exercises-api';
 import { fetchLabels, createLabel as createLabelApi, updateLabel as updateLabelApi, deleteLabel as deleteLabelApi, appendLabels } from '../api/labels-api';
 import { fetchTemplateRows, groupTemplateRows, createTemplate as createTemplateApi, updateTemplate as updateTemplateApi, deleteTemplate as deleteTemplateApi, updateExerciseNameInTemplates } from '../api/templates-api';
-import { fetchWorkouts, fetchSets, createWorkout as createWorkoutApi, updateWorkout as updateWorkoutApi, deleteWorkoutRows, appendSet as appendSetApi, appendSets as appendSetsApi, updateSet as updateSetApi, deleteSetRow, updateExerciseNameInSets, findWorkoutRow, WorkoutRowMismatchError } from '../api/workouts-api';
+import { fetchWorkouts, fetchSets, createWorkout as createWorkoutApi, updateWorkout as updateWorkoutApi, deleteWorkoutRows, appendSet as appendSetApi, appendSets as appendSetsApi, updateSet as updateSetApi, deleteSetRow, updateExerciseNameInSets, findWorkoutRow, WorkoutRowMismatchError, builderExercisesToSets, carryPlannedSetValues, replaceWorkoutSets as replaceWorkoutSetsApi } from '../api/workouts-api';
+import type { WorkoutPatch } from '../api/workouts-api';
 import { toLocalDateStr } from '../components/activities/activities-helpers';
 import { colorKeyFromName } from '../api/label-colors';
 import type { TemplateExerciseInput } from '../api/templates-api';
@@ -416,16 +417,16 @@ export async function startPlannedWorkout(
     activeWorkoutId.value = workoutId;
     activeWorkoutSets.value = sets.value.filter((s) => s.workout_id === workoutId);
 
-    // Restore warmup exercises from template if applicable
+    // Restore the template's warmups only for a plan with no warmup rows at
+    // all: one written before warmups were stored as set rows (#89). A plan
+    // with any warmup row has its warmups already, wherever the planned
+    // editor moved them, and one it removed stays removed (#349 AC5).
     if (workout.template_id) {
       const tpl = templates.value.find((t) => t.id === workout.template_id);
       if (tpl) {
-        const workoutSets = activeWorkoutSets.value;
-        activeWarmupExercises.value = tpl.exercises
+        const hasWarmupRows = activeWorkoutSets.value.some((s) => s.section === 'warmup');
+        activeWarmupExercises.value = hasWarmupRows ? [] : tpl.exercises
           .filter((ex) => ex.section === 'warmup')
-          .filter((ex) => !workoutSets.some(
-            (s) => s.exercise_id === ex.exercise_id && s.exercise_order === ex.order && s.section === 'warmup',
-          ))
           .map((ex) => ({
             exercise_id: ex.exercise_id,
             exercise_name: ex.exercise_name,
@@ -567,46 +568,11 @@ async function prepopulateSetsFromBuilder(
   builderExercises: BuilderExercise[],
   token: string,
 ): Promise<void> {
-  const newSets: WorkoutSet[] = [];
-  const warmups: { exercise_id: string; exercise_name: string; exercise_order: number }[] = [];
-
-  builderExercises.forEach((ex, index) => {
-    if (ex.section === 'warmup') {
-      warmups.push({
-        exercise_id: ex.exercise_id,
-        exercise_name: ex.exercise_name,
-        exercise_order: index + 1,
-      });
-      // Persist a single set row so warmup exercises survive across sessions
-      newSets.push({
-        workout_id: workoutId,
-        exercise_id: ex.exercise_id,
-        exercise_name: ex.exercise_name,
-        section: 'warmup',
-        exercise_order: index + 1,
-        set_number: 1,
-        planned_reps: '',
-        weight: '',
-        reps: '',
-        effort: '',
-      });
-      return;
-    }
-    for (let s = 1; s <= ex.sets; s++) {
-      newSets.push({
-        workout_id: workoutId,
-        exercise_id: ex.exercise_id,
-        exercise_name: ex.exercise_name,
-        section: ex.section || 'primary',
-        exercise_order: index + 1,
-        set_number: s,
-        planned_reps: ex.planned_reps,
-        weight: ex.weights?.[s - 1] ?? '',
-        reps: '',
-        effort: '',
-      });
-    }
-  });
+  // A warmup is persisted as a single set row so it survives across sessions.
+  const newSets = builderExercisesToSets(workoutId, builderExercises);
+  const warmups = newSets
+    .filter((s) => s.section === 'warmup')
+    .map((s) => ({ exercise_id: s.exercise_id, exercise_name: s.exercise_name, exercise_order: s.exercise_order }));
 
   activeWarmupExercises.value = warmups;
 
@@ -1108,6 +1074,73 @@ export async function saveWorkoutEdits(
     showToast('Failed to save changes', 'error');
     throw err;
   }
+}
+
+const PLANNED_SETS_FAILED_MESSAGE = "Couldn't save the exercises. Try again.";
+
+/**
+ * Saves the planned-workout editor in place (#349): the same `Workouts` row
+ * and the same id, so `created`, `time`, `template_id`, `copied_from`,
+ * `notes` and every sync column stay as the sheet holds them.
+ *
+ * The row patch goes first, so a row mismatch writes nothing at all. Then
+ * the sets are made the planner's structure in one atomic write. If that
+ * fails, the only partial state is "name/date/estimate saved, exercises
+ * not", which the toast says, and Save simply runs again: the patch is then
+ * empty or the same, and the reconcile starts from a fresh read.
+ *
+ * Unlike `saveWorkoutEdits` it never calls `exitEditMode` and never touches
+ * the active workout's signals: a plan is not the workout being tracked.
+ *
+ * @param patch only the fields the user changed, from `name`, `date` and
+ *   `estimated_seconds`. Empty when only the exercises changed.
+ */
+export async function savePlannedWorkoutEdits(
+  workoutId: string,
+  patch: Pick<WorkoutPatch, 'name' | 'date' | 'estimated_seconds'>,
+  exercises: BuilderExercise[],
+  token: string,
+): Promise<void> {
+  try {
+    const workout = workouts.value.find((w) => w.id === workoutId);
+    if (!workout) throw new Error('Workout not found');
+    const updated = await updateWorkoutApi(workout, patch, token);
+    workouts.value = workouts.value.map((w) => (w.id === workoutId ? updated : w));
+  } catch (err) {
+    if (isReauthFailure(err)) throw err;
+    if (err instanceof WorkoutRowMismatchError) {
+      showToast(WORKOUT_OUT_OF_SYNC_MESSAGE, 'error');
+      throw err;
+    }
+    showToast('Failed to save changes', 'error');
+    throw err;
+  }
+
+  try {
+    const desired = builderExercisesToSets(workoutId, exercises);
+    if (isDemo()) {
+      // No sheet to read: carry from the store. The rows move to the end of
+      // the list (screens sort by order and set number), keeping their
+      // sheetRows where they can so every sheetRow stays unique.
+      const own = sets.value.filter((s) => s.workout_id === workoutId);
+      const rows = carryPlannedSetValues(own, desired);
+      const others = sets.value.filter((s) => s.workout_id !== workoutId);
+      const baseRow = Math.max(1, ...sets.value.map((s) => s.sheetRow)) + 1;
+      sets.value = [...others, ...rows.map((s, i) => ({ ...s, sheetRow: own[i]?.sheetRow ?? baseRow + i }))];
+    } else {
+      await replaceWorkoutSetsApi(workoutId, desired, token);
+      // Inside this try on purpose: if the refetch fails the store still
+      // shows the old exercises, and a retry is harmless (an unchanged plan
+      // writes nothing).
+      sets.value = await fetchSets(token);
+    }
+  } catch (err) {
+    if (isReauthFailure(err)) throw err;
+    showToast(PLANNED_SETS_FAILED_MESSAGE, 'error');
+    throw err;
+  }
+
+  showToast('Workout updated', 'success');
 }
 
 export async function saveSimpleWorkoutEdits(

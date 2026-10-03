@@ -1,7 +1,7 @@
 // Workouts + Sets domain API — wraps Sheets REST calls with demo-mode fallback.
 
-import type { Workout, WorkoutWithRow, WorkoutSet, SetWithRow, WorkoutType, Effort } from './types';
-import { sheetsGet, sheetsAppend, sheetsUpdate, sheetsDeleteRow, getSheetId, withReauth } from './sheets';
+import type { Workout, WorkoutWithRow, WorkoutSet, SetWithRow, WorkoutType, Effort, BuilderExercise } from './types';
+import { sheetsGet, sheetsAppend, sheetsUpdate, sheetsDeleteRow, sheetsBatchUpdate, getSheetId, withReauth } from './sheets';
 import { isDemo, DEMO_SETS, shiftDemoWorkouts } from './demo-data';
 import { toLocalDateStr } from '../components/activities/activities-helpers';
 
@@ -267,22 +267,24 @@ export async function deleteWorkoutRows(
 export async function fetchSets(token: string): Promise<SetWithRow[]> {
   if (isDemo()) return [...DEMO_SETS];
 
-  return withReauth(token, async (t) => {
-    const rows = await sheetsGet('Sets!A2:J', t);
-    return rows.map((row, i) => ({
-      workout_id: row[0] || '',
-      exercise_id: row[1] || '',
-      exercise_name: row[2] || '',
-      section: row[3] || '',
-      exercise_order: Number(row[4]) || 0,
-      set_number: Number(row[5]) || 0,
-      planned_reps: row[6] || '',
-      weight: row[7] || '',
-      reps: row[8] || '',
-      effort: (row[9] || '') as SetWithRow['effort'],
-      sheetRow: i + 2,
-    }));
-  });
+  return withReauth(token, fetchSetsRaw);
+}
+
+async function fetchSetsRaw(token: string): Promise<SetWithRow[]> {
+  const rows = await sheetsGet('Sets!A2:J', token);
+  return rows.map((row, i) => ({
+    workout_id: row[0] || '',
+    exercise_id: row[1] || '',
+    exercise_name: row[2] || '',
+    section: row[3] || '',
+    exercise_order: Number(row[4]) || 0,
+    set_number: Number(row[5]) || 0,
+    planned_reps: row[6] || '',
+    weight: row[7] || '',
+    reps: row[8] || '',
+    effort: (row[9] || '') as SetWithRow['effort'],
+    sheetRow: i + 2,
+  }));
 }
 
 /**
@@ -353,6 +355,153 @@ export async function updateExerciseNameInSets(
         t,
       );
     }
+  });
+}
+
+/**
+ * A builder's exercise list as `Sets` rows, the shape every new plan is
+ * written in: in list order, `exercise_order` is the position, a warmup is
+ * one row (set 1, blank `planned_reps`), anything else is `sets` rows with
+ * the builder's reps. Weight, reps and effort are blank.
+ */
+export function builderExercisesToSets(workoutId: string, exercises: BuilderExercise[]): WorkoutSet[] {
+  const rows: WorkoutSet[] = [];
+  exercises.forEach((ex, index) => {
+    const base = {
+      workout_id: workoutId,
+      exercise_id: ex.exercise_id,
+      exercise_name: ex.exercise_name,
+      exercise_order: index + 1,
+      weight: '',
+      reps: '',
+      effort: '' as const,
+    };
+    if (ex.section === 'warmup') {
+      rows.push({ ...base, section: 'warmup', set_number: 1, planned_reps: '' });
+      return;
+    }
+    for (let s = 1; s <= ex.sets; s++) {
+      rows.push({ ...base, section: ex.section || 'primary', set_number: s, planned_reps: ex.planned_reps });
+    }
+  });
+  return rows;
+}
+
+const setKey = (s: Pick<WorkoutSet, 'exercise_id' | 'section' | 'set_number'>) =>
+  `${s.exercise_id}\u0000${s.section}\u0000${s.set_number}`;
+
+/**
+ * The planner edits structure only, so every value it does not show is
+ * carried from the stored set it replaces (#118, widened to reps and effort
+ * by #349): same exercise + section + set number, warmups included. A set
+ * with no stored match keeps the blanks it was built with.
+ */
+export function carryPlannedSetValues(stored: WorkoutSet[], desired: WorkoutSet[]): WorkoutSet[] {
+  const byKey = new Map<string, WorkoutSet>();
+  for (const s of stored) if (!byKey.has(setKey(s))) byKey.set(setKey(s), s);
+  return desired.map((d) => {
+    const match = byKey.get(setKey(d));
+    return match ? { ...d, weight: match.weight, reps: match.reps, effort: match.effort } : d;
+  });
+}
+
+export interface SetsReconcilePlan {
+  /** Stored rows overwritten in place, ascending. */
+  updates: { sheetRow: number; set: WorkoutSet }[];
+  /** Surplus stored rows, descending, so each delete leaves the rest where they were. */
+  deletes: number[];
+  /** Desired rows beyond the stored ones, appended at the end of the tab. */
+  appends: WorkoutSet[];
+}
+
+const sameRow = (a: WorkoutSet, b: WorkoutSet) => {
+  const ra = setToRow(a);
+  const rb = setToRow(b);
+  return ra.every((v, i) => String(v) === String(rb[i]));
+};
+
+/**
+ * Pairs one workout's stored rows (ascending) with its desired rows by
+ * position. Sets rows carry no identity, so position is as good a pairing as
+ * any, and it means only a shrinking set count ever deletes (and so shifts)
+ * a row. A pair that already matches is left out; an unchanged workout plans
+ * nothing at all.
+ */
+export function planSetsReconcile(stored: SetWithRow[], desired: WorkoutSet[]): SetsReconcilePlan {
+  const own = [...stored].sort((a, b) => a.sheetRow - b.sheetRow);
+  const updates: SetsReconcilePlan['updates'] = [];
+  const shared = Math.min(own.length, desired.length);
+  for (let i = 0; i < shared; i++) {
+    if (!sameRow(own[i], desired[i])) updates.push({ sheetRow: own[i].sheetRow, set: desired[i] });
+  }
+  const deletes = own.slice(shared).map((s) => s.sheetRow).sort((a, b) => b - a);
+  const appends = desired.slice(shared);
+  return { updates, deletes, appends };
+}
+
+export const isEmptyPlan = (p: SetsReconcilePlan) =>
+  p.updates.length === 0 && p.deletes.length === 0 && p.appends.length === 0;
+
+/**
+ * A `Sets!A:J` row as `CellData`, matching what `setToRow` writes under
+ * `valueInputOption=RAW`: text as text, the two numeric columns as numbers,
+ * and a blank as no value at all. So `fetchSets` reads it back identically.
+ */
+function setToCells(s: WorkoutSet) {
+  return {
+    values: setToRow(s).map((v) => {
+      if (typeof v === 'number') return { userEnteredValue: { numberValue: v } };
+      if (v === '') return {};
+      return { userEnteredValue: { stringValue: String(v) } };
+    }),
+  };
+}
+
+/** The plan as `batchUpdate` requests: overwrites, then deletes bottom-to-top, then appends. */
+export function reconcileRequests(plan: SetsReconcilePlan, sheetId: number): object[] {
+  const requests: object[] = [];
+  for (const u of plan.updates) {
+    requests.push({
+      updateCells: {
+        rows: [setToCells(u.set)],
+        fields: 'userEnteredValue',
+        start: { sheetId, rowIndex: u.sheetRow - 1, columnIndex: 0 },
+      },
+    });
+  }
+  for (const row of plan.deletes) {
+    requests.push({
+      deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: row - 1, endIndex: row } },
+    });
+  }
+  if (plan.appends.length > 0) {
+    requests.push({
+      appendCells: { sheetId, rows: plan.appends.map(setToCells), fields: 'userEnteredValue' },
+    });
+  }
+  return requests;
+}
+
+/**
+ * Makes a planned workout's `Sets` rows the planner's structure (#349), in
+ * one atomic `batchUpdate`: either every row is as desired, or none changed.
+ *
+ * The workout's rows are found by a fresh read, never by cached `sheetRow`s,
+ * and the values the planner does not show (weight, reps, effort) are carried
+ * from that same read. When nothing differs, no request is made.
+ *
+ * @param desired the rows as `builderExercisesToSets` builds them.
+ */
+export async function replaceWorkoutSets(workoutId: string, desired: WorkoutSet[], token: string): Promise<void> {
+  if (isDemo()) return;
+
+  await withReauth(token, async (t) => {
+    const all = await fetchSetsRaw(t);
+    const stored = all.filter((s) => s.workout_id === workoutId);
+    const plan = planSetsReconcile(stored, carryPlannedSetValues(stored, desired));
+    if (isEmptyPlan(plan)) return;
+    const sheetId = await getSheetId('Sets', t);
+    await sheetsBatchUpdate(reconcileRequests(plan, sheetId), t);
   });
 }
 
