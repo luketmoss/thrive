@@ -3663,6 +3663,59 @@ a.training-card {
   text-decoration: none;
 }
 
+/* A planned workout carried onto today (#347 AC9): one visual unit. The
+   wrapper carries the planned card's border, radius and background; the link
+   (upper area, its own focus ring, drawn inside so the wrapper never clips it)
+   and the actions row below it are siblings, so a button is never in a link. */
+.training-overdue {
+  display: flex;
+  flex-direction: column;
+  border: 1.5px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+}
+
+.training-overdue > .training-overdue-link {
+  border: none;
+  background: transparent;
+}
+
+.day-screen .training-overdue-link:focus-visible {
+  outline-offset: -2px;
+}
+
+/* The date the plan was for: secondary, not muted, for contrast (#99). */
+.training-planned-for {
+  display: block;
+}
+
+.training-overdue-row {
+  padding: 0 var(--space-md) var(--space-md);
+}
+
+/* Wraps onto a second line rather than overflowing or shrinking (375/320px). */
+.training-overdue-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.training-action {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.training-reschedule {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.training-reschedule-input {
+  max-width: 100%;
+  min-height: 44px;
+}
+
 /* ===== Day Health and Body panels (#239) =====
    After the Training section and apart from it. Rows are a `dl`: label on the
    left, value and its captions on the right. Only the unwelcome side of your

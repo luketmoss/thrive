@@ -17,7 +17,7 @@ import { fetchLabels, createLabel as createLabelApi, updateLabel as updateLabelA
 import { fetchTemplateRows, groupTemplateRows, createTemplate as createTemplateApi, updateTemplate as updateTemplateApi, deleteTemplate as deleteTemplateApi, updateExerciseNameInTemplates } from '../api/templates-api';
 import { fetchWorkouts, fetchSets, createWorkout as createWorkoutApi, updateWorkout as updateWorkoutApi, deleteWorkoutRows, appendSet as appendSetApi, appendSets as appendSetsApi, updateSet as updateSetApi, deleteSetRow, updateExerciseNameInSets, findWorkoutRow, WorkoutRowMismatchError, builderExercisesToSets, carryPlannedSetValues, replaceWorkoutSets as replaceWorkoutSetsApi } from '../api/workouts-api';
 import type { WorkoutPatch } from '../api/workouts-api';
-import { toLocalDateStr } from '../components/activities/activities-helpers';
+import { toLocalDateStr, formatPlannedDate } from '../components/activities/activities-helpers';
 import { colorKeyFromName } from '../api/label-colors';
 import type { TemplateExerciseInput } from '../api/templates-api';
 import type { ExerciseWithRow, LabelWithRow, TemplateRowWithRow, Workout, WorkoutWithRow, WorkoutType, WorkoutSet, SetWithRow, BuilderExercise, Effort } from '../api/types';
@@ -1165,6 +1165,41 @@ export async function saveSimpleWorkoutEdits(
       throw err;
     }
     showToast('Failed to save changes', 'error');
+    throw err;
+  }
+}
+
+/**
+ * Moves a workout to `date` in place (#347): the same row and id, only `date`
+ * written, through `updateWorkout`'s patch write. Its sets, template, estimate,
+ * notes and `created` stay as the sheet holds them. Nothing is written when the
+ * date is unchanged.
+ *
+ * @param today the Day view's today, so the toast says "Moved to today" for it
+ *   and "Rescheduled to <formatPlannedDate>" for any other date.
+ */
+export async function rescheduleWorkout(
+  workoutId: string,
+  date: string,
+  token: string,
+  today: string,
+): Promise<void> {
+  try {
+    const workout = workouts.value.find((w) => w.id === workoutId);
+    if (!workout) throw new Error('Workout not found');
+    if (workout.date === date) return;
+
+    const updated = await updateWorkoutApi(workout, { date }, token);
+    workouts.value = workouts.value.map((w) => (w.id === workoutId ? updated : w));
+
+    showToast(date === today ? 'Moved to today' : `Rescheduled to ${formatPlannedDate(date, today)}`, 'success');
+  } catch (err) {
+    if (isReauthFailure(err)) throw err;
+    if (err instanceof WorkoutRowMismatchError) {
+      showToast(WORKOUT_OUT_OF_SYNC_MESSAGE, 'error');
+      throw err;
+    }
+    showToast(date === today ? 'Failed to move workout' : 'Failed to reschedule workout', 'error');
     throw err;
   }
 }

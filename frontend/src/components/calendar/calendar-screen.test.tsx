@@ -423,6 +423,21 @@ describe('AC4 — the day summary', () => {
     expect(s.textContent).toContain('Nothing recorded.');
   });
 
+  // #347 AC2 regression guard: the Day view carries overdue plans onto today,
+  // but the Calendar's summary of today lists only today's own workouts, and
+  // the missed plan stays on its own day as Overdue.
+  it("#347: today's summary does not carry an earlier missed plan; its own day still lists it", () => {
+    workouts.value = [
+      wk({ id: 'old', date: '2026-09-28', status: 'planned', name: 'Missed', type: 'weight' }),
+      wk({ id: 'p', date: TODAY, status: 'planned', name: 'Today plan', type: 'weight' }),
+    ];
+    const { container } = renderAt('#/calendar');
+    const lines = () => [...summary(container).querySelectorAll('.calendar-summary-line')].map((l) => l.textContent);
+    expect(lines()).toEqual(['weightToday planPlanned']);
+    fireEvent.click(cell(container, '2026-09-28'));
+    expect(lines()).toEqual(['weightMissedOverdue']);
+  });
+
   it("selects the 1st in a month that is not today's", () => {
     const { container } = renderAt('#/calendar/2025-01');
     expect(cell(container, '2025-01-01').getAttribute('aria-selected')).toBe('true');
