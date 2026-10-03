@@ -66,18 +66,20 @@ vi.mock('../../api/labels-api', () => ({
 }));
 vi.mock('../../auth/reauth', () => ({ attemptReauth: vi.fn(), ReauthFailedError: class extends Error {} }));
 vi.mock('../../auth/auth-context', () => ({ useAuth: () => ({ token: 'test-token' }) }));
-vi.mock('../../router/router', () => ({ navigate: vi.fn() }));
+vi.mock('../../router/router', () => ({ navigate: vi.fn(), goBack: vi.fn() }));
 
 const { EditWorkoutForm } = await import('./edit-workout-form');
 const { WorkoutTracker } = await import('../workout/workout-tracker');
 const { rowToWorkout, workoutToRow } = await import('../../api/workouts-api');
 const { saveSimpleWorkoutEdits } = await import('../../state/actions');
-const { navigate } = await import('../../router/router');
+const { navigate, goBack } = await import('../../router/router');
 
-/** Clicks Save and waits for the save to finish, which ends in navigation. */
+/** Clicks Save and waits for the save to finish, which ends in goBack (#348). */
 async function clickSave(view: ReturnType<typeof render>) {
   fireEvent.click(view.getAllByText('Save Changes')[0]);
-  await vi.waitFor(() => expect(navigate).toHaveBeenCalled());
+  await vi.waitFor(() => expect(goBack).toHaveBeenCalled());
+  expect(goBack).toHaveBeenCalledWith('/activities');
+  expect(navigate).not.toHaveBeenCalled();
 }
 
 // A COROS hike as the sync writes it. Values are made up.
@@ -112,6 +114,7 @@ beforeEach(() => {
   sheetsGet.mockClear();
   sheetsUpdate.mockClear();
   vi.mocked(navigate).mockClear();
+  vi.mocked(goBack).mockClear();
 });
 
 afterEach(() => {
@@ -283,5 +286,73 @@ describe('AC6: the edit forms label their text inputs', () => {
     const t = render(h(WorkoutTracker, { workoutId: ENRICHED.id, workoutName: ENRICHED.name }));
     const ids = ['Name', 'Date', 'Duration (minutes)', 'Notes'].map((l) => (t.getByLabelText(l) as HTMLElement).id);
     expect(ids).toEqual(['tracker-edit-name', 'tracker-edit-date', 'tracker-edit-duration', 'tracker-edit-notes']);
+  });
+});
+
+// #348: Back, Discard and Save step back through the router, not forward.
+describe('#348: leaving the edit forms uses goBack', () => {
+  const dirty = (f: { type: (l: string, v: string) => void }) => f.type('Notes', 'changed');
+
+  it('EditWorkoutForm: a failed Save calls neither goBack nor navigate', async () => {
+    sheetsUpdate.mockRejectedValueOnce(new Error('boom'));
+    const f = renderEdit();
+    dirty(f);
+    fireEvent.click(f.getAllByText('Save Changes')[0]);
+    await vi.waitFor(() => expect(sheetsUpdate).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 20));
+    expect(goBack).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it.each(['Back', 'Discard Changes'])('EditWorkoutForm: %s with no edits calls goBack once, no navigate', (label) => {
+    const f = renderEdit();
+    fireEvent.click(f.getAllByText(label, { exact: false })[0]);
+    expect(goBack).toHaveBeenCalledTimes(1);
+    expect(goBack).toHaveBeenCalledWith('/activities');
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('EditWorkoutForm: a cancelled Discard calls neither, a confirmed one goBack', () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+    const f = renderEdit();
+    dirty(f);
+    fireEvent.click(f.getByText('Discard Changes'));
+    expect(goBack).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+    fireEvent.click(f.getByText('Discard Changes'));
+    expect(goBack).toHaveBeenCalledTimes(1);
+    expect(goBack).toHaveBeenCalledWith('/activities');
+    expect(navigate).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  function renderTracker() {
+    isEditMode.value = true;
+    activeWorkoutId.value = ENRICHED.id;
+    return render(h(WorkoutTracker, { workoutId: ENRICHED.id, workoutName: ENRICHED.name }));
+  }
+
+  it('Tracker edit mode: a failed Save calls neither goBack nor navigate', async () => {
+    sheetsUpdate.mockRejectedValueOnce(new Error('boom'));
+    const t = renderTracker();
+    fireEvent.input(t.getByLabelText('Notes'), { target: { value: 'changed' } });
+    fireEvent.click(t.getAllByText('Save Changes')[0]);
+    await vi.waitFor(() => expect(sheetsUpdate).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 20));
+    expect(goBack).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('Tracker edit mode: a cancelled Discard calls neither, a confirmed one goBack once', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+    const t = renderTracker();
+    fireEvent.click(t.getByText('Discard Changes'));
+    expect(goBack).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+    fireEvent.click(t.getByText('Discard Changes'));
+    await vi.waitFor(() => expect(goBack).toHaveBeenCalledTimes(1));
+    expect(goBack).toHaveBeenCalledWith('/activities');
+    expect(navigate).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
   });
 });

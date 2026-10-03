@@ -3,7 +3,7 @@ import { activeWorkoutSets, activeWarmupExercises, isEditMode, workouts, pending
 import { saveSet, removeSet, finishWorkout, deleteWorkout, saveWorkoutEdits, exitEditMode } from '../../state/actions';
 import { flushQueue } from '../../api/sync-queue';
 import { useAuth } from '../../auth/auth-context';
-import { navigate } from '../../router/router';
+import { navigate, goBack } from '../../router/router';
 import { AddExerciseModal } from '../exercises/add-exercise-modal';
 import { FinishWorkoutModal } from './finish-modal';
 import { ExerciseRow } from './exercise-row';
@@ -494,7 +494,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
         editedSets,
         token,
       );
-      navigate(`/history/${workoutId}`);
+      goBack('/activities');
     } catch {
       // Error toast shown by action
     } finally {
@@ -544,7 +544,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
     if (editMode) {
       if (!confirm('Discard changes? Your edits will not be saved.')) return;
       exitEditMode();
-      navigate(`/history/${workoutId}`);
+      goBack('/activities');
       return;
     }
 

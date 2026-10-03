@@ -103,7 +103,7 @@ export function WorkoutDetail({ workoutId }: Props) {
     setDeleting(true);
     try {
       await deleteWorkout(workoutId, token);
-      navigate('/activities');
+      goBack('/activities');
     } catch {
       // Error toast shown by action
     } finally {
