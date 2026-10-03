@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import { AuthContext } from './auth-context';
 import type { UserInfo } from '../api/types';
-import { registerReauthCallback, onReauthFailed } from './reauth';
-import { showToast } from '../state/store';
+import { registerReauthCallback, onReauthFailed, attemptReauth } from './reauth';
+import { onPageVisible } from '../state/page-visible';
 import { isDemo } from '../api/demo-data';
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -13,6 +13,9 @@ const TOKEN_KEY = 'gw_token';
 const USER_KEY = 'gw_user';
 const TOKEN_EXPIRY_KEY = 'gw_token_expiry';
 
+/** #353: renew from the next tap once the token is this close to expiring. */
+export const RENEW_AHEAD_MS = 10 * 60 * 1000;
+
 export function loadCachedAuth(): { token: string; user: UserInfo; expiry: number } | null {
   try {
     const token = localStorage.getItem(TOKEN_KEY);
@@ -21,12 +24,29 @@ export function loadCachedAuth(): { token: string; user: UserInfo; expiry: numbe
     if (token && user && expiry && Date.now() < Number(expiry)) {
       return { token, user: JSON.parse(user), expiry: Number(expiry) };
     }
-    // Expired or missing — clear stale data
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
-    localStorage.removeItem(TOKEN_EXPIRY_KEY);
+    // Expired or missing — drop the token but keep the user (#353), so the
+    // login screen can offer "Continue as <email>" instead of a bare sign-in.
+    clearCachedToken();
   } catch { /* ignore */ }
   return null;
+}
+
+/** #353: the user a previous sign-in left behind, or null. Holds no secret. */
+export function loadRememberedUser(): UserInfo | null {
+  try {
+    const user = localStorage.getItem(USER_KEY);
+    return user ? (JSON.parse(user) as UserInfo) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Drop the token and its expiry; the remembered user stays (#353). */
+export function clearCachedToken() {
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(TOKEN_EXPIRY_KEY);
+  } catch { /* ignore */ }
 }
 
 export function saveCachedAuth(token: string, user: UserInfo, expiresIn: number) {
@@ -48,6 +68,13 @@ export function clearCachedAuth() {
 
 declare const google: any;
 
+const RENEW_FAILED = 'Could not sign you in. Try again, or use a different account.';
+
+/** `hint` is GIS's current name for the account hint; `login_hint` its older one. */
+function hintFor(user: UserInfo | null): { hint?: string; login_hint?: string } {
+  return user?.email ? { hint: user.email, login_hint: user.email } : {};
+}
+
 interface Props {
   children: ComponentChildren;
 }
@@ -60,6 +87,15 @@ export function AuthProvider({ children }: Props) {
   const [token, setToken] = useState<string | null>(demo ? 'demo' : (cached?.token ?? null));
   const [user, setUser] = useState<UserInfo | null>(demo ? DEMO_USER : (cached?.user ?? null));
   const tokenClientRef = useRef<any>(null);
+  const [ready, setReady] = useState(false);
+  const [renewing, setRenewing] = useState(false);
+  const [renewError, setRenewError] = useState<string | null>(null);
+  // Token expiry (ms epoch) as last cached; drives the touch-armed renewal (#353).
+  const expiryRef = useRef<number | null>(cached?.expiry ?? null);
+  const userRef = useRef<UserInfo | null>(demo ? DEMO_USER : (cached?.user ?? loadRememberedUser()));
+  const [rememberedUser, setRememberedUser] = useState<UserInfo | null>(
+    demo || cached ? null : loadRememberedUser(),
+  );
 
   // Demo mode: skip GIS entirely — provide fake auth context
   if (demo) {
@@ -71,6 +107,11 @@ export function AuthProvider({ children }: Props) {
           isAuthenticated: true,
           login: () => {},
           logout: () => {},
+          rememberedUser: null,
+          ready: true,
+          renewing: false,
+          renewError: null,
+          continueAs: () => {},
         }}
       >
         {children}
@@ -85,6 +126,8 @@ export function AuthProvider({ children }: Props) {
    */
   const reauthResolveRef = useRef<((token: string) => void) | null>(null);
   const reauthRejectRef = useRef<((err: Error) => void) | null>(null);
+  const scheduleTouchRenewalRef = useRef<() => void>(() => {});
+  const scheduleTouchRenewal = () => scheduleTouchRenewalRef.current();
 
   useEffect(() => {
     // Wait for GIS script to load
@@ -99,8 +142,10 @@ export function AuthProvider({ children }: Props) {
         scope: SCOPES,
         prompt: '',
         callback: async (response: any) => {
+          setRenewing(false);
           if (response.error) {
             console.error('OAuth error:', response.error);
+            setRenewError(RENEW_FAILED);
             // If this was a silent reauth attempt, reject the promise
             if (reauthRejectRef.current) {
               reauthRejectRef.current(new Error(`OAuth error: ${response.error}`));
@@ -112,6 +157,9 @@ export function AuthProvider({ children }: Props) {
 
           const newToken = response.access_token;
           setToken(newToken);
+          setRenewError(null);
+          expiryRef.current = Date.now() + ((response.expires_in || 3600) - 60) * 1000;
+          scheduleTouchRenewal();
 
           // Fetch user info (skip if this is a background reauth — use cached user)
           if (reauthResolveRef.current) {
@@ -137,6 +185,7 @@ export function AuthProvider({ children }: Props) {
                 picture: info.picture,
               };
               setUser(userInfo);
+              userRef.current = userInfo;
               saveCachedAuth(newToken, userInfo, response.expires_in || 3600);
             } catch (err) {
               console.error('Failed to fetch user info:', err);
@@ -145,6 +194,9 @@ export function AuthProvider({ children }: Props) {
         },
         error_callback: (error: any) => {
           console.error('Token client error:', error);
+          setRenewing(false);
+          // popup_failed_to_open / popup_closed from a Continue tap (#353)
+          setRenewError(RENEW_FAILED);
           // If this was a silent reauth attempt, reject the promise
           if (reauthRejectRef.current) {
             reauthRejectRef.current(new Error(`Token client error: ${error?.type || error?.message || 'unknown'}`));
@@ -153,6 +205,7 @@ export function AuthProvider({ children }: Props) {
           }
         },
       });
+      setReady(true);
     };
 
     init();
@@ -167,21 +220,54 @@ export function AuthProvider({ children }: Props) {
         reauthResolveRef.current = resolve;
         reauthRejectRef.current = reject;
         // Request a new token silently (prompt: '' skips consent screen)
-        tokenClientRef.current.requestAccessToken({ prompt: '' });
+        tokenClientRef.current.requestAccessToken({ prompt: '', ...hintFor(userRef.current) });
       });
     });
 
-    // Register the reauth-failed callback — clears auth state and shows login
+    // Register the reauth-failed callback — drops the token and shows the
+    // Continue screen; the user is kept so one tap gets back in (#353).
     const unregisterFailed = onReauthFailed(() => {
-      clearCachedAuth();
+      clearCachedToken();
+      expiryRef.current = null;
       setToken(null);
-      setUser(null);
-      showToast('Session expired — please sign in again', 'error');
+      setRememberedUser(userRef.current);
     });
+
+    // #353: GIS renews through a popup the browser only allows from a real tap,
+    // so an expiring token is renewed by the next `pointerup` (touch only grants popup activation on release), never by a timer
+    // or a 401. Armed when the token nears expiry and when the page returns to
+    // the foreground; one-shot; a failure here leaves the old token alone.
+    let armed = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const needsRenewal = () =>
+      expiryRef.current !== null && Date.now() >= expiryRef.current - RENEW_AHEAD_MS;
+    const onTouch = () => {
+      armed = false;
+      if (!needsRenewal() || !tokenClientRef.current) return;
+      attemptReauth({ quiet: true })
+        .then(() => scheduleTouchRenewal())
+        .catch(() => { /* old token still works; the next foreground or 401 deals with it */ });
+    };
+    const armTouchRenewal = () => {
+      if (armed || !needsRenewal()) return;
+      armed = true;
+      document.addEventListener('pointerup', onTouch, { once: true, capture: true });
+    };
+    scheduleTouchRenewalRef.current = () => {
+      clearTimeout(timer);
+      if (expiryRef.current === null) return;
+      timer = setTimeout(armTouchRenewal, Math.max(0, expiryRef.current - RENEW_AHEAD_MS - Date.now()));
+    };
+    scheduleTouchRenewal();
+    armTouchRenewal();
+    const unsubscribeVisible = onPageVisible(armTouchRenewal);
 
     return () => {
       unregisterReauth();
       unregisterFailed();
+      unsubscribeVisible();
+      clearTimeout(timer);
+      document.removeEventListener('pointerup', onTouch, { capture: true });
     };
   }, []);
 
@@ -189,12 +275,23 @@ export function AuthProvider({ children }: Props) {
     tokenClientRef.current?.requestAccessToken();
   }, []);
 
+  // #353: runs from a tap on "Continue as <email>", so the popup is allowed.
+  const continueAs = useCallback(() => {
+    if (!tokenClientRef.current) return;
+    setRenewError(null);
+    setRenewing(true);
+    tokenClientRef.current.requestAccessToken({ prompt: '', ...hintFor(userRef.current) });
+  }, []);
+
   const logout = useCallback(() => {
     // Don't revoke the token — that removes the consent grant and forces
     // the full consent flow on next login. Just clear local state.
     clearCachedAuth();
+    expiryRef.current = null;
+    userRef.current = null;
     setToken(null);
     setUser(null);
+    setRememberedUser(null);
   }, []);
 
   return (
@@ -205,6 +302,11 @@ export function AuthProvider({ children }: Props) {
         isAuthenticated: !!token,
         login,
         logout,
+        rememberedUser: token ? null : rememberedUser,
+        ready,
+        renewing,
+        renewError,
+        continueAs,
       }}
     >
       {children}
