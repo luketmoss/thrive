@@ -127,6 +127,10 @@ export const DEMO_WORKOUTS: WorkoutWithRow[] = [
   // the link shows here too.
   { id: 'w_demo009', date: '2025-01-08', time: '06:45', type: 'weight', name: 'Leg Day', template_id: '', notes: '', elapsed_seconds: '3947', created: '2025-01-08T13:45:00.000Z', copied_from: '', status: '', moving_seconds: '3611', effort: 'Medium', distance_m: '', ascent_m: '', descent_m: '', avg_hr: '112', sub_type: '', source: '', source_activity_id: '100000000000000009', raw_ref: 'demo/raw/100000000000000009.json', fit_ref: '', fit_fetched_at: '', synced_at: '2025-01-08T15:02:37.000Z', started_at_utc: '', calories: '387', estimated_seconds: '', sport_type: '402', sheetRow: 10 },
   { id: 'w_demo005', date: workoutDate, time: '06:30', type: 'weight', name: 'Upper Pull A', template_id: 'tpl_demo002', notes: '', elapsed_seconds: '', created: '2025-01-14T06:30:00.000Z', copied_from: '', status: 'planned', moving_seconds: '', effort: '', distance_m: '', ascent_m: '', descent_m: '', avg_hr: '', sub_type: '', source: '', source_activity_id: '', raw_ref: '', fit_ref: '', fit_fetched_at: '', synced_at: '', started_at_utc: '', calories: '', estimated_seconds: '2820', sport_type: '', sheetRow: 6 },
+  // #347: a plan from two days before the anchor that was never started, so
+  // demo mode carries it onto today's Training panel as Overdue, with Move to
+  // today, Reschedule and Start now to exercise.
+  { id: 'w_demo010', date: '2025-01-12', time: '', type: 'weight', name: 'Lower Body B', template_id: '', notes: '', elapsed_seconds: '', created: '2025-01-11T20:00:00.000Z', copied_from: '', status: 'planned', moving_seconds: '', effort: '', distance_m: '', ascent_m: '', descent_m: '', avg_hr: '', sub_type: '', source: '', source_activity_id: '', raw_ref: '', fit_ref: '', fit_fetched_at: '', synced_at: '', started_at_utc: '', calories: '', estimated_seconds: '2400', sport_type: '', sheetRow: 11 },
 ];
 
 // ── Demo workout dates relative to today (#250) ──────────────────────
@@ -255,6 +259,12 @@ export const DEMO_SETS: SetWithRow[] = [
   { workout_id: 'w_demo009', exercise_id: 'ex_demo006', exercise_name: 'RDL BB', section: 'SS1', exercise_order: 2, set_number: 2, planned_reps: '8', weight: '185', reps: '7', effort: 'Hard', sheetRow: 49 },
   { workout_id: 'w_demo009', exercise_id: 'ex_demo005', exercise_name: 'Bulgarian Split Squats DB', section: 'SS1', exercise_order: 3, set_number: 1, planned_reps: '10', weight: '40', reps: '10', effort: 'Medium', sheetRow: 50 },
   { workout_id: 'w_demo009', exercise_id: 'ex_demo005', exercise_name: 'Bulgarian Split Squats DB', section: 'SS1', exercise_order: 3, set_number: 2, planned_reps: '10', weight: '40', reps: '9', effort: 'Hard', sheetRow: 51 },
+  // ── Overdue planned workout (w_demo010 — Lower Body B, Jan 12, #347) ──
+  { workout_id: 'w_demo010', exercise_id: 'ex_demo004', exercise_name: 'Squat BB', section: 'primary', exercise_order: 1, set_number: 1, planned_reps: '5', weight: '', reps: '', effort: '', sheetRow: 52 },
+  { workout_id: 'w_demo010', exercise_id: 'ex_demo004', exercise_name: 'Squat BB', section: 'primary', exercise_order: 1, set_number: 2, planned_reps: '5', weight: '', reps: '', effort: '', sheetRow: 53 },
+  { workout_id: 'w_demo010', exercise_id: 'ex_demo004', exercise_name: 'Squat BB', section: 'primary', exercise_order: 1, set_number: 3, planned_reps: '5', weight: '', reps: '', effort: '', sheetRow: 54 },
+  { workout_id: 'w_demo010', exercise_id: 'ex_demo006', exercise_name: 'RDL BB', section: 'SS1', exercise_order: 2, set_number: 1, planned_reps: '8', weight: '', reps: '', effort: '', sheetRow: 55 },
+  { workout_id: 'w_demo010', exercise_id: 'ex_demo006', exercise_name: 'RDL BB', section: 'SS1', exercise_order: 2, set_number: 2, planned_reps: '8', weight: '', reps: '', effort: '', sheetRow: 56 },
 ];
 
 // ── Demo SyncLog (#157) ──────────────────────────────────────────────

@@ -3,7 +3,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { addDays, dayNumber, todayInDenver } from '../day/dates';
-import { DEMO_WORKOUTS, DEMO_ANCHOR_DATE, shiftDemoWorkouts, addDaysToIso } from './demo-data';
+import { DEMO_WORKOUTS, DEMO_SETS, DEMO_ANCHOR_DATE, shiftDemoWorkouts, addDaysToIso } from './demo-data';
 
 vi.mock('./sheets', () => ({
   sheetsGet: vi.fn(), sheetsAppend: vi.fn(), sheetsUpdate: vi.fn(), sheetsDeleteRow: vi.fn(),
@@ -144,5 +144,21 @@ describe('#304 AC3: addDaysToIso shifts an instant, not a date', () => {
   });
   it('returns an unparseable string unchanged', () => {
     expect(addDaysToIso('not a date', 5)).toBe('not a date');
+  });
+});
+
+describe('#347 AC8: demo mode carries one overdue plan', () => {
+  it('has exactly one planned workout dated before the anchor, with sets, two days back once shifted', () => {
+    const overdue = DEMO_WORKOUTS.filter((w) => w.status === 'planned' && w.date < DEMO_ANCHOR_DATE);
+    expect(overdue.map((w) => w.id)).toEqual(['w_demo010']);
+    expect(DEMO_SETS.some((s) => s.workout_id === 'w_demo010')).toBe(true);
+    const shifted = shiftDemoWorkouts(at('2026-09-30')).find((w) => w.id === 'w_demo010')!;
+    expect(shifted.date).toBe('2026-09-28');
+    expect(shifted.status).toBe('planned');
+  });
+
+  it('keeps every sheetRow unique', () => {
+    expect(new Set(DEMO_WORKOUTS.map((w) => w.sheetRow)).size).toBe(DEMO_WORKOUTS.length);
+    expect(new Set(DEMO_SETS.map((s) => s.sheetRow)).size).toBe(DEMO_SETS.length);
   });
 });

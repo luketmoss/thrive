@@ -174,12 +174,12 @@ describe('AC5 — a card', () => {
     expect(names(panel('today').container)).toEqual(['hike']);
   });
 
-  it('planned weight card shows counts and estimate; edit link', () => {
+  it('planned weight card shows counts and estimate; detail link (#347 AC7)', () => {
     workouts.value = [wk('p', { status: 'planned', name: 'Push', estimated_seconds: '2700' })];
     sets.value = [st('p', 'e1', 1, 1), st('p', 'e1', 1, 2), st('p', 'e2', 2, 1), st('other', 'e9', 1, 1)];
     const { container } = panel('today');
     const card = container.querySelector('a.training-card')!;
-    expect(card.getAttribute('href')).toBe('#/history/p/edit');
+    expect(card.getAttribute('href')).toBe('#/history/p');
     expect(card.querySelector('.workout-meta')!.textContent).toBe('2 exercises · 3 sets · about 45 min');
   });
 

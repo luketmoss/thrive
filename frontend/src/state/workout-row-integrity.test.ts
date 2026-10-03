@@ -110,6 +110,7 @@ const {
   copyWorkout,
   finishWorkout,
   startPlannedWorkout,
+  rescheduleWorkout,
 } = await import('./actions');
 
 const TOKEN = 'test-token';
@@ -342,5 +343,64 @@ describe('#145: a planned workout estimate', () => {
     expect(elapsed).toBeLessThan(22 * 60);
     expect(row[7]).not.toBe('2820');
     expect(row[26]).toBe('2820');
+  });
+});
+
+describe('#347: rescheduleWorkout moves a workout in place', () => {
+  const TODAY = '2026-09-30';
+
+  function seed() {
+    sheet.Workouts = [
+      workoutRow({ id: 'w_x', date: '2026-09-20', time: '07:00', type: 'bike', name: 'Other' }),
+      workoutRow({ id: 'w_p', date: '2026-09-27', time: '', type: 'weight', name: 'Pull A', status: 'planned', estimated_seconds: '2820' }),
+    ];
+    sheet.Workouts[1][5] = 'tpl_1';
+    sheet.Workouts[1][6] = 'Heavy week';
+    sheet.Workouts[1][8] = '2026-09-26T20:00:00.000Z';
+    sheet.Sets = [setRow({ workout_id: 'w_p', exercise_id: 'ex1', exercise_name: 'Row' })];
+    workouts.value = workoutsFromSheet();
+    sets.value = setsFromSheet();
+  }
+
+  it('writes only the date to the same row, keeping id, template, notes, estimate, created and sets', async () => {
+    seed();
+    const before = [...sheet.Workouts[1]];
+    await rescheduleWorkout('w_p', TODAY, TOKEN, TODAY);
+
+    expect(sheet.Workouts).toHaveLength(2);
+    const row = sheet.Workouts[1];
+    expect(row[1]).toBe(TODAY);
+    expect(row.map((v, i) => (i === 1 ? before[1] : v))).toEqual(before);
+    expect(sheet.Sets).toHaveLength(1);
+    expect(sheet.Sets[0][0]).toBe('w_p');
+    const w = workouts.value.find((x) => x.id === 'w_p')!;
+    expect(w.date).toBe(TODAY);
+    expect(w.sheetRow).toBe(3);
+    expect(toasts.value.map((t) => t.text)).toContain('Moved to today');
+  });
+
+  it('says where a future date took it', async () => {
+    seed();
+    await rescheduleWorkout('w_p', '2026-10-01', TOKEN, TODAY);
+    expect(sheet.Workouts[1][1]).toBe('2026-10-01');
+    expect(toasts.value.map((t) => t.text)).toContain('Rescheduled to Tomorrow');
+  });
+
+  it('writes nothing when the date is unchanged', async () => {
+    seed();
+    const { sheetsUpdate } = await import('../api/sheets');
+    vi.mocked(sheetsUpdate).mockClear();
+    await rescheduleWorkout('w_p', '2026-09-27', TOKEN, TODAY);
+    expect(sheetsUpdate).not.toHaveBeenCalled();
+  });
+
+  it('aborts with the out-of-sync message when the cached row no longer matches', async () => {
+    seed();
+    workouts.value = workouts.value.map((w) => (w.id === 'w_p' ? { ...w, sheetRow: 2 } : w));
+    await expect(rescheduleWorkout('w_p', TODAY, TOKEN, TODAY)).rejects.toThrow();
+    expect(sheet.Workouts[0][1]).toBe('2026-09-20');
+    expect(sheet.Workouts[1][1]).toBe('2026-09-27');
+    expect(workouts.value.find((w) => w.id === 'w_p')!.date).toBe('2026-09-27');
+    expect(toasts.value.map((t) => t.text)).toContain("Couldn't save — this workout is out of sync. Reload and try again.");
   });
 });
