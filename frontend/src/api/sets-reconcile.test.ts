@@ -1,0 +1,168 @@
+// #349 AC2: the pure half of the planned editor's in-place Sets write —
+// building the desired rows, carrying what the planner does not show, and
+// pairing them with the stored rows by position.
+
+import { describe, it, expect } from 'vitest';
+import {
+  builderExercisesToSets, carryPlannedSetValues, planSetsReconcile, isEmptyPlan, reconcileRequests,
+} from './workouts-api';
+import type { BuilderExercise, SetWithRow, WorkoutSet } from './types';
+
+const W = 'w_X';
+
+function ex(id: string, section: string, sets: number, reps = '8'): BuilderExercise {
+  return { exercise_id: id, exercise_name: id.toUpperCase(), section, sets, planned_reps: reps };
+}
+
+/** Stored rows for W at consecutive sheet rows from `firstRow`. */
+function stored(rows: WorkoutSet[], firstRow: number): SetWithRow[] {
+  return rows.map((s, i) => ({ ...s, sheetRow: firstRow + i }));
+}
+
+const PLAN = [ex('warm', 'warmup', 0, ''), ex('squat', 'primary', 3, '5'), ex('curl', 'SS1', 2, '12')];
+
+describe('builderExercisesToSets: a new plan\'s expansion', () => {
+  it('orders by position, one warmup row, N rows otherwise', () => {
+    const rows = builderExercisesToSets(W, PLAN);
+    expect(rows.map((s) => [s.exercise_id, s.section, s.exercise_order, s.set_number, s.planned_reps])).toEqual([
+      ['warm', 'warmup', 1, 1, ''],
+      ['squat', 'primary', 2, 1, '5'], ['squat', 'primary', 2, 2, '5'], ['squat', 'primary', 2, 3, '5'],
+      ['curl', 'SS1', 3, 1, '12'], ['curl', 'SS1', 3, 2, '12'],
+    ]);
+    expect(rows.every((s) => s.workout_id === W && s.weight === '' && s.reps === '' && s.effort === '')).toBe(true);
+  });
+});
+
+describe('carryPlannedSetValues (#118, widened to reps and effort)', () => {
+  const old = builderExercisesToSets(W, [ex('bench', 'primary', 3)]).map((s, i) => ({
+    ...s, weight: ['95', '115', '135'][i], reps: i === 0 ? '8' : '', effort: (i === 0 ? 'Hard' : '') as WorkoutSet['effort'],
+  }));
+
+  it('keeps weight, reps and effort on every surviving set', () => {
+    const out = carryPlannedSetValues(old, builderExercisesToSets(W, [ex('bench', 'primary', 3)]));
+    expect(out.map((s) => [s.weight, s.reps, s.effort])).toEqual([['95', '8', 'Hard'], ['115', '', ''], ['135', '', '']]);
+  });
+
+  it('leaves an added set blank and drops a removed one', () => {
+    expect(carryPlannedSetValues(old, builderExercisesToSets(W, [ex('bench', 'primary', 4)])).map((s) => s.weight))
+      .toEqual(['95', '115', '135', '']);
+    expect(carryPlannedSetValues(old, builderExercisesToSets(W, [ex('bench', 'primary', 2)])).map((s) => s.weight))
+      .toEqual(['95', '115']);
+  });
+
+  it('keeps a bodyweight "0" distinct from blank', () => {
+    const bw = [{ ...old[0], exercise_id: 'pushup', section: 'SS2', weight: '0' }];
+    expect(carryPlannedSetValues(bw, builderExercisesToSets(W, [ex('pushup', 'SS2', 1)]))[0].weight).toBe('0');
+  });
+
+  it('does not borrow from the same lift in another section; warmups carry too', () => {
+    const warm = [{ ...old[0], section: 'warmup', exercise_order: 1, weight: '45', reps: '', effort: '' as const }];
+    const out = carryPlannedSetValues([...warm, ...old], builderExercisesToSets(W, [ex('bench', 'warmup', 0), ex('bench', 'SS1', 1)]));
+    expect(out.map((s) => s.weight)).toEqual(['45', '']);
+  });
+
+  it('follows the set when the exercise is reordered', () => {
+    const out = carryPlannedSetValues(old, builderExercisesToSets(W, [ex('curl', 'primary', 1), ex('bench', 'primary', 3)]));
+    expect(out.map((s) => s.weight)).toEqual(['', '95', '115', '135']);
+    expect(out[1].exercise_order).toBe(2);
+  });
+});
+
+describe('planSetsReconcile: stored rows + desired rows → requests', () => {
+  const base = builderExercisesToSets(W, PLAN); // 6 rows
+  const at10 = stored(base, 10);
+
+  it('plans nothing when unchanged', () => {
+    const plan = planSetsReconcile(at10, base);
+    expect(isEmptyPlan(plan)).toBe(true);
+    expect(reconcileRequests(plan, 2)).toEqual([]);
+  });
+
+  it('ignores stored order: pairs by ascending sheet row', () => {
+    expect(isEmptyPlan(planSetsReconcile([...at10].reverse(), base))).toBe(true);
+  });
+
+  it('adds an exercise: rows already there are untouched, the new ones appended', () => {
+    const desired = builderExercisesToSets(W, [...PLAN, ex('row', 'primary', 2)]);
+    const plan = planSetsReconcile(at10, desired);
+    expect(plan.updates).toEqual([]);
+    expect(plan.deletes).toEqual([]);
+    expect(plan.appends.map((s) => s.exercise_id)).toEqual(['row', 'row']);
+  });
+
+  it('removes an exercise: overwrites in place, deletes the surplus bottom-to-top', () => {
+    const desired = builderExercisesToSets(W, [PLAN[0], PLAN[2]]); // warm + curl x2 = 3 rows
+    const plan = planSetsReconcile(at10, desired);
+    expect(plan.updates.map((u) => [u.sheetRow, u.set.exercise_id, u.set.set_number])).toEqual([
+      [11, 'curl', 1], [12, 'curl', 2],
+    ]);
+    expect(plan.deletes).toEqual([15, 14, 13]);
+    expect(plan.appends).toEqual([]);
+  });
+
+  it('reorders: every moved row is overwritten, nothing deleted or appended', () => {
+    const desired = builderExercisesToSets(W, [PLAN[1], PLAN[2], PLAN[0]]);
+    const plan = planSetsReconcile(at10, desired);
+    expect(plan.deletes).toEqual([]);
+    expect(plan.appends).toEqual([]);
+    expect(plan.updates.map((u) => u.sheetRow)).toEqual([10, 11, 12, 13, 14, 15]);
+    expect(plan.updates[5].set).toMatchObject({ exercise_id: 'warm', section: 'warmup', exercise_order: 3 });
+  });
+
+  it('more sets: appends only the extra set', () => {
+    const plan = planSetsReconcile(at10, builderExercisesToSets(W, [PLAN[0], PLAN[1], ex('curl', 'SS1', 3, '12')]));
+    expect(plan.updates).toEqual([]);
+    expect(plan.deletes).toEqual([]);
+    expect(plan.appends.map((s) => [s.exercise_id, s.set_number])).toEqual([['curl', 3]]);
+  });
+
+  it('fewer sets: deletes only the last row', () => {
+    const plan = planSetsReconcile(at10, builderExercisesToSets(W, [PLAN[0], PLAN[1], ex('curl', 'SS1', 1, '12')]));
+    expect(plan.updates).toEqual([]);
+    expect(plan.deletes).toEqual([15]);
+  });
+
+  it('warmup removed: rows shift up in place, last one deleted', () => {
+    const plan = planSetsReconcile(at10, builderExercisesToSets(W, [PLAN[1], PLAN[2]]));
+    expect(plan.updates.map((u) => u.sheetRow)).toEqual([10, 11, 12, 13, 14]);
+    expect(plan.deletes).toEqual([15]);
+  });
+
+  it('warmup added: overwrites from the top and appends one', () => {
+    const plan = planSetsReconcile(at10, builderExercisesToSets(W, [PLAN[0], ex('warm2', 'warmup', 0, ''), PLAN[1], PLAN[2]]));
+    expect(plan.updates[0].sheetRow).toBe(11);
+    expect(plan.appends).toHaveLength(1);
+    expect(plan.deletes).toEqual([]);
+  });
+
+  it('works with rows that are not contiguous', () => {
+    const scattered = base.map((s, i) => ({ ...s, sheetRow: [3, 4, 9, 10, 20, 21][i] }));
+    const plan = planSetsReconcile(scattered, builderExercisesToSets(W, [PLAN[0]]));
+    expect(plan.deletes).toEqual([21, 20, 10, 9, 4]);
+  });
+});
+
+describe('reconcileRequests: one batch, in a safe order', () => {
+  it('overwrites, then deletes descending, then appends; cells mirror setToRow under RAW', () => {
+    const at10 = stored(builderExercisesToSets(W, [ex('a', 'primary', 3)]), 10);
+    const desired = builderExercisesToSets(W, [ex('b', 'primary', 1, '')]);
+    const del = planSetsReconcile(at10, desired);
+    const reqs = reconcileRequests(del, 7) as any[];
+    expect(reqs.map((r) => Object.keys(r)[0])).toEqual(['updateCells', 'deleteDimension', 'deleteDimension']);
+    expect(reqs[0].updateCells.start).toEqual({ sheetId: 7, rowIndex: 9, columnIndex: 0 });
+    expect(reqs[0].updateCells.fields).toBe('userEnteredValue');
+    const cells = reqs[0].updateCells.rows[0].values;
+    expect(cells).toHaveLength(10);
+    expect(cells[0]).toEqual({ userEnteredValue: { stringValue: W } });
+    expect(cells[4]).toEqual({ userEnteredValue: { numberValue: 1 } });
+    expect(cells[5]).toEqual({ userEnteredValue: { numberValue: 1 } });
+    expect(cells[6]).toEqual({}); // blank planned_reps clears the cell
+    expect(reqs[1].deleteDimension.range).toEqual({ sheetId: 7, dimension: 'ROWS', startIndex: 11, endIndex: 12 });
+    expect(reqs[2].deleteDimension.range.startIndex).toBe(10);
+
+    const grow = reconcileRequests(planSetsReconcile([], desired), 7) as any[];
+    expect(grow).toHaveLength(1);
+    expect(grow[0].appendCells.sheetId).toBe(7);
+    expect(grow[0].appendCells.rows).toHaveLength(1);
+  });
+});

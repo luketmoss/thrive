@@ -1,15 +1,14 @@
 import { useState, useEffect } from 'preact/hooks';
 import { workouts, sets, isEditMode } from '../../state/store';
-import { enterEditMode, exitEditMode, deleteWorkout } from '../../state/actions';
+import { enterEditMode, exitEditMode, savePlannedWorkoutEdits } from '../../state/actions';
 import { useAuth } from '../../auth/auth-context';
-import { navigate } from '../../router/router';
+import { navigate, goBack } from '../../router/router';
 import { WorkoutTracker } from '../workout/workout-tracker';
 import { EditWorkoutForm } from './edit-workout-form';
 import { WorkoutPlanner } from '../workout/workout-planner';
 import type { PlannerExercise } from '../workout/workout-planner';
 import type { BuilderExercise } from '../../api/types';
-import { saveWorkoutForLater } from '../../state/actions';
-import { plannedWeightsFor } from './planned-weights';
+import { estimateMinutesToSeconds, secondsToMinutesInput } from '../../api/duration';
 
 interface Props {
   workoutId: string;
@@ -117,38 +116,28 @@ function PlannedWorkoutEditor({ workoutId }: { workoutId: string }) {
     if (!token) return;
     setSaving(true);
     try {
-      // Delete old workout and create new planned one with updated exercises.
-      // Fields that should survive the round-trip must be forwarded explicitly —
-      // anything omitted is silently lost, which is how `date` was being reset
-      // to today on every edit (issue #99).
-      //
-      // `template_id` is deliberately NOT forwarded: saveWorkoutForLater
-      // re-expands from the template when it is set, which would discard the
-      // edits the user just made.
-      //
-      // Prescribed weights aren't shown in the planner, so they are carried
-      // over from the existing sets or the re-create would wipe them (#118).
-      //
-      // The estimate (#145) comes back from the planner, pre-filled from the
-      // row, so it is forwarded like `date`: unchanged unless the user
-      // changed it, blank only if they cleared it.
+      // Saved in place (#349): only what the user changed is patched, so an
+      // untouched estimate is never re-sent (and an off-minute stored value
+      // never rounded), and every column the planner does not edit stays as
+      // the sheet holds it.
+      const patch: { name?: string; date?: string; estimated_seconds?: string } = {};
+      if (name !== workout.name) patch.name = name;
+      if (date !== workout.date) patch.date = date;
+      if (estimatedSeconds !== estimateMinutesToSeconds(secondsToMinutesInput(workout.estimated_seconds))) {
+        patch.estimated_seconds = estimatedSeconds;
+      }
       const builderExercises: BuilderExercise[] = exercises.map((ex) => ({
         exercise_id: ex.exercise_id,
         exercise_name: ex.exercise_name,
         section: ex.section,
         sets: Number(ex.sets) || 1,
         planned_reps: ex.reps,
-        weights: plannedWeightsFor(workoutSets, ex.exercise_id, ex.section, Number(ex.sets) || 1),
       }));
 
-      await deleteWorkout(workoutId, token);
-      await saveWorkoutForLater(
-        { type: 'weight', name, exercises: builderExercises, date, estimated_seconds: estimatedSeconds },
-        token,
-      );
-      navigate('/activities');
+      await savePlannedWorkoutEdits(workoutId, patch, builderExercises, token);
+      goBack('/activities');
     } catch {
-      // Error toast shown by action
+      // Error toast shown by action; the user stays here with their edits.
     } finally {
       setSaving(false);
     }
