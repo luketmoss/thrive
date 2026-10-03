@@ -1119,8 +1119,9 @@ export async function savePlannedWorkoutEdits(
   try {
     const desired = builderExercisesToSets(workoutId, exercises);
     if (isDemo()) {
-      // No sheet to read: carry from the store, and keep this workout's rows
-      // where they were in the list.
+      // No sheet to read: carry from the store. The rows move to the end of
+      // the list (screens sort by order and set number), keeping their
+      // sheetRows where they can so every sheetRow stays unique.
       const own = sets.value.filter((s) => s.workout_id === workoutId);
       const rows = carryPlannedSetValues(own, desired);
       const others = sets.value.filter((s) => s.workout_id !== workoutId);
