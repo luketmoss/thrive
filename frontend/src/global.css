@@ -3685,8 +3685,9 @@ a.training-card {
 }
 
 /* The date the plan was for: secondary, not muted, for contrast (#99). */
-.training-planned-for {
+.workout-meta.training-planned-for {
   display: block;
+  color: var(--color-text-secondary);
 }
 
 .training-overdue-row {
