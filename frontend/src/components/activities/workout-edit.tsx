@@ -144,7 +144,7 @@ function PlannedWorkoutEditor({ workoutId }: { workoutId: string }) {
   };
 
   const handleDiscard = () => {
-    navigate(`/history/${workoutId}`);
+    goBack('/activities');
   };
 
   return (

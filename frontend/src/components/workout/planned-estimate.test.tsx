@@ -287,3 +287,57 @@ describe('AC2: a planned workout shows its estimate', () => {
     expect(document.querySelector('.detail-duration')!.textContent).toBe('55 min');
   });
 });
+
+describe('#348: planned editor Back/Discard and detail Delete step back through the router', () => {
+  beforeEach(() => {
+    workouts.value = [planned()];
+    sets.value = PLAN_SETS;
+    navigate.mockClear();
+    goBack.mockClear();
+  });
+
+  it.each(['Back', 'Discard'])('%s on an untouched plan calls goBack once, never navigate', async (label) => {
+    render(<WorkoutEdit workoutId="w_plan" />);
+    await tap(label);
+    expect(goBack).toHaveBeenCalledTimes(1);
+    expect(goBack).toHaveBeenCalledWith('/activities');
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('a cancelled "Discard changes?" calls neither; a confirmed one goes back', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+    render(<WorkoutEdit workoutId="w_plan" />);
+    type(nameInput(), 'Changed');
+    await tap('Discard');
+    expect(goBack).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+    await tap('Discard');
+    expect(goBack).toHaveBeenCalledTimes(1);
+    expect(goBack).toHaveBeenCalledWith('/activities');
+    expect(navigate).not.toHaveBeenCalled();
+    confirm.mockRestore();
+  });
+
+  it('Delete on the detail goes back to where the user came from, never navigate', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(h(WorkoutDetail, { workoutId: 'w_plan' }));
+    await tap('Delete Workout');
+    expect(deleteWorkout).toHaveBeenCalledWith('w_plan', 'test-token');
+    expect(goBack).toHaveBeenCalledTimes(1);
+    expect(goBack).toHaveBeenCalledWith('/activities');
+    expect(navigate).not.toHaveBeenCalled();
+    confirm.mockRestore();
+  });
+
+  it('a cancelled Delete confirm, or a failed delete, calls neither', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+    render(h(WorkoutDetail, { workoutId: 'w_plan' }));
+    await tap('Delete Workout');
+    expect(deleteWorkout).not.toHaveBeenCalled();
+    deleteWorkout.mockRejectedValueOnce(new Error('boom'));
+    await tap('Delete Workout');
+    expect(goBack).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+    confirm.mockRestore();
+  });
+});

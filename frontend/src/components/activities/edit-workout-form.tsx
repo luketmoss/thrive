@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks';
 import { workouts } from '../../state/store';
 import { saveSimpleWorkoutEdits } from '../../state/actions';
 import { useAuth } from '../../auth/auth-context';
-import { navigate } from '../../router/router';
+import { navigate, goBack } from '../../router/router';
 import { EffortToggle } from '../shared/effort-toggle';
 import type { Effort } from '../../api/types';
 import { CardioFields } from '../shared/cardio-fields';
@@ -51,7 +51,7 @@ export function EditWorkoutForm({ workoutId }: Props) {
     setSaving(true);
     try {
       await saveSimpleWorkoutEdits(workoutId, editInputsToPatch(initial, current), token);
-      navigate(`/history/${workoutId}`);
+      goBack('/activities');
     } catch {
       // Error toast shown by action
     } finally {
@@ -63,7 +63,7 @@ export function EditWorkoutForm({ workoutId }: Props) {
     if (hasEdits(initial, current)) {
       if (!confirm('Discard changes? Your edits will not be saved.')) return;
     }
-    navigate(`/history/${workoutId}`);
+    goBack('/activities');
   };
 
   return (
