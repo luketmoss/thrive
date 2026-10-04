@@ -49,7 +49,8 @@ export function registerReauthCallback(cb: ReauthCallback): () => void {
 
 /**
  * Register a callback for when reauth fails (user must re-login).
- * Called by auth-provider. The callback should clear cached auth and show login.
+ * Called by auth-provider. The callback drops the token (keeping the remembered
+ * user, #353) so the Continue screen shows.
  */
 export function onReauthFailed(cb: ReauthFailedCallback): () => void {
   _reauthFailedCallback = cb;
@@ -59,34 +60,39 @@ export function onReauthFailed(cb: ReauthFailedCallback): () => void {
 }
 
 /**
- * Attempt silent re-authentication. Called by sheets.ts on 401.
+ * Attempt silent re-authentication. Called by sheets.ts on 401, and (quietly)
+ * by the touch-armed renewal in auth-provider (#353).
  * Returns the new access token on success.
  * Throws on failure (no callback registered, or GIS reauth failed).
  *
  * Deduplicates concurrent reauth attempts — if one is already in progress,
  * subsequent callers wait for the same promise.
+ *
+ * `quiet` renewals run ahead of expiry while the old token still works, so a
+ * failure must not sign the user out: it throws without calling the
+ * reauth-failed callback. A non-quiet caller (the 401 path) always does.
  */
-export async function attemptReauth(): Promise<string> {
+export async function attemptReauth({ quiet = false }: { quiet?: boolean } = {}): Promise<string> {
   if (!_reauthCallback) {
     throw new Error('No reauth callback registered');
   }
 
-  // Deduplicate: if a reauth is already in flight, piggyback on it
-  if (_reauthInProgress) {
-    return _reauthInProgress;
+  if (!_reauthInProgress) {
+    _reauthInProgress = _reauthCallback()
+      .catch((err) => {
+        throw new ReauthFailedError(err instanceof Error ? err : undefined);
+      })
+      .finally(() => {
+        _reauthInProgress = null;
+      });
   }
 
-  _reauthInProgress = _reauthCallback()
-    .catch((err) => {
-      // Reauth failed — notify auth-provider to clear state and show login
-      _reauthFailedCallback?.();
-      throw new ReauthFailedError(err instanceof Error ? err : undefined);
-    })
-    .finally(() => {
-      _reauthInProgress = null;
-    });
-
-  return _reauthInProgress;
+  try {
+    return await _reauthInProgress;
+  } catch (err) {
+    if (!quiet) _reauthFailedCallback?.();
+    throw err;
+  }
 }
 
 /** Reset all state. Useful for testing. */
