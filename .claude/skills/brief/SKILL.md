@@ -1,6 +1,6 @@
 ---
 name: brief
-description: Write the user's daily brief (last night's sleep, yesterday's training, today's plan, an activity recommendation, the weather and what it means for planned rides, the next few days) or, with "weekly", a look back at the past week and ahead to the next. Reads Thrive, Hive, COROS, Google Calendar and a weather forecast, and publishes the daily brief as a web page; writes nothing else. Use when the user asks for their brief, a morning summary, "how should I train today", or a weekly review.
+description: Write the user's daily brief (last night's sleep, yesterday's training, today's plan, an activity recommendation, the weather and what it means for planned rides, the next few days) or, with "weekly", a look back at the past week and ahead to the next. Reads Thrive, Hive, COROS, Google Calendar and a weather forecast, and publishes the daily and weekly briefs as web pages; writes nothing else. Use when the user asks for their brief, a morning summary, "how should I train today", or a weekly review.
 argument-hint: [weekly] [scheduled]
 ---
 
@@ -9,7 +9,7 @@ argument-hint: [weekly] [scheduled]
 A short morning read, built from what the watch, the board and the calendar
 already know. **Read-only**: this skill never writes to Thrive, Hive or the
 calendar. A suggestion stays a suggestion until the user asks for it. The
-one thing it writes is the brief page itself (Step 6).
+one thing it writes is the brief page itself (Step 6, and the weekly page).
 
 `$ARGUMENTS` containing `weekly` runs the [weekly brief](#weekly-brief);
 anything else runs the daily one. `scheduled` means a scheduled task started
@@ -283,8 +283,8 @@ content; a script in the page draws it. Never edit the CSS or the script.
 - `days`: one per look-ahead day, `{name, sm, charts, events, empty}`. `sm`
   is the high–low, the top wind and the top rain chance. `charts` has a
   `weather`-shaped entry per location, with `place` set on each when there
-  are two. `events` are `{t, title, plan}`, with `plan: true` for a
-  planned session. `empty` is a line such as "Nothing planned for
+  are two. `events` are `{t, title, plan}`. A planned session has `plan: true`
+  and its activity type as `t` (`weight`, `bike:mountain`), not a time. `empty` is a line such as "Nothing planned for
   training".
 - `board`: `{overdue: [{title, board, days}], today: [{title, board,
   status}], note}`. `body`: `{value, series, sub}`. `foot`: the line
@@ -292,24 +292,65 @@ content; a script in the page draws it. Never edit the CSS or the script.
 
 ## Weekly brief
 
-Gather the same sources over the **last 7 days** (Monday–Sunday, if run on
-a Sunday or Monday) and the **next 7 days**. Then write, under 400 words:
+The same sources as the daily brief, over the **next 7 days** (calendar,
+birthdays, Hive due dates, planned sessions, weather) and the **last 7
+days** (Monday to Sunday, when run on a Sunday). Step 1 doesn't apply: use
+the nights Thrive has, and never wait for a sync. It is published as a page
+from `weekly-template.html`, the way Step 6 publishes the daily one: replace
+the JSON, publish it titled `Weekly Brief` to that artifact's existing `url`
+(a new one with icon `calendar` the first time), and reply in chat with the
+first suggestion and the link.
 
-- **The week:** sessions by type, total moving time and outdoor distance,
-  how efforts split across Easy, Medium and Hard, and the longest or
+The page leads with the week ahead and looks back last. Its sections, in
+order, and the data for each (leave a key out and the section disappears):
+
+- `title`: for example "Week of 5 to 11 Oct 2026".
+- `next`: `{note, days}`, one entry per day for 7 days. A day is `{name,
+  wx, tag, events, empty}`. `wx` is `{hi, lo, rain, wind, blurb}` from
+  the home forecast (`forecast_days=8`, no `past_days`): the high and low
+  in °F, the top rain chance in %, the top wind in mph, and one plain
+  sentence on what the day is doing, such as "Cool start, hot afternoon. Dry
+  and calm." On a day with a trails session, add the trails weather to the
+  sentence. `tag` is `{kind: "flag", text}` and only for a weather warning
+  by the Step 4 limits (wind 15 mph or more, rain 40% or more, feels-like
+  under 35°F or over 90°F), so the user doesn't plan a ride there. Nothing
+  else gets a pill in this section. `events` and `empty` work as in the
+  daily page; a planned session has `plan: true` and its activity type as
+  `t`.
+- `suggestions`: 2 to 4 of `{kind, title, why}`. `kind` is `keep` (leave a
+  planned session where it is), `add` (put a session on a day), `move`
+  (shift a planned session to another day) or `skip` (no session or ride on
+  a day). `title` names the day and the thing. `why` carries at least one
+  figure from the data: planned load, recovery against the week before,
+  the calendar, or the forecast. Look for these:
+  - a hard session on a day with a full calendar, the day after a Hard
+    day, or while HRV, resting HR or sleep are worse than the week before:
+    `move` it to an open day;
+  - an open day with nothing planned while recovery is at or better than
+    the week before: `add` a session;
+  - two or more hard days in a row, or a week with no stretch: `add` a
+    stretch;
+  - an outdoor session on a day with a weather warning: `skip` it or `move`
+    it;
+  - a planned session with no reason against it: `keep`.
+
+  Only `add` a type the user already logs (`weight`, `stretch`, `bike`,
+  `hike`, `run`, `walk`). Never invent a workout.
+- `board`: `{done, overdue, open, note}`, each list `{title, board, days |
+  status}`. Finished items are those marked Done this week.
+- `week`: the look back. `{range, stats, load, note}`. `stats` is up to four
+  `{label, value, sub}`: sessions by type, moving time with how many
+  sessions recorded it, outdoor distance, and the effort split. `load` is
+  seven `{d, load, e}` as on the daily page. `note` names the longest or
   hardest session.
-- **Recovery:** average sleep slept, HRV and resting HR, each against the
-  week before, and the worst night with its likely cause if the journal
-  says one.
-- **Body:** weight change across the week, and BP readings if any.
-- **Board:** what got finished in Hive, and what's overdue.
-- **Next week:** busy and open days from the calendar, planned sessions,
-  Hive due dates, and the weather (same fetch with `forecast_days=7`, no
-  `past_days`), flagging outdoor sessions as in Step 4. Point out days that have a hard session planned and
-  a full calendar, and open days with nothing planned.
-
-Close with **one** suggestion for the week ahead, drawn from the numbers,
-such as "Two hard leg days back to back on Tue/Wed; move one."
+- `recovery`: `{note, sleep, hrv, rhr}` as on the daily page, but each value
+  is the week's average with the change from the week before in `sub`, plus
+  the worst night with its likely cause if the journal says one. `series`
+  runs over both weeks and `avgOf` is how many leading points are the week
+  before.
+- `body`: weight change across the week, and any blood pressure readings.
+  `foot`: what wasn't checked, and any thin comparison, such as a week
+  before with only a few nights of data.
 
 ## Never
 
