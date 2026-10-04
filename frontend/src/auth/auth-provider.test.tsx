@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, act, fireEvent, cleanup } from '@testing-library/preact';
 import { AuthProvider, loadCachedAuth, loadRememberedUser, RENEW_AHEAD_MS } from './auth-provider';
 import { useAuth, type AuthState } from './auth-context';
-import { _resetForTesting } from './reauth';
+import { _resetForTesting, attemptReauth } from './reauth';
 
 const USER = { email: 'me@example.com', name: 'Me', picture: '' };
 
@@ -148,6 +148,34 @@ describe('AuthProvider (#353)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('AC3: a token renewed after the stored one expired is saved', async () => {
+    seed(-1000);
+    mount();
+    const renewal = attemptReauth({ quiet: true });
+    await act(async () => {
+      await gisConfig.callback({ access_token: 'fresh', expires_in: 3600 });
+      await renewal;
+    });
+    expect(localStorage.getItem('gw_token')).toBe('fresh');
+    expect(Number(localStorage.getItem('gw_token_expiry'))).toBeGreaterThan(Date.now());
+  });
+
+  it('AC4: a failed 401 renewal drops the token, keeps the user, shows Continue', async () => {
+    seed(60 * 60 * 1000);
+    mount();
+    expect(auth.isAuthenticated).toBe(true);
+    const renewal = attemptReauth().catch(() => {});
+    await act(async () => {
+      gisConfig.error_callback({ type: 'popup_failed_to_open' });
+      await renewal;
+    });
+    expect(auth.isAuthenticated).toBe(false);
+    expect(auth.rememberedUser).toEqual(USER);
+    expect(auth.renewError).toBeNull();
+    expect(localStorage.getItem('gw_token')).toBeNull();
+    expect(loadRememberedUser()).toEqual(USER);
   });
 
   it('AC3: nothing is requested without a tap', () => {

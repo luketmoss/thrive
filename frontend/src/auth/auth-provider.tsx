@@ -164,8 +164,10 @@ export function AuthProvider({ children }: Props) {
           // Fetch user info (skip if this is a background reauth — use cached user)
           if (reauthResolveRef.current) {
             // Silent reauth: resolve the promise with the new token and update cache
-            // Re-use the existing cached user info to avoid an extra network call
-            const cachedUser = loadCachedAuth()?.user;
+            // Re-use the user we already know to avoid an extra network call.
+            // Not loadCachedAuth(): it returns null once the stored token has
+            // expired, which is exactly when a renewal arrives (#353).
+            const cachedUser = userRef.current ?? loadRememberedUser();
             if (cachedUser) {
               saveCachedAuth(newToken, cachedUser, response.expires_in || 3600);
             }
@@ -231,10 +233,12 @@ export function AuthProvider({ children }: Props) {
       expiryRef.current = null;
       setToken(null);
       setRememberedUser(userRef.current);
+      setRenewError(null);
     });
 
     // #353: GIS renews through a popup the browser only allows from a real tap,
-    // so an expiring token is renewed by the next `pointerup` (touch only grants popup activation on release), never by a timer
+    // so an expiring token is renewed by the next `pointerup` (touch grants popup
+    // activation on release, not press), never by a timer
     // or a 401. Armed when the token nears expiry and when the page returns to
     // the foreground; one-shot; a failure here leaves the old token alone.
     let armed = false;
