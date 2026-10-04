@@ -24,3 +24,6 @@ client_secret*.json
 
 # look.mjs screenshots — they belong in the temp dir it defaults to, never here
 look-*.png
+
+# /brief weather locations — where you live and ride, never committed
+.claude/skills/brief/settings.local.md

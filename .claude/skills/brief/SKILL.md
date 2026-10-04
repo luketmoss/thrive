@@ -19,13 +19,17 @@ the run and nobody is there to answer a question (see Step 1).
 Edit these here rather than in the steps below.
 
 - **Time zone:** `America/Denver`. "Today" and "yesterday" are local dates.
-- **Hive owner:** `<your Hive owner name>`. The name exactly as
-  `hive_list_owners` shows it. Until it is set, show items owned by anyone
-  and say so in one line at the end.
+- **Hive owner:** `Luke`.
 - **Look-ahead:** the next 3 days after today.
 - **Baseline:** the 14 days before today, for HRV, resting HR and sleep.
-- **Weather location:** `<latitude>, <longitude>` (`<place name>`). Where
-  most rides start. Until it is set, skip the weather and say so.
+- **Weather locations:** in `settings.local.md` next to this file. That
+  file is gitignored, because this repo is public and the locations are
+  where you live and ride. `settings.example.md` shows its shape. It names
+  two places:
+  - **home**: gravel, road and every other outdoor session start here
+  - **trails**: `bike:mountain` rides and hikes
+
+  If the file is missing, skip the weather and say why in the last line.
 
 **Dates:** work out today's local date first, then pass every date to every
 tool as `YYYY-MM-DD`. Thrive accepts `today` and `+3d` but nothing in the
@@ -92,7 +96,7 @@ A partial brief beats no brief.
 
 ### The forecast
 
-Fetch this, with the location from Settings:
+Fetch this once for each location in `settings.local.md`:
 
 ```
 https://api.open-meteo.com/v1/forecast?latitude=<lat>&longitude=<lon>
@@ -104,7 +108,10 @@ https://api.open-meteo.com/v1/forecast?latitude=<lat>&longitude=<lon>
 ```
 
 (One line, no spaces.) `past_days=2` gives the rain of the last two days,
-which is what decides whether the trails are muddy today.
+which is what decides whether the trails are muddy today. Apply each
+session's flags from its own location's forecast: wet trails from
+**trails**, and a gravel ride's wind from **home**. When there's no
+outdoor session, show **home** only.
 
 ## Step 3: Read the signals
 
