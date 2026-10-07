@@ -245,6 +245,7 @@ export function WorkoutFlow({ workoutId, planDate }: Props) {
       return (
         <SimpleWorkout
           workoutType={selectedType}
+          workoutId={workoutId}
           onBack={() => setStep('type')}
         />
       );

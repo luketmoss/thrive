@@ -904,6 +904,45 @@ export async function startSimpleWorkout(
   }
 }
 
+export interface SimpleWorkoutData {
+  name: string; notes: string; elapsed_seconds: string; effort: Effort | '';
+  distance_m: string; ascent_m: string; descent_m: string; avg_hr: string;
+  sub_type: string; date: string;
+}
+
+/**
+ * Finishes a started planned non-weight workout in place (#360): the quick-log
+ * form's values go onto the existing row, `status` clears and the active state
+ * is released. Never creates a row. `estimated_seconds` stays as the plan's record.
+ */
+export async function finishSimpleWorkout(
+  workoutId: string,
+  data: SimpleWorkoutData,
+  token: string,
+): Promise<void> {
+  try {
+    const workout = workouts.value.find((w) => w.id === workoutId);
+    if (!workout) throw new Error('Workout not found');
+
+    const updated = await updateWorkoutApi(workout, { ...data, status: '' }, token);
+
+    workouts.value = workouts.value.map((w) => (w.id === workoutId ? updated : w));
+    if (activeWorkoutId.value === workoutId) {
+      activeWorkoutId.value = null;
+      activeWorkoutSets.value = [];
+    }
+    showToast('Workout saved', 'success');
+  } catch (err) {
+    if (isReauthFailure(err)) throw err;
+    if (err instanceof WorkoutRowMismatchError) {
+      showToast(WORKOUT_OUT_OF_SYNC_MESSAGE, 'error');
+      throw err;
+    }
+    showToast('Failed to save workout', 'error');
+    throw err;
+  }
+}
+
 export function enterEditMode(workoutId: string): void {
   const workout = workouts.value.find((w) => w.id === workoutId);
   if (!workout) return;
