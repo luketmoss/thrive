@@ -20,6 +20,7 @@ Personal workout tracker: Preact SPA → Google Sheets REST API.
 
 ## Environment
 - **Windows machine** — `jq` is NOT available. For JSON parsing in shell commands, use `gh` built-in `--jq` flags. Never pipe to a standalone `jq` command.
+- `.gitattributes` pins `*.js`/`*.mjs` to LF (#366): vitest cannot load a shebang script checked out with CRLF. A checkout from before #366 needs those files re-checked out once.
 - Node 20+, npm
 
 ## Architecture Notes
