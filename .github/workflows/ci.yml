@@ -36,21 +36,6 @@ jobs:
         run: npx tsc --noEmit
       - run: npm run build
 
-  mcp-server:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: mcp-server
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: '20'
-          cache: npm
-          cache-dependency-path: mcp-server/package-lock.json
-      - run: npm ci
-      - run: npm test
-
   # #130. Like the two above, deliberately not path-filtered.
   apps-script:
     runs-on: ubuntu-latest

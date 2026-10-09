@@ -23,7 +23,7 @@ const SPREADSHEET_ID =
   process.env.THRIVE_SPREADSHEET_ID || '1YvFnJsY9KlKmbRZ4CrFc67pFwGgjUpHc_LgMVQm2zeQ';
 const BASE = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}`;
 
-const creds = JSON.parse(readFileSync(new URL('../mcp-server/thrive-sa.json', import.meta.url), 'utf8'));
+const creds = JSON.parse(readFileSync(new URL('thrive-sa.json', import.meta.url), 'utf8'));
 const client = new JWT({
   email: creds.client_email,
   key: creds.private_key,

@@ -36,7 +36,7 @@ const LAST_OLD_HEADER = 'calories';      // Z, from #128
 const TOTAL_COLUMNS = 27;                // A:AA
 
 const creds = JSON.parse(
-  readFileSync(new URL('../mcp-server/thrive-sa.json', import.meta.url), 'utf8')
+  readFileSync(new URL('thrive-sa.json', import.meta.url), 'utf8')
 );
 const client = new JWT({
   email: creds.client_email,

@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 if (process.env.CLAUDE_CODE_REMOTE !== 'true') process.exit(0);
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const packages = ['frontend', 'mcp-server', 'sync', 'apps-script']
+const packages = ['frontend', 'sync', 'apps-script']
   .filter((p) => !existsSync(join(root, p, 'node_modules')));
 
 const results = await Promise.all(packages.map((p) => new Promise((done) => {
