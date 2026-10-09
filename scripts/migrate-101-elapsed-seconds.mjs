@@ -35,7 +35,7 @@ const NEW_COLUMNS = [
 const OLD_HEADER = 'Duration (min)';
 const NEW_HEADER = 'Elapsed (s)';
 
-const creds = JSON.parse(readFileSync(new URL('../mcp-server/thrive-sa.json', import.meta.url), 'utf8'));
+const creds = JSON.parse(readFileSync(new URL('thrive-sa.json', import.meta.url), 'utf8'));
 const client = new JWT({
   email: creds.client_email,
   key: creds.private_key,

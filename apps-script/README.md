@@ -6,7 +6,7 @@ mapping rows themselves.
 ## Why this exists
 
 The row layout was duplicated between `frontend/src/api/*.ts` and
-`mcp-server/domain.js`, and CLAUDE.md requires they change together. Three more
+the MCP server's `domain.js` (now `keel/mcp/src/thrive/domain.js`), and CLAUDE.md requires they change together. Three more
 consumers are arriving — `DailySummary` (#131), the COROS sync, and the
 Journal. Without an API each would add another copy.
 
@@ -521,7 +521,7 @@ name into a fresh workout.
 
 **Narration stays client-side.** `describeSlots` is here because resolution
 errors need it, but `describeSetState` and `describeLoad` — which format MCP
-tool output for an agent to read — remain in `mcp-server/`. They are a
+tool output for an agent to read — remain in the MCP server (`keel/mcp/src/thrive/`, formerly `mcp-server/`). They are a
 presentation concern, not a data one.
 
 ## SyncRequests poller (#314)

@@ -7,6 +7,14 @@ dist/
 # one-time migration backups (scripts/migrate-*.mjs)
 scripts/.migrate-*-backup-*.json
 
+# Google service account keys, used by scripts/ (#372: moved here from the
+# retired mcp-server/). Keep the patterns broad: a leaked key grants write
+# access to the whole Groundwork sheet.
+thrive-sa.json
+*-sa.json
+*service-account*.json
+*.key.json
+
 # Apps Script (#130) — holds the script id; the API key lives in script
 # properties and never on disk.
 .clasp.json

@@ -70,7 +70,7 @@ const BEFORE = HEADERS.slice(0, 20);
 const ADDED = HEADERS.slice(20);
 
 const creds = JSON.parse(
-  readFileSync(new URL('../mcp-server/thrive-sa.json', import.meta.url), 'utf8')
+  readFileSync(new URL('thrive-sa.json', import.meta.url), 'utf8')
 );
 const client = new JWT({
   email: creds.client_email,

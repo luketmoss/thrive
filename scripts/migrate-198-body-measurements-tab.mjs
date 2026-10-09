@@ -128,7 +128,7 @@ export async function migrate({ api, dryRun = false, log = console.log, error = 
 async function main() {
   const { JWT } = await import('google-auth-library');
   const creds = JSON.parse(
-    readFileSync(new URL('../mcp-server/thrive-sa.json', import.meta.url), 'utf8')
+    readFileSync(new URL('thrive-sa.json', import.meta.url), 'utf8')
   );
   const client = new JWT({
     email: creds.client_email,

@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Historical (luketmoss/keel#372): this imports ../mcp-server/domain.js, which was
+// removed when the MCP server moved to Keel. To re-run it, check out the commit
+// before that removal; the function it needs is kept in keel/mcp/src/thrive/domain.js.
 /**
  * repair-120-cached-exercise-names.mjs — One-time data repair for issue #120.
  *
@@ -27,7 +30,7 @@ const SPREADSHEET_ID =
   process.env.THRIVE_SPREADSHEET_ID || '1YvFnJsY9KlKmbRZ4CrFc67pFwGgjUpHc_LgMVQm2zeQ';
 const BASE = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}`;
 
-const creds = JSON.parse(readFileSync(new URL('../mcp-server/thrive-sa.json', import.meta.url), 'utf8'));
+const creds = JSON.parse(readFileSync(new URL('thrive-sa.json', import.meta.url), 'utf8'));
 const client = new JWT({
   email: creds.client_email,
   key: creds.private_key,

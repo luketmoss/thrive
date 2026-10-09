@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Historical (luketmoss/keel#372): this imports ../mcp-server/domain.js, which was
+// removed when the MCP server moved to Keel. To re-run it, check out the commit
+// before that removal; the function it needs is kept in keel/mcp/src/thrive/domain.js.
 /**
  * migrate-128-workouts-a-to-z.mjs — One-time sheet migration for issue #128.
  *
@@ -40,7 +43,7 @@ const LAST_OLD_HEADER = 'Avg HR (bpm)';   // Q, from #101
 const TOTAL_COLUMNS = 26;                 // A:Z
 const STARTED_AT_INDEX = 24;              // Y, zero-based
 
-const creds = JSON.parse(readFileSync(new URL('../mcp-server/thrive-sa.json', import.meta.url), 'utf8'));
+const creds = JSON.parse(readFileSync(new URL('thrive-sa.json', import.meta.url), 'utf8'));
 const client = new JWT({
   email: creds.client_email,
   key: creds.private_key,
