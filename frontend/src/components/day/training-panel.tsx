@@ -65,14 +65,15 @@ export function overdueForToday(all: readonly WorkoutWithRow[], today: string): 
 }
 
 /** A workout row, a link to `href` when there is an id to open. */
-function CardShell({ id, href, className, children }: {
+function CardShell({ id, href, className, label, children }: {
   id: string;
   href: string;
   className: string;
+  label?: string;
   children: preact.ComponentChildren;
 }) {
   return id
-    ? <a class={className} href={href} data-workout-id={id}>{children}</a>
+    ? <a class={className} href={href} data-workout-id={id} aria-label={label}>{children}</a>
     : <div class={className}>{children}</div>;
 }
 
@@ -90,8 +91,16 @@ function DoneCard({ w }: { w: WorkoutWithRow }) {
     descent && `↓ ${descent}`,
     hr,
   ].filter(Boolean);
+  // #362: an in-progress workout goes straight back into the tracker, as the
+  // Activities In Progress card does, with the same accessible name.
+  const active = w.status === 'active';
   return (
-    <CardShell id={w.id} href={`#/history/${w.id}`} className={`workout-card training-card workout-card-${w.type}`}>
+    <CardShell
+      id={w.id}
+      href={active ? `#/workout/${w.id}` : `#/history/${w.id}`}
+      label={active ? `${w.name || w.type}, in progress. Resume workout.` : undefined}
+      className={`workout-card training-card workout-card-${w.type}`}
+    >
       <div class="workout-card-center">
         <span class="workout-name">{w.name || w.type}</span>
         {meta.length > 0 && <span class="workout-meta">{meta.join(' · ')}</span>}
