@@ -160,6 +160,14 @@ export function makeUtilities(uuids: string[] = []) {
           timeZone, hour: 'numeric', minute: '2-digit', hour12: true,
         }).format(date).replace(/[  ]/g, ' ');
       }
+      if (format === 'u') {
+        // ISO day of week, 1 Monday ... 7 Sunday.
+        const wd = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short' }).format(date);
+        return String(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(wd) + 1);
+      }
+      if (format === 'HH:mm') {
+        return new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(date);
+      }
       if (format !== 'yyyy-MM-dd') {
         throw new Error('Utilities.formatDate stub only supports yyyy-MM-dd and h:mm a, got: ' + format);
       }

@@ -130,10 +130,16 @@ Google Sheet "Groundwork" with these tabs:
   row per vendor per "Sync now" press. request_id, vendor, requested_at,
   requested_by, status, workflow_run_id, dispatched_at, finished_at, detail.
   The SPA only ever appends A–E (`sr_` + 8 hex, `coros`|`withings`, ISO UTC,
-  the signed-in email or blank, `requested`; #315). `pollSyncRequests`
+  the signed-in email or blank, `requested`; #315). The one other appender is
+  the poller itself: on the first tick in a slot's 15-minute window
+  (`SYNC_SCHEDULE_SLOTS`: 6:30 AM and 6:30 PM daily, America/Denver) it adds
+  one `coros` row with `requested_by` = `schedule` (once per slot per day, any
+  status counts) and dispatches it that tick — GitHub's own cron is best-effort,
+  a dispatch is not. The phone opens the COROS app at 6:15 (MacroDroid) and the
+  daily brief / Sunday weekly brief run at 6:45. `pollSyncRequests`
   (`apps-script/src/sync-requests.js`), a 5-minute Apps Script time-driven
   trigger on the bot account, writes every later value in E–I and never
-  appends, deletes or writes A–D. It dispatches the existing
+  deletes or writes A–D of a row it did not add. It dispatches the existing
   `coros-sync.yml`/`withings-sync.yml` with a fixed `{"ref":"main"}` and the
   `GITHUB_DISPATCH_TOKEN` script property, and closes each row it started.
   Statuses: `requested` → `started` → `done`|`cancelled`|`failed`|`not_reported`,

@@ -102,6 +102,7 @@ function harness(opts: {
   lockHeld?: boolean;
   triggers?: Trigger[];
   logFails?: string;
+  now?: Date;
 } = {}) {
   const requests = opts.requests === undefined ? [] : opts.requests;
   const fetches: Fetch[] = [];
@@ -137,7 +138,7 @@ function harness(opts: {
 
   const FixedDate = new Proxy(Date, {
     construct(target, args) {
-      return args.length ? new target(...(args as [])) : new target(NOW);
+      return args.length ? new target(...(args as [])) : new target(opts.now ?? NOW);
     },
   });
 
@@ -886,5 +887,91 @@ describe('AC7: install and remove the trigger', () => {
     ]);
     expect(manifest.webapp).toEqual({ executeAs: 'USER_DEPLOYING', access: 'ANYONE_ANONYMOUS' });
     expect(manifest.timeZone).toBe('America/Denver');
+  });
+});
+
+describe('the scheduled morning COROS sync', () => {
+  const at = (iso: string) => new Date(iso); // MDT is UTC-6: 12:30Z is 6:30 AM
+  const SCHEDULE = (over: Record<string, string> = {}) =>
+    req({ requested_by: 'schedule', status: 'done', requested_at: '2026-10-09T12:30:00.000Z', ...over });
+
+  it('at 6:30 appends a coros request from `schedule` and dispatches it in the same tick', () => {
+    const h = harness({ requests: [], syncLog: [], now: at('2026-10-09T12:31:00.000Z') });
+    h.poll();
+    expect(h.fetches.map((f) => f.url)).toEqual([DISPATCH_URL('coros-sync.yml')]);
+    expect(h.row(0)).toMatchObject({
+      vendor: 'coros', requested_by: 'schedule', status: 'started', workflow_run_id: '987654',
+    });
+    expect(h.row(0).request_id).toMatch(/^sr_[a-z0-9]{4,8}$/); // the stub uuid is not hex; the real one is
+  });
+
+  it('does nothing before 6:30 or from 6:45', () => {
+    for (const iso of ['2026-10-09T12:29:00.000Z', '2026-10-09T12:45:00.000Z', '2026-10-09T13:30:00.000Z']) {
+      const h = harness({ requests: [], syncLog: [], now: at(iso) });
+      h.poll();
+      expect(h.fetches).toHaveLength(0);
+      expect(h.rows).toHaveLength(0);
+    }
+  });
+
+  it('a tick later in the window still catches a missed 6:30 tick', () => {
+    const h = harness({ requests: [], syncLog: [], now: at('2026-10-09T12:44:00.000Z') });
+    h.poll();
+    expect(h.fetches).toHaveLength(1);
+  });
+
+  it('adds only one a day, whatever its status', () => {
+    for (const status of ['done', 'failed', 'skipped', 'started']) {
+      const h = harness({ requests: [SCHEDULE({ status })], syncLog: [], now: at('2026-10-09T12:40:00.000Z') });
+      h.poll();
+      expect(h.rows).toHaveLength(1);
+    }
+  });
+
+  it("yesterday's scheduled row does not stop today's", () => {
+    const old = SCHEDULE({ requested_at: '2026-10-08T12:30:00.000Z' });
+    const h = harness({ requests: [old], syncLog: [], now: at('2026-10-09T12:31:00.000Z') });
+    h.poll();
+    expect(h.rows).toHaveLength(2);
+    expect(h.fetches).toHaveLength(1);
+  });
+
+  it("a person's own request does not count as the scheduled one", () => {
+    const mine = req({ requested_at: '2026-10-09T12:20:00.000Z', status: 'done' });
+    const h = harness({ requests: [mine], syncLog: [], now: at('2026-10-09T12:31:00.000Z') });
+    h.poll();
+    expect(h.rows).toHaveLength(2);
+  });
+
+  it('6:30 PM gets one too, on any day', () => {
+    for (const iso of ['2026-10-12T00:31:00.000Z', '2026-10-11T00:31:00.000Z']) { // Sunday and Saturday evening
+      const h = harness({ requests: [], syncLog: [], now: at(iso) });
+      h.poll();
+      expect(h.fetches).toHaveLength(1);
+      expect(h.row(0)).toMatchObject({ requested_by: 'schedule', status: 'started' });
+    }
+  });
+
+  it('the morning row does not stand in for the evening one, and vice versa', () => {
+    const morning = SCHEDULE({ requested_at: '2026-10-11T12:30:00.000Z' });
+    const evening = harness({ requests: [morning], syncLog: [], now: at('2026-10-12T00:35:00.000Z') });
+    evening.poll();
+    expect(evening.rows).toHaveLength(2);
+    const both = harness({
+      requests: [morning, SCHEDULE({ requested_at: '2026-10-12T00:30:00.000Z' })],
+      syncLog: [], now: at('2026-10-12T00:40:00.000Z'),
+    });
+    both.poll();
+    expect(both.rows).toHaveLength(2);
+  });
+
+  it('a recent COROS run makes the scheduled row skipped, not a second dispatch', () => {
+    const h = harness({
+      requests: [], syncLog: [logRow('scheduled-1', '2026-10-09T12:25:00.000Z')],
+      now: at('2026-10-09T12:31:00.000Z'),
+    });
+    h.poll();
+    expect(h.fetches).toHaveLength(0);
+    expect(h.row(0).status).toBe('skipped');
   });
 });

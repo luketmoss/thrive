@@ -1,7 +1,7 @@
 // SyncRequests poller (#314) — the server half of on-demand sync (#232 route c).
 //
 // The SPA (#315) appends one `requested` row per vendor to the SyncRequests
-// tab. pollSyncRequests, an installable time-driven trigger on the bot account,
+// tab; the poller appends one itself, for COROS, in the SYNC_SCHEDULE_SLOTS. pollSyncRequests, an installable time-driven trigger on the bot account,
 // reads the open rows and starts the EXISTING coros-sync.yml / withings-sync.yml
 // through GitHub's workflow-dispatch API, then closes every row it started.
 // It never runs run.mjs itself: those workflows' concurrency groups are what
@@ -44,6 +44,25 @@ var SYNC_CEILING_MINUTES = 20;
 var SYNC_LOCK_WAIT_MS = 5000;
 
 var SYNC_POLL_HANDLER = 'pollSyncRequests';
+
+/**
+ * The scheduled COROS syncs. GitHub's own cron is best-effort and runs late or
+ * not at all; a dispatch is immediate. So the poller itself appends one `coros`
+ * request, requested_by `schedule`, on the first tick inside a slot's window, and
+ * the same tick dispatches it. Each window is as wide as three ticks, so a missed
+ * tick still lands before the briefs 15 minutes later. A slot that already has
+ * its row today is left alone.
+ *   6:30 AM daily  phone opens COROS at 6:15, daily brief at 6:45
+ *   6:30 PM daily  phone opens COROS at 6:15, Sunday's weekly brief at 6:45
+ * `isoDay` is Utilities.formatDate's 'u': 1 Monday ... 7 Sunday; null is every day.
+ */
+var SYNC_SCHEDULE_VENDOR = 'coros';
+var SYNC_SCHEDULE_REQUESTED_BY = 'schedule';
+var SYNC_SCHEDULE_WINDOW_MINUTES = 15;
+var SYNC_SCHEDULE_SLOTS = [
+  { startMinute: 6 * 60 + 30, isoDay: null },
+  { startMinute: 18 * 60 + 30, isoDay: null },
+];
 
 var SYNC_REQUEST_ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 
@@ -292,8 +311,7 @@ function syncPollLocked(tokenRef) {
     return;
   }
   var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return;
-  var raw = sheet.getRange(2, 1, lastRow - 1, SYNC_REQUEST_COLUMN_COUNT).getDisplayValues();
+  var raw = lastRow < 2 ? [] : sheet.getRange(2, 1, lastRow - 1, SYNC_REQUEST_COLUMN_COUNT).getDisplayValues();
 
   var all = [];
   var open = 0;
@@ -302,9 +320,14 @@ function syncPollLocked(tokenRef) {
     all.push(req);
     if (req.status === 'requested' || req.status === 'started') open++;
   }
-  if (open === 0) return;
 
   var nowMs = new Date().getTime();
+  if (syncScheduledSyncDue(all, nowMs)) {
+    all.push(syncAppendScheduledRequest(sheet, nowMs));
+    open++;
+  }
+  if (open === 0) return;
+
   var token = function () {
     if (!tokenRef.read) {
       tokenRef.read = true;
@@ -349,6 +372,55 @@ function syncPollLocked(tokenRef) {
   });
 
   Logger.log('pollSyncRequests: ' + counts.started + ' started, ' + counts.closed + ' closed.');
+}
+
+/** Minutes after local midnight of an instant, in TIMEZONE. */
+function syncLocalMinute(date) {
+  var parts = Utilities.formatDate(date, TIMEZONE, 'HH:mm').split(':');
+  return Number(parts[0]) * 60 + Number(parts[1]);
+}
+
+/**
+ * Whether this tick owes a scheduled sync: inside a slot's window on its day,
+ * and no `schedule` row for this vendor in that slot yet today (any status: a
+ * failed or skipped one is not retried, the manual "Sync now" is for that).
+ */
+function syncScheduledSyncDue(all, nowMs) {
+  var now = new Date(nowMs);
+  var minute = syncLocalMinute(now);
+  var today = Utilities.formatDate(now, TIMEZONE, 'yyyy-MM-dd');
+  var isoDay = Number(Utilities.formatDate(now, TIMEZONE, 'u'));
+  return SYNC_SCHEDULE_SLOTS.some(function (slot) {
+    if (slot.isoDay !== null && slot.isoDay !== isoDay) return false;
+    if (minute < slot.startMinute || minute >= slot.startMinute + SYNC_SCHEDULE_WINDOW_MINUTES) return false;
+    return !all.some(function (req) {
+      if (req.requested_by !== SYNC_SCHEDULE_REQUESTED_BY || req.vendor !== SYNC_SCHEDULE_VENDOR) return false;
+      var at = syncParseInstant(req.requested_at);
+      if (isNaN(at)) return false;
+      var when = new Date(at);
+      if (Utilities.formatDate(when, TIMEZONE, 'yyyy-MM-dd') !== today) return false;
+      var m = syncLocalMinute(when);
+      return m >= slot.startMinute && m < slot.startMinute + SYNC_SCHEDULE_WINDOW_MINUTES;
+    });
+  });
+}
+
+/** Append the scheduled request as the SPA would (A:E), and answer it as a row object. */
+function syncAppendScheduledRequest(sheet, nowMs) {
+  var sheetRow = sheet.getLastRow() + 1;
+  var req = {
+    request_id: 'sr_' + Utilities.getUuid().replace(/-/g, '').slice(0, 8),
+    vendor: SYNC_SCHEDULE_VENDOR,
+    requested_at: new Date(nowMs).toISOString(),
+    requested_by: SYNC_SCHEDULE_REQUESTED_BY,
+    status: 'requested',
+    workflow_run_id: '', dispatched_at: '', finished_at: '', detail: '',
+    sheetRow: sheetRow,
+  };
+  var cells = [];
+  for (var i = 0; i < 5; i++) cells.push(req[SYNC_REQUEST_FIELDS[i]]);
+  sheet.getRange(sheetRow, 1, 1, 5).setValues([asText(cells)]);
+  return req;
 }
 
 /** Run one row's work, recording an unexpected error on that row alone. */
