@@ -1,0 +1,5 @@
+# Shebang scripts must check out LF on Windows too: vitest cannot load a
+# `#!` line that ends in \r (#366). The index is already LF; this pins the
+# working copy whatever core.autocrlf says.
+*.js text eol=lf
+*.mjs text eol=lf
