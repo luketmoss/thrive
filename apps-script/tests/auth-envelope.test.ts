@@ -68,7 +68,10 @@ describe('AC1: authentication', () => {
 
     // validateApiKey moved to auth.js with the token check (#144).
     const auth = readFileSync(path.join(dir, 'auth.js'), 'utf8');
-    expect(auth).toMatch(/PropertiesService\.getScriptProperties\(\)\.getProperty\('API_KEY'\)/);
+    expect(auth).toMatch(/getProperty\('API_KEY'\)/);
+    // #364 AC5: the MCP Worker's key is read the same way, never a literal.
+    expect(auth).toMatch(/getProperty\('MCP_API_KEY'\)/);
+    expect(auth).toMatch(/PropertiesService\.getScriptProperties\(\)/);
   });
 });
 

@@ -626,6 +626,12 @@ under ~2 s, by changing the constant, pushing, and running
    `.clasp.json` holds the script id and is gitignored.
 2. Set **script properties** — never put either in source, this repo is public:
    - `API_KEY` — a long random string
+   - `MCP_API_KEY` — optional (#364): a second long random string with the
+     same full access, held **only** by the remote MCP Worker
+     ([luketmoss/keel#367](https://github.com/luketmoss/keel/issues/367)), so
+     it can be rotated or revoked without touching `API_KEY`'s holders (the
+     syncs, watchdogs and scripts). Leaving it unset changes nothing; it never
+     replaces `API_KEY`, which stays required.
    - `SPREADSHEET_ID` — the Groundwork sheet id
    - `TOKEN_CLIENT_ID` — almanac's OAuth client ID (#144)
    - `TOKEN_ALLOWED_EMAIL` — the one Google account allowed to call with a

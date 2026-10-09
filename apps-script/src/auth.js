@@ -3,7 +3,8 @@
 // Two kinds of caller:
 //
 // - A **key caller** sends `key`: the MCP server and the COROS sync. Full
-//   access, exactly as before #144.
+//   access, exactly as before #144. `key` may be `API_KEY` or, for the remote
+//   MCP Worker only, `MCP_API_KEY` (#364).
 // - A **token caller** sends `access_token`, a Google access token from
 //   almanac's own sign-in. almanac is a browser app on GitHub Pages, so it
 //   cannot hold the key — a key in a public bundle is not a secret. A token
@@ -79,11 +80,20 @@ var TOKEN_REFUSAL_MESSAGES = {
 /**
  * The key lives in script properties, never in source — this file is in a
  * public repo. An unconfigured key is an error, not an open door.
+ *
+ * `MCP_API_KEY` (#364) is a second key with the same full access, held only by
+ * the remote MCP Worker (keel#367), so it can be rotated or revoked without
+ * touching `API_KEY`'s holders. It is optional, but never a replacement:
+ * `API_KEY` unset still errors, and an unset or blank `MCP_API_KEY` matches
+ * nothing, not even an empty `key`.
  */
 function validateApiKey(key) {
-  var expected = PropertiesService.getScriptProperties().getProperty('API_KEY');
+  var props = PropertiesService.getScriptProperties();
+  var expected = props.getProperty('API_KEY');
   if (!expected) throw new Error('API_KEY not configured in script properties');
-  return key === expected;
+  if (key === expected) return true;
+  var mcpKey = props.getProperty('MCP_API_KEY');
+  return !!mcpKey && key === mcpKey;
 }
 
 /**
