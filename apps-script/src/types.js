@@ -297,7 +297,8 @@ var JOURNAL_COLUMN_COUNT = 4;
 // One row per vendor per "Sync now" press. The SPA appends A-E with status
 // `requested` (#315); pollSyncRequests (sync-requests.js), an Apps Script
 // time-driven trigger, writes every later value in E-I. The poller never
-// appends, never deletes, and never writes A-D. Mirrored by
+// deletes and never writes A-D of a row it did not add; it appends only the
+// scheduled COROS rows (SYNC_SCHEDULE_SLOTS). Mirrored by
 // frontend/src/api/sync-requests-api.ts; change both together. Its test fails
 // if any of the three lists below drifts. Later columns are only ever appended.
 var SYNC_REQUEST_FIELDS = [
