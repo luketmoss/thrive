@@ -133,6 +133,10 @@ export function WorkoutDetail({ workoutId }: Props) {
   };
 
   const isPlanned = workout.status === 'planned';
+  const isActive = workout.status === 'active';
+  // #362: resuming is not starting, so the start guard does not apply. The
+  // workout screen makes this the tracked workout.
+  const handleResume = () => navigate(`/workout/${workoutId}`);
   const provenance = provenanceDetail(workout);
   const corosUrl = corosActivityUrl(workout);
   const estimate = formatEstimate(workout.estimated_seconds);
@@ -173,7 +177,9 @@ export function WorkoutDetail({ workoutId }: Props) {
         <div class="detail-info-row">
           {isPlanned
             ? <span class="type-badge badge-planned">Planned</span>
-            : <span class={`type-badge badge-${workout.type}`}>{workout.type}</span>
+            : isActive
+              ? <span class="type-badge badge-active">Active</span>
+              : <span class={`type-badge badge-${workout.type}`}>{workout.type}</span>
           }
           {/* #145: the plan's estimate, only while it is a plan. Once started,
               elapsed time is the only duration shown. */}
@@ -358,9 +364,19 @@ export function WorkoutDetail({ workoutId }: Props) {
             {startingPlanned ? 'Starting...' : 'Start Workout'}
           </button>
         )}
+        {isActive && (
+          <button
+            class="btn btn-primary"
+            style={{ width: '100%' }}
+            onClick={handleResume}
+            disabled={deleting}
+          >
+            Resume Workout
+          </button>
+        )}
         <button
           class="btn btn-danger"
-          style={{ width: '100%', marginTop: isPlanned ? 'var(--space-md)' : '0' }}
+          style={{ width: '100%', marginTop: isPlanned || isActive ? 'var(--space-md)' : '0' }}
           onClick={handleDelete}
           disabled={deleting}
         >
