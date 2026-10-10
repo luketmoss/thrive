@@ -18,6 +18,8 @@ import { buildExerciseList, mergeWarmups } from './build-exercise-list';
 import { collectEditedSets } from './edited-sets';
 import { workoutToEditInputs, editInputsToPatch } from '../shared/edit-patch';
 import { EffortToggle } from '../shared/effort-toggle';
+import { newRowKey, useReorderFocus } from '../shared/reorder-focus';
+import type { MoveDirection } from '../shared/reorder-focus';
 
 interface Props {
   workoutId: string;
@@ -34,7 +36,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
   const [finishing, setFinishing] = useState(false);
   const [notes, setNotes] = useState(editMode ? (workout?.notes || '') : '');
   const [showFinishForm, setShowFinishForm] = useState(false);
-  const [reorderAnnouncement, setReorderAnnouncement] = useState('');
+  const reorder = useReorderFocus();
   const saveTimers = useRef<Map<string, number>>(new Map());
 
   // Edit mode metadata
@@ -362,42 +364,19 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
     setExerciseList(updated);
   };
 
-  const handleMoveUp = (exerciseId: string, exerciseOrder: number) => {
-    setExerciseList((prev) => {
-      const next = applyMoveUp(prev, exerciseId, exerciseOrder);
-      const sorted = [...next].sort((a, b) => a.exercise_order - b.exercise_order);
-      const movedEx = next.find(
-        (e) => e.exercise_id === exerciseId,
-      );
-      if (movedEx) {
-        const newPos = sorted.findIndex(
-          (e) => e.exercise_id === movedEx.exercise_id && e.exercise_order === movedEx.exercise_order,
-        ) + 1;
-        setReorderAnnouncement(
-          `${movedEx.exercise_name} moved to position ${newPos} of ${sorted.length}`,
-        );
-      }
-      return next;
-    });
-  };
-
-  const handleMoveDown = (exerciseId: string, exerciseOrder: number) => {
-    setExerciseList((prev) => {
-      const next = applyMoveDown(prev, exerciseId, exerciseOrder);
-      const sorted = [...next].sort((a, b) => a.exercise_order - b.exercise_order);
-      const movedEx = next.find(
-        (e) => e.exercise_id === exerciseId,
-      );
-      if (movedEx) {
-        const newPos = sorted.findIndex(
-          (e) => e.exercise_id === movedEx.exercise_id && e.exercise_order === movedEx.exercise_order,
-        ) + 1;
-        setReorderAnnouncement(
-          `${movedEx.exercise_name} moved to position ${newPos} of ${sorted.length}`,
-        );
-      }
-      return next;
-    });
+  // #371: position and announcement come from the current list, outside the
+  // state updater; a move from an end does nothing at all.
+  const handleMove = (exerciseId: string, exerciseOrder: number, dir: MoveDirection) => {
+    const sorted = [...exerciseList].sort((a, b) => a.exercise_order - b.exercise_order);
+    const from = sorted.findIndex(
+      (e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder,
+    );
+    const to = dir === 'up' ? from - 1 : from + 1;
+    if (from < 0 || to < 0 || to >= sorted.length) return;
+    const moved = sorted[from];
+    const apply = dir === 'up' ? applyMoveUp : applyMoveDown;
+    setExerciseList((prev) => apply(prev, exerciseId, exerciseOrder));
+    reorder.moved(moved.rowKey ?? '', dir, moved.exercise_name, to + 1, sorted.length);
   };
 
   const handleRemoveExercise = async (exerciseId: string, exerciseOrder: number) => {
@@ -447,6 +426,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
       exercise_name: ex.name,
       section: 'primary',
       exercise_order: maxOrder + 1,
+      rowKey: newRowKey(),
       sets: [{
         set_number: 1,
         planned_reps: '',
@@ -694,10 +674,10 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
         aria-live="polite"
         class="sr-only"
       >
-        {reorderAnnouncement}
+        {reorder.announcement}
       </div>
 
-      <div class="tracker-exercise-list">
+      <div class="tracker-exercise-list" ref={reorder.listRef}>
         {exerciseList.length === 0 && (
           <div class="empty-state">
             <p>No exercises yet</p>
@@ -709,7 +689,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
           const sorted = [...exerciseList].sort((a, b) => a.exercise_order - b.exercise_order);
           return sorted.map((ex, idx) => (
             <ExerciseRow
-              key={`${ex.exercise_id}-${ex.exercise_order}`}
+              key={ex.rowKey ?? `${ex.exercise_id}-${ex.exercise_order}`}
               exercise={ex}
               currentWorkoutId={workoutId}
               onUpdateSet={(setNum, updates) =>
@@ -734,8 +714,8 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
               onChangeSection={(newSection) =>
                 handleChangeSection(ex.exercise_id, ex.exercise_order, newSection)
               }
-              onMoveUp={() => handleMoveUp(ex.exercise_id, ex.exercise_order)}
-              onMoveDown={() => handleMoveDown(ex.exercise_id, ex.exercise_order)}
+              onMoveUp={() => handleMove(ex.exercise_id, ex.exercise_order, 'up')}
+              onMoveDown={() => handleMove(ex.exercise_id, ex.exercise_order, 'down')}
               onRemoveExercise={() => handleRemoveExercise(ex.exercise_id, ex.exercise_order)}
               isFirst={idx === 0}
               isLast={idx === sorted.length - 1}

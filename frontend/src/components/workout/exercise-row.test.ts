@@ -102,26 +102,30 @@ describe('AC1: Controls row merges section badge and action buttons', () => {
 });
 
 describe('AC2: Action buttons render at 28x28px matching effort button size', () => {
-  it('preserves disabled state on move-up when isFirst', () => {
+  it('marks move-up aria-disabled (not disabled) when isFirst (#371)', () => {
     const { container } = renderExerciseRow({}, { isFirst: true, isLast: false, totalExercises: 3 });
     const controlsRow = container.querySelector('.tracker-exercise-controls');
     // Get non-history toolbar buttons (history toggle also has exercise-toolbar-btn)
     const buttons = controlsRow!.querySelectorAll('.exercise-toolbar-btn:not(.last-time-toggle)');
     // First non-history button is move-up
     const moveUp = buttons[0] as HTMLButtonElement;
-    expect(moveUp.disabled).toBe(true);
+    expect(moveUp.getAttribute('aria-disabled')).toBe('true');
+    expect(moveUp.disabled).toBe(false);
+    expect(moveUp.dataset.move).toBe('up');
     expect(moveUp.getAttribute('aria-label')).toContain('Move');
     expect(moveUp.getAttribute('aria-label')).toContain('up');
   });
 
-  it('preserves disabled state on move-down when isLast', () => {
+  it('marks move-down aria-disabled (not disabled) when isLast (#371)', () => {
     const { container } = renderExerciseRow({}, { isFirst: false, isLast: true, totalExercises: 3 });
     const controlsRow = container.querySelector('.tracker-exercise-controls');
     // Get non-history toolbar buttons
     const buttons = controlsRow!.querySelectorAll('.exercise-toolbar-btn:not(.last-time-toggle)');
     // Second non-history button is move-down
     const moveDown = buttons[1] as HTMLButtonElement;
-    expect(moveDown.disabled).toBe(true);
+    expect(moveDown.getAttribute('aria-disabled')).toBe('true');
+    expect(moveDown.disabled).toBe(false);
+    expect(moveDown.dataset.move).toBe('down');
     expect(moveDown.getAttribute('aria-label')).toContain('Move');
     expect(moveDown.getAttribute('aria-label')).toContain('down');
   });
@@ -211,5 +215,28 @@ describe('AC5: Warmup cards use same controls layout as other sections', () => {
     const { container } = renderExerciseRow({ section: 'warmup' });
     const quickFill = container.querySelector('.quick-fill-row');
     expect(quickFill).toBeNull();
+  });
+});
+
+describe('#371: row key and guarded end buttons', () => {
+  it('puts data-row-key on the root element of both variants', () => {
+    const normal = renderExerciseRow({ rowKey: 'row-a' });
+    expect((normal.container.firstElementChild as HTMLElement).dataset.rowKey).toBe('row-a');
+    expect(normal.container.firstElementChild!.classList.contains('tracker-exercise')).toBe(true);
+    const warm = renderExerciseRow({ rowKey: 'row-b', section: 'warmup', sets: [] });
+    expect((warm.container.firstElementChild as HTMLElement).dataset.rowKey).toBe('row-b');
+    expect(warm.container.firstElementChild!.classList.contains('tracker-exercise-warmup')).toBe(true);
+  });
+
+  it('an aria-disabled end button does not call its handler', () => {
+    let up = 0;
+    let down = 0;
+    const { container } = renderExerciseRow({}, {
+      isFirst: true, isLast: true, onMoveUp: () => { up++; }, onMoveDown: () => { down++; },
+    });
+    (container.querySelector('[data-move="up"]') as HTMLButtonElement).click();
+    (container.querySelector('[data-move="down"]') as HTMLButtonElement).click();
+    expect(up).toBe(0);
+    expect(down).toBe(0);
   });
 });

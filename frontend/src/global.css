@@ -2977,7 +2977,7 @@ input, select, textarea {
   transform: translate(-50%, -50%);
 }
 
-.exercise-toolbar-btn:hover:not(:disabled) {
+.exercise-toolbar-btn:hover:not(:disabled):not([aria-disabled="true"]) {
   color: var(--color-text);
   border-color: var(--color-border-strong, var(--color-border));
 }
@@ -2985,6 +2985,16 @@ input, select, textarea {
 .exercise-toolbar-btn:disabled {
   opacity: 0.3;
   cursor: not-allowed;
+}
+
+/* #371 (as #328): an end Move button stays focusable (aria-disabled), so only
+   the glyph is dimmed: opacity on the button itself would fade its focus ring. */
+.exercise-toolbar-btn[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+.exercise-toolbar-btn[aria-disabled="true"] > span {
+  opacity: 0.3;
 }
 
 .exercise-toolbar-remove {

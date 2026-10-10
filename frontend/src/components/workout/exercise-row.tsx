@@ -14,6 +14,12 @@ export interface TrackerExercise {
   quickFillWeight: string;
   quickFillReps: string;
   quickFillEffort: Effort | '';
+  /**
+   * Client-only row identity (#371), from `newRowKey()`. Unlike
+   * `exercise_id`/`exercise_order` it survives a move and tells duplicates
+   * apart. Never part of a set payload, so it cannot reach the sheet.
+   */
+  rowKey?: string;
 }
 
 interface Props {
@@ -122,23 +128,31 @@ export function ExerciseRow({
 
   const actionButtons = showToolbar && (
     <>
+      {/* At an end the button is aria-disabled, not disabled (#371, as #328):
+          it keeps focus after a move puts the row there, and does nothing. */}
       <button
         type="button"
         class="exercise-toolbar-btn"
-        onClick={onMoveUp}
-        disabled={isFirst}
+        onClick={() => {
+          if (!isFirst) onMoveUp();
+        }}
+        aria-disabled={isFirst ? 'true' : undefined}
+        data-move="up"
         aria-label={`Move ${exercise.exercise_name} up`}
       >
-        ▲
+        <span aria-hidden="true">▲</span>
       </button>
       <button
         type="button"
         class="exercise-toolbar-btn"
-        onClick={onMoveDown}
-        disabled={isLast}
+        onClick={() => {
+          if (!isLast) onMoveDown();
+        }}
+        aria-disabled={isLast ? 'true' : undefined}
+        data-move="down"
         aria-label={`Move ${exercise.exercise_name} down`}
       >
-        ▼
+        <span aria-hidden="true">▼</span>
       </button>
       <button
         type="button"
@@ -196,6 +210,7 @@ export function ExerciseRow({
     return (
       <div
         class="tracker-exercise tracker-exercise-warmup"
+        data-row-key={exercise.rowKey}
         aria-label={`Warmup: ${exercise.exercise_name} (list only)`}
       >
         <div class="tracker-exercise-controls">
@@ -223,7 +238,7 @@ export function ExerciseRow({
   const cardClass = `tracker-exercise${isSS ? ` section-ss-group ss-${exercise.section}` : ''}`;
 
   return (
-    <div class={cardClass}>
+    <div class={cardClass} data-row-key={exercise.rowKey}>
       <div class="tracker-exercise-controls">
         <button
           type="button"

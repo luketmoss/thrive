@@ -1,5 +1,6 @@
 import type { TrackerExercise } from './exercise-row';
 import type { SetWithRow, Effort } from '../../api/types';
+import { newRowKey } from '../shared/reorder-focus';
 
 interface WarmupExerciseInfo {
   exercise_id: string;
@@ -24,6 +25,7 @@ export function buildExerciseList(setRows: SetWithRow[]): TrackerExercise[] {
         quickFillWeight: '',
         quickFillReps: '',
         quickFillEffort: '',
+        rowKey: newRowKey(),
       };
       map.set(key, ex);
     }
@@ -67,6 +69,7 @@ export function mergeWarmups(
       quickFillWeight: '',
       quickFillReps: '',
       quickFillEffort: '',
+      rowKey: newRowKey(),
     }));
 
   return [...newWarmups, ...tracked].sort((a, b) => a.exercise_order - b.exercise_order);
