@@ -12,6 +12,14 @@ export interface PlannerExercise {
   section: string;
   sets: string;
   reps: string;
+  /**
+   * Set only by the planned-workout editor (#350), and never changed after
+   * open: the Reps value the entry was pre-filled with, and the stored
+   * `planned_reps` of the rows it was built from, in set order. The planner
+   * passes both through untouched.
+   */
+  initial_reps?: string;
+  stored_planned_reps?: string[];
 }
 
 interface Props {

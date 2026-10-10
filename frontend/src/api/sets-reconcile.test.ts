@@ -166,3 +166,24 @@ describe('reconcileRequests: one batch, in a safe order', () => {
     expect(grow[0].appendCells.rows).toHaveLength(1);
   });
 });
+
+describe('builderExercisesToSets: per-set planned reps (#350)', () => {
+  it('writes set n from planned_reps_by_set[n - 1], falling back to planned_reps', () => {
+    const rows = builderExercisesToSets(W, [{ ...ex('bench', 'primary', 4, '10'), planned_reps_by_set: ['10', '8', '6'] }]);
+    expect(rows.map((r) => r.planned_reps)).toEqual(['10', '8', '6', '10']);
+  });
+
+  it('a shorter set count takes only the first values', () => {
+    const rows = builderExercisesToSets(W, [{ ...ex('bench', 'primary', 2, '10'), planned_reps_by_set: ['10', '8', '6'] }]);
+    expect(rows.map((r) => r.planned_reps)).toEqual(['10', '8']);
+  });
+
+  it('a warmup is still one row with blank planned reps', () => {
+    const rows = builderExercisesToSets(W, [{ ...ex('bench', 'warmup', 3, '10'), planned_reps_by_set: ['10', '8', '6'] }]);
+    expect(rows.map((r) => [r.section, r.set_number, r.planned_reps])).toEqual([['warmup', 1, '']]);
+  });
+
+  it('without the list, every set gets planned_reps, as before', () => {
+    expect(builderExercisesToSets(W, [ex('bench', 'primary', 3, '12')]).map((r) => r.planned_reps)).toEqual(['12', '12', '12']);
+  });
+});

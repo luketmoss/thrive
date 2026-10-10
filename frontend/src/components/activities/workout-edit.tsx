@@ -59,6 +59,28 @@ export function WorkoutEdit({ workoutId }: Props) {
   return <WorkoutTracker workoutId={workoutId} workoutName={workout.name} />;
 }
 
+/**
+ * The planned-workout editor's entries as the builder's (#350). An entry
+ * whose Reps still equals its pre-fill keeps each set's stored
+ * `planned_reps` (a set added beyond them gets the Reps value); a changed
+ * Reps value applies to every set, as it always has.
+ */
+export function plannerToBuilderExercises(exercises: PlannerExercise[]): BuilderExercise[] {
+  return exercises.map((ex) => {
+    const out: BuilderExercise = {
+      exercise_id: ex.exercise_id,
+      exercise_name: ex.exercise_name,
+      section: ex.section,
+      sets: Number(ex.sets) || 1,
+      planned_reps: ex.reps,
+    };
+    if (ex.stored_planned_reps && ex.reps === ex.initial_reps) {
+      out.planned_reps_by_set = ex.stored_planned_reps;
+    }
+    return out;
+  });
+}
+
 /** Editor for planned workouts - uses the planner UI. */
 function PlannedWorkoutEditor({ workoutId }: { workoutId: string }) {
   const { token } = useAuth();
@@ -93,24 +115,26 @@ function PlannedWorkoutEditor({ workoutId }: { workoutId: string }) {
       continue;
     }
 
-    const setCount = workoutSets.filter(
+    // Already in set order, so entry i is set i + 1.
+    const own = workoutSets.filter(
       (ws) => ws.exercise_id === s.exercise_id && ws.exercise_order === s.exercise_order,
-    ).length;
+    );
+    const reps = s.planned_reps || '';
     initialExercises.push({
       exercise_id: s.exercise_id,
       exercise_name: s.exercise_name,
       section: s.section || 'primary',
-      sets: String(setCount),
-      reps: s.planned_reps || '',
+      sets: String(own.length),
+      reps,
+      initial_reps: reps,
+      stored_planned_reps: own.map((ws) => ws.planned_reps),
     });
   }
 
-  // Sort by exercise_order from set rows
-  initialExercises.sort((a, b) => {
-    const orderA = workoutSets.find((s) => s.exercise_id === a.exercise_id && s.section === a.section)?.exercise_order ?? 0;
-    const orderB = workoutSets.find((s) => s.exercise_id === b.exercise_id && s.section === b.section)?.exercise_order ?? 0;
-    return orderA - orderB;
-  });
+  // Already in exercise_order: the rows are sorted by it and each entry is
+  // pushed at its first row. (A re-sort keyed by exercise_id + section once
+  // pulled a second same-exercise, same-section entry up beside the first,
+  // so an untouched plan was rewritten on Save — #350's AC4/AC5.)
 
   const handleSave = async (name: string, exercises: PlannerExercise[], date: string, estimatedSeconds: string) => {
     if (!token) return;
@@ -126,15 +150,7 @@ function PlannedWorkoutEditor({ workoutId }: { workoutId: string }) {
       if (estimatedSeconds !== estimateMinutesToSeconds(secondsToMinutesInput(workout.estimated_seconds))) {
         patch.estimated_seconds = estimatedSeconds;
       }
-      const builderExercises: BuilderExercise[] = exercises.map((ex) => ({
-        exercise_id: ex.exercise_id,
-        exercise_name: ex.exercise_name,
-        section: ex.section,
-        sets: Number(ex.sets) || 1,
-        planned_reps: ex.reps,
-      }));
-
-      await savePlannedWorkoutEdits(workoutId, patch, builderExercises, token);
+      await savePlannedWorkoutEdits(workoutId, patch, plannerToBuilderExercises(exercises), token);
       goBack('/activities');
     } catch {
       // Error toast shown by action; the user stays here with their edits.

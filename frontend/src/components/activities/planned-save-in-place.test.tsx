@@ -521,3 +521,196 @@ describe('AC6: demo mode', () => {
     expect(lastToast().text).toBe('Workout updated');
   });
 });
+
+// ── #350: per-set planned reps survive an edit that leaves Reps alone ──
+
+describe('#350: an untouched exercise keeps its per-set planned reps', () => {
+  /** Bench 10/8/6, push-ups 12/12, then Bench again in the same section 12/12. */
+  function variedSets(): string[][] {
+    return [
+      setRow('w_other', 'ex_a', 'primary', 1, 1, '10'),
+      setRow('w_X', 'ex_squat', 'warmup', 1, 1, ''),
+      setRow('w_X', 'ex_bench', 'primary', 2, 1, '10', '135'),
+      setRow('w_X', 'ex_bench', 'primary', 2, 2, '8', '155'),
+      setRow('w_X', 'ex_bench', 'primary', 2, 3, '6', '175', '6', 'Hard'),
+      setRow('w_X', 'ex_pushup', 'SS1', 3, 1, '12', '0'),
+      setRow('w_X', 'ex_pushup', 'SS1', 3, 2, '12', '0'),
+      // Same weights as the first Bench's sets 1-2: #349 carries weight by
+      // exercise + section + set number, first match wins, so a duplicate
+      // with its own weights is a separate (out-of-scope) problem.
+      setRow('w_X', 'ex_bench', 'primary', 4, 1, '12', '135'),
+      setRow('w_X', 'ex_bench', 'primary', 4, 2, '12', '155'),
+    ];
+  }
+
+  beforeEach(() => {
+    sheet.Sets = variedSets();
+    load();
+  });
+
+  const cards = () => Array.from(document.querySelectorAll<HTMLElement>('.compact-card-body'));
+  /** Expands entry `i` and returns its [sets, reps] inputs. */
+  function open(i: number): [HTMLInputElement, HTMLInputElement] {
+    fireEvent.click(cards()[i]);
+    const inputs = document.querySelectorAll<HTMLInputElement>('.template-exercise-config input[type="number"]');
+    return [inputs[0], inputs[1]];
+  }
+  const setValue = (el: HTMLInputElement, value: string) => fireEvent.input(el, { target: { value } });
+  /** [exercise, section, order, set, planned_reps, weight] of w_X's rows. */
+  const shape = () => rowsOf('w_X').map((r) => [r[1], r[3], r[4], r[5], r[6], r[7]]);
+  const benchReps = (order: string) => rowsOf('w_X').filter((r) => r[1] === 'ex_bench' && r[4] === order).map((r) => r[6]);
+
+  it('pre-fills Reps from the first set, as before', () => {
+    render(<WorkoutEdit workoutId="w_X" />);
+    expect(open(1)[1].value).toBe('10');
+  });
+
+  it('AC1/AC5: a name-only edit writes no Sets rows at all', async () => {
+    await saveFromEditor(() => type('planner-name', 'Push B'));
+    expect(batchCalls()).toHaveLength(0);
+    expect(sheet.Sets).toEqual(variedSets());
+  });
+
+  it('AC5: opening and saving with nothing changed writes no Sets rows', async () => {
+    await saveFromEditor();
+    expect(batchCalls()).toHaveLength(0);
+    expect(sheet.Sets).toEqual(variedSets());
+  });
+
+  it('AC1: another exercise\'s reps changed: Bench keeps 10 / 8 / 6', async () => {
+    await saveFromEditor(() => setValue(open(2)[1], '15'));
+    expect(benchReps('2')).toEqual(['10', '8', '6']);
+    expect(rowsOf('w_X').filter((r) => r[1] === 'ex_pushup').map((r) => r[6])).toEqual(['15', '15']);
+    expect(benchReps('4')).toEqual(['12', '12']);
+  });
+
+  it('AC1: removing another exercise: Bench keeps 10 / 8 / 6, weights carried', async () => {
+    await saveFromEditor(() => fireEvent.click(document.querySelectorAll<HTMLButtonElement>('[aria-label="Remove EX_PUSHUP"]')[0]));
+    expect(shape()).toEqual([
+      ['ex_squat', 'warmup', '1', '1', '', ''],
+      ['ex_bench', 'primary', '2', '1', '10', '135'],
+      ['ex_bench', 'primary', '2', '2', '8', '155'],
+      ['ex_bench', 'primary', '2', '3', '6', '175'],
+      ['ex_bench', 'primary', '3', '1', '12', '135'],
+      ['ex_bench', 'primary', '3', '2', '12', '155'],
+    ]);
+  });
+
+  it('AC1: Reps changed and changed back to 10 still counts as unchanged', async () => {
+    await saveFromEditor(() => {
+      type('planner-name', 'Push B');
+      const [, reps] = open(1);
+      setValue(reps, '12');
+      setValue(reps, '10');
+    });
+    expect(benchReps('2')).toEqual(['10', '8', '6']);
+  });
+
+  it('AC2: a changed Reps value applies to every set', async () => {
+    await saveFromEditor(() => setValue(open(1)[1], '12'));
+    expect(benchReps('2')).toEqual(['12', '12', '12']);
+  });
+
+  it('AC2: a cleared Reps value blanks every set', async () => {
+    await saveFromEditor(() => setValue(open(1)[1], ''));
+    expect(benchReps('2')).toEqual(['', '', '']);
+  });
+
+  it('AC3: Sets 3 → 4 with Reps unchanged: 10, 8, 6, then the field\'s 10', async () => {
+    await saveFromEditor(() => setValue(open(1)[0], '4'));
+    expect(benchReps('2')).toEqual(['10', '8', '6', '10']);
+  });
+
+  it('AC3: Sets 3 → 2 with Reps unchanged: 10, 8', async () => {
+    await saveFromEditor(() => setValue(open(1)[0], '2'));
+    expect(benchReps('2')).toEqual(['10', '8']);
+  });
+
+  it('AC4: moving the second Bench up keeps each entry\'s own reps', async () => {
+    await saveFromEditor(() => {
+      fireEvent.click(document.querySelectorAll<HTMLButtonElement>('[aria-label="Move EX_BENCH up"]')[1]);
+      fireEvent.click(document.querySelectorAll<HTMLButtonElement>('[aria-label="Move EX_BENCH up"]')[1]);
+    });
+    // Bench (12/12) now sits ahead of Bench (10/8/6).
+    expect(shape().map((r) => [r[0], r[2], r[4]])).toEqual([
+      ['ex_squat', '1', ''],
+      ['ex_bench', '2', '12'],
+      ['ex_bench', '2', '12'],
+      ['ex_bench', '3', '10'],
+      ['ex_bench', '3', '8'],
+      ['ex_bench', '3', '6'],
+      ['ex_pushup', '4', '12'],
+      ['ex_pushup', '4', '12'],
+    ]);
+  });
+
+  it('AC4: moving the first Bench down keeps each entry\'s own reps', async () => {
+    await saveFromEditor(() => {
+      fireEvent.click(document.querySelectorAll<HTMLButtonElement>('[aria-label="Move EX_BENCH down"]')[0]);
+      fireEvent.click(document.querySelectorAll<HTMLButtonElement>('[aria-label="Move EX_BENCH down"]')[0]);
+    });
+    expect(benchReps('3')).toEqual(['12', '12']);
+    expect(benchReps('4')).toEqual(['10', '8', '6']);
+  });
+
+  it('AC4: changing either entry\'s section never flattens or swaps its reps', async () => {
+    const pill = (text: string) =>
+      Array.from(document.querySelectorAll<HTMLButtonElement>('.section-picker-row button')).find((b) => b.textContent === text)!;
+    await saveFromEditor(() => {
+      open(3);
+      fireEvent.click(pill('SS2'));
+      fireEvent.click(cards()[3]); // collapse
+      open(1);
+      fireEvent.click(pill('SS2'));
+    });
+    expect(shape().map((r) => [r[0], r[1], r[2], r[4]])).toEqual([
+      ['ex_squat', 'warmup', '1', ''],
+      ['ex_bench', 'SS2', '2', '10'],
+      ['ex_bench', 'SS2', '2', '8'],
+      ['ex_bench', 'SS2', '2', '6'],
+      ['ex_pushup', 'SS1', '3', '12'],
+      ['ex_pushup', 'SS1', '3', '12'],
+      ['ex_bench', 'SS2', '4', '12'],
+      ['ex_bench', 'SS2', '4', '12'],
+    ]);
+  });
+
+  it('AC5: the warmup stays one row with blank planned reps', async () => {
+    await saveFromEditor(() => setValue(open(2)[1], '15'));
+    expect(rowsOf('w_X').filter((r) => r[3] === 'warmup')).toEqual([setRow('w_X', 'ex_squat', 'warmup', 1, 1, '')]);
+  });
+});
+
+// ── #350: the editor's entries as the builder's ─────────────────────
+
+describe('#350: plannerToBuilderExercises', () => {
+  const BENCH = {
+    exercise_id: 'ex_bench', exercise_name: 'Bench', section: 'primary', sets: '3', reps: '10',
+    initial_reps: '10', stored_planned_reps: ['10', '8', '6'],
+  };
+
+  it('an entry whose Reps equals its pre-fill carries the stored per-set list', async () => {
+    const { plannerToBuilderExercises } = await import('./workout-edit');
+    expect(plannerToBuilderExercises([BENCH])[0].planned_reps_by_set).toEqual(['10', '8', '6']);
+  });
+
+  it('a changed Reps value carries no list', async () => {
+    const { plannerToBuilderExercises } = await import('./workout-edit');
+    expect(plannerToBuilderExercises([{ ...BENCH, reps: '12' }])[0]).not.toHaveProperty('planned_reps_by_set');
+  });
+
+  it('AC5: a newly added exercise (no stored list) gets its Reps on every set', async () => {
+    const { plannerToBuilderExercises } = await import('./workout-edit');
+    const added = { exercise_id: 'ex_row', exercise_name: 'Row', section: 'primary', sets: '3', reps: '8' };
+    const [b] = plannerToBuilderExercises([added]);
+    expect(b).toEqual({ exercise_id: 'ex_row', exercise_name: 'Row', section: 'primary', sets: 3, planned_reps: '8' });
+    await savePlannedWorkoutEdits('w_X', {}, [b], TOKEN);
+    expect(rowsOf('w_X').map((r) => r[6])).toEqual(['8', '8', '8']);
+  });
+
+  it('AC5: a uniform plan saves exactly as today', async () => {
+    await saveFromEditor(() => type('planner-name', 'Legs B'));
+    expect(batchCalls()).toHaveLength(0);
+    expect(sheet.Sets).toEqual(scheduledSets());
+  });
+});
