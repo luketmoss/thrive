@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks';
+import { useState, useId } from 'preact/hooks';
 import type { WorkoutType } from '../../api/types';
 import { useAuth } from '../../auth/auth-context';
 import { startSimpleWorkout, finishSimpleWorkout, deleteWorkout } from '../../state/actions';
@@ -30,6 +30,12 @@ const TYPE_LABELS: Record<string, string> = {
 
 export function SimpleWorkout({ workoutType, workoutId, onBack }: Props) {
   const { token } = useAuth();
+  const uid = useId();
+  const nameId = `simple-name-${uid}`;
+  const durationId = `simple-duration-${uid}`;
+  const notesId = `simple-notes-${uid}`;
+  const typeLabelId = `simple-type-label-${uid}`;
+  const effortLabelId = `simple-effort-label-${uid}`;
   const now = new Date();
 
   const todayStr = toLocalDateStr(now);
@@ -137,8 +143,9 @@ export function SimpleWorkout({ workoutType, workoutId, onBack }: Props) {
       </div>
 
       <div class="form-group">
-        <label class="form-label">Name</label>
+        <label class="form-label" htmlFor={nameId}>Name</label>
         <input
+          id={nameId}
           class="form-input"
           type="text"
           placeholder={`e.g. ${TYPE_LABELS[workoutType] || 'Workout'}`}
@@ -161,8 +168,9 @@ export function SimpleWorkout({ workoutType, workoutId, onBack }: Props) {
       </div>
 
       <div class="form-group">
-        <label class="form-label">Duration (minutes)</label>
+        <label class="form-label" htmlFor={durationId}>Duration (minutes)</label>
         <input
+          id={durationId}
           class="form-input"
           type="number"
           inputMode="numeric"
@@ -176,12 +184,13 @@ export function SimpleWorkout({ workoutType, workoutId, onBack }: Props) {
           are asked for, so the two belong together (#129 AC2). */}
       {subTypeOptions(workoutType).length > 0 && (
         <div class="form-group">
-          <label class="form-label">Type (optional)</label>
+          <span class="form-label" id={typeLabelId}>Type (optional)</span>
           <SubTypeToggle
             workoutType={workoutType}
             value={subType}
             onChange={setSubType}
             label="Activity type"
+            labelledBy={typeLabelId}
           />
         </div>
       )}
@@ -195,18 +204,20 @@ export function SimpleWorkout({ workoutType, workoutId, onBack }: Props) {
       />
 
       <div class="form-group">
-        <label class="form-label">Session Effort (optional)</label>
+        <span class="form-label" id={effortLabelId}>Session Effort (optional)</span>
         <EffortToggle
           value={effort}
           onChange={setEffort}
           size="session"
           label="Session effort"
+          labelledBy={effortLabelId}
         />
       </div>
 
       <div class="form-group">
-        <label class="form-label">Notes</label>
+        <label class="form-label" htmlFor={notesId}>Notes</label>
         <textarea
+          id={notesId}
           class="form-textarea"
           placeholder="How did it go?"
           rows={5}

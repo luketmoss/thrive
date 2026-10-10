@@ -30,6 +30,11 @@ interface Props {
   onChange: (subType: string) => void;
   /** Prefixes each button's accessible name, and names the group. */
   label?: string;
+  /**
+   * Id of a visible element that names the group. When set it replaces
+   * `label` as the group's name; the buttons still use `label`.
+   */
+  labelledBy?: string;
 }
 
 /**
@@ -44,12 +49,12 @@ interface Props {
  * incomplete. Nothing here defaults, and clearing stays reachable from every
  * value.
  */
-export function SubTypeToggle({ workoutType, value, onChange, label = 'Type' }: Props) {
+export function SubTypeToggle({ workoutType, value, onChange, label = 'Type', labelledBy }: Props) {
   const options = subTypeOptions(workoutType);
   if (options.length === 0) return null;
 
   return (
-    <div class="sub-type-toggle" role="group" aria-label={label}>
+    <div class="sub-type-toggle" role="group" aria-label={labelledBy ? undefined : label} aria-labelledby={labelledBy}>
       {options.map((option) => {
         const active = value === option;
         return (
