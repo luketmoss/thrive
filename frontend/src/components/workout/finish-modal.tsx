@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'preact/hooks';
+import { useRef } from 'preact/hooks';
+import { useModalFocus } from '../shared/use-modal-focus';
 import { EffortToggle } from '../shared/effort-toggle';
 import type { Effort } from '../../api/types';
 
@@ -23,23 +24,15 @@ export function FinishWorkoutModal({
   onCancel,
   finishing,
 }: FinishWorkoutModalProps) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Auto-focus textarea on mount
-  useEffect(() => {
-    textareaRef.current?.focus();
-  }, []);
-
-  // Escape key handler
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !finishing) {
-        onCancel();
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [finishing, onCancel]);
+  const dialog = useRef<HTMLDivElement>(null);
+  // Escape and the backdrop do nothing while the save is in flight.
+  useModalFocus(
+    dialog,
+    () => {
+      if (!finishing) onCancel();
+    },
+    { initialFocus: 'textarea' },
+  );
 
   const handleBackdropClick = (e: MouseEvent) => {
     if (finishing) return;
@@ -55,6 +48,7 @@ export function FinishWorkoutModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={HEADING_ID}
+        ref={dialog}
         style="max-width: 400px;"
       >
         <h2
@@ -67,7 +61,6 @@ export function FinishWorkoutModal({
         <div class="form-group" style="margin-bottom: var(--space-md);">
           <label class="form-label">Workout Notes (optional)</label>
           <textarea
-            ref={textareaRef}
             class="form-textarea"
             placeholder="How did it go?"
             rows={3}

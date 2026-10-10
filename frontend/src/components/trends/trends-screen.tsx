@@ -129,7 +129,6 @@ export function TrendsScreen() {
   const [groupId, setGroupId] = usePref<string>(GROUP_PREF);
   const [custom, setCustomIds] = useState<string[]>(readCustom);
   const [picking, setPicking] = useState(false);
-  const editButton = useRef<HTMLButtonElement>(null);
   const charts = useRef<HTMLDivElement>(null);
   // Set by a pointer press so the focus it causes is not mistaken for Tab arrival.
   // On touch the browser moves focus after pointerup, so it is cleared by the
@@ -181,10 +180,7 @@ export function TrendsScreen() {
     setCustomIds(ids);
     writeCustom(ids);
   };
-  const closePicker = () => {
-    setPicking(false);
-    editButton.current?.focus();
-  };
+  const closePicker = () => setPicking(false);
   // Only the tabs this group reads count: a Body group is neither held up by
   // DailyHealth nor spared by a BodyMeasurements failure. A custom set reads
   // exactly the union of its metrics' tabs, and none when nothing is picked.
@@ -335,7 +331,7 @@ export function TrendsScreen() {
         </div>
         {isCustom && (
           <div class="trends-custom-head">
-            <button type="button" class="btn btn-secondary trends-custom-edit" ref={editButton} onClick={() => setPicking(true)}>
+            <button type="button" class="btn btn-secondary trends-custom-edit" onClick={() => setPicking(true)}>
               Edit metrics
             </button>
           </div>
