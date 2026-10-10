@@ -105,3 +105,20 @@ describe('EffortToggle', () => {
     });
   });
 });
+
+// #372: optional labelledBy names the group; label still names the buttons.
+describe('EffortToggle labelledBy (#372)', () => {
+  it('names the group by the referenced element when labelledBy is set', () => {
+    const { getByRole } = render(h('div', null,
+      h('span', { id: 'lbl' }, 'Session Effort (optional)'),
+      h(EffortToggle as any, { value: '', onChange: vi.fn(), size: 'session', label: 'Session effort', labelledBy: 'lbl' })));
+    const g = getByRole('group', { name: 'Session Effort (optional)' });
+    expect(g.hasAttribute('aria-label')).toBe(false);
+    expect(getByRole('button', { name: 'Session effort: Easy' })).toBeTruthy();
+  });
+
+  it('falls back to label for the group name without labelledBy', () => {
+    const { getByRole } = renderToggle();
+    expect(getByRole('group', { name: 'Session effort' })).toBeTruthy();
+  });
+});

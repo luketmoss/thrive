@@ -217,7 +217,7 @@ describe('FinishWorkoutModal — session effort (#102)', () => {
   // AC1: nothing pre-selected, and saving untouched leaves it empty.
   it('offers the control with nothing pre-selected', () => {
     const { container } = renderWithEffort();
-    const group = container.querySelector('[aria-label="Session effort"]')!;
+    const group = container.querySelector('[role="group"]')!;
     expect(group).toBeTruthy();
     expect(group.querySelector('.active')).toBeNull();
   });
@@ -228,7 +228,7 @@ describe('FinishWorkoutModal — session effort (#102)', () => {
   it('places the effort control after the notes textarea in DOM order', () => {
     const { container } = renderWithEffort();
     const textarea = container.querySelector('textarea')!;
-    const group = container.querySelector('[aria-label="Session effort"]')!;
+    const group = container.querySelector('[role="group"]')!;
     expect(textarea.compareDocumentPosition(group) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
@@ -259,5 +259,43 @@ describe('FinishWorkoutModal — session effort (#102)', () => {
     expect(save.hasAttribute('disabled')).toBe(false);
     fireEvent.click(save);
     expect(onFinish).toHaveBeenCalled();
+  });
+});
+
+// #372: visible labels name the controls.
+describe('FinishWorkoutModal accessible names (#372)', () => {
+  afterEach(cleanup);
+  const mk = (extra: Record<string, unknown> = {}) =>
+    render(h(FinishWorkoutModal as any, {
+      notes: '', onNotesChange: vi.fn(), effort: '', onEffortChange: vi.fn(),
+      onFinish: vi.fn(), onCancel: vi.fn(), finishing: false, ...extra,
+    }));
+
+  it('names the notes textarea by its visible label, not the placeholder', () => {
+    const { getByRole } = mk();
+    const box = getByRole('textbox', { name: 'Workout Notes (optional)' });
+    expect(box.getAttribute('placeholder')).toBe('How did it go?');
+  });
+
+  it('names the effort group by its visible label', () => {
+    const { getByRole, container } = mk();
+    const group = getByRole('group', { name: 'Session Effort (optional)' });
+    expect(group.hasAttribute('aria-label')).toBe(false);
+    expect(container.querySelector('label.form-label[for]')?.textContent).toBe('Workout Notes (optional)');
+    expect([...container.querySelectorAll('label')].some((l) => /Session Effort/.test(l.textContent!))).toBe(false);
+  });
+
+  it('keeps the effort button names and pressed state', () => {
+    const { getByRole } = mk({ effort: 'Hard' });
+    expect(getByRole('button', { name: 'Session effort: Hard' }).getAttribute('aria-pressed')).toBe('true');
+    expect(getByRole('button', { name: 'Session effort: Easy' }).getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('generates distinct ids for two instances in one tree', () => {
+    const props = { notes: '', onNotesChange: vi.fn(), effort: '', onEffortChange: vi.fn(), onFinish: vi.fn(), onCancel: vi.fn(), finishing: false };
+    const { container } = render(h('div', null, h(FinishWorkoutModal as any, props), h(FinishWorkoutModal as any, props)));
+    const ids = [...container.querySelectorAll('textarea')].map((t) => t.id);
+    expect(ids.length).toBe(2);
+    expect(new Set(ids).size).toBe(2);
   });
 });

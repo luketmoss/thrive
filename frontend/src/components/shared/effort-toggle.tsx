@@ -16,6 +16,11 @@ interface Props {
    * Also names the group.
    */
   label: string;
+  /**
+   * Id of a visible element that names the group. When set it replaces
+   * `label` as the group's name; the buttons still use `label`.
+   */
+  labelledBy?: string;
 }
 
 /**
@@ -24,11 +29,11 @@ interface Props {
  * Unset is a legitimate permanent state, not a missing value — nothing here
  * defaults, and clearing is reachable from every value.
  */
-export function EffortToggle({ value, onChange, size = 'compact', label }: Props) {
+export function EffortToggle({ value, onChange, size = 'compact', label, labelledBy }: Props) {
   const session = size === 'session';
 
   return (
-    <div class={`effort-toggle${session ? ' effort-toggle-session' : ''}`} role="group" aria-label={label}>
+    <div class={`effort-toggle${session ? ' effort-toggle-session' : ''}`} role="group" aria-label={labelledBy ? undefined : label} aria-labelledby={labelledBy}>
       {EFFORTS.map((effort) => {
         const active = value === effort;
         return (
