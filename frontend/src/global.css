@@ -701,35 +701,6 @@ input, select, textarea {
   width: 100%;
 }
 
-/* ===== Plan Action Sheet ===== */
-.plan-action-sheet {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-}
-
-.plan-action-sheet-title {
-  font-size: var(--text-lg);
-  font-weight: 700;
-  margin-bottom: var(--space-xs);
-}
-
-.plan-action-sheet-note {
-  font-size: var(--text-sm);
-  color: var(--color-text-secondary);
-  margin-bottom: var(--space-sm);
-}
-
-.plan-action-sheet-actions {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-}
-
-.plan-action-sheet-btn {
-  width: 100%;
-}
-
 /* ===== Workout Builder ===== */
 .builder-body {
   padding-bottom: calc(var(--space-2xl) + 100px);
