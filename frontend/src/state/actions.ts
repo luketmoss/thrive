@@ -437,6 +437,8 @@ export async function startWorkout(
   data: { type: WorkoutType; name: string; template_id?: string; copied_from?: string; exercises?: BuilderExercise[] },
   token: string,
 ): Promise<string> {
+  // The new workout, once its row exists and it is in `workouts`.
+  let started: Workout | null = null;
   try {
     const workout = await createWorkoutApi({
       type: data.type,
@@ -448,20 +450,35 @@ export async function startWorkout(
 
     const withRow = await resolveNewWorkoutRow(workout, token);
     workouts.value = [withRow, ...workouts.value];
-    activeWorkoutId.value = workout.id;
+    started = workout;
 
     // Pre-populate sets from template, builder exercises, or empty. Only a
-    // started workout assigns the active signals from what was written (#351).
+    // started workout assigns the active signals from what was written (#351),
+    // all three together, so the id never pairs with another workout's rows (#374).
     const written = data.template_id
       ? await prepopulateSetsFromTemplate(workout.id, data.template_id, token)
       : data.exercises && data.exercises.length > 0
         ? await prepopulateSetsFromBuilder(workout.id, data.exercises, token)
         : { rows: [], warmups: [] };
-    activeWorkoutSets.value = written.rows;
-    activeWarmupExercises.value = written.warmups;
+    batch(() => {
+      activeWorkoutId.value = workout.id;
+      activeWorkoutSets.value = written.rows;
+      activeWarmupExercises.value = written.warmups;
+    });
 
     return workout.id;
   } catch (err) {
+    if (started) {
+      // The row exists (status active) but its sets did not all land: make the
+      // three signals what opening #/workout/<id> would derive for it (#374).
+      const { id, template_id } = started;
+      const ownSets = sets.value.filter((s) => s.workout_id === id);
+      batch(() => {
+        activeWorkoutId.value = id;
+        activeWorkoutSets.value = ownSets;
+        activeWarmupExercises.value = templateWarmupsToRestore(template_id, ownSets, templates.value);
+      });
+    }
     if (isReauthFailure(err)) throw err;
     showToast('Failed to start workout', 'error');
     throw err;

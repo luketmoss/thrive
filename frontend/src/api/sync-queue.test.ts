@@ -5,6 +5,7 @@ import { signal } from '@preact/signals';
 vi.mock('../state/store', () => ({
   pendingSyncCount: signal(0),
   isSyncing: signal(false),
+  activeWorkoutId: signal(null),
   activeWorkoutSets: signal([]),
   sets: signal([]),
 }));

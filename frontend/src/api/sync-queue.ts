@@ -2,7 +2,7 @@
 
 import type { WorkoutSet } from './types';
 import { appendSet, updateSet, fetchSets } from './workouts-api';
-import { pendingSyncCount, isSyncing, activeWorkoutSets, sets } from '../state/store';
+import { pendingSyncCount, isSyncing, activeWorkoutId, activeWorkoutSets, sets } from '../state/store';
 
 const STORAGE_KEY = 'gw_sync_queue';
 
@@ -84,14 +84,17 @@ export async function flushQueue(token: string): Promise<FlushResult> {
         // Update existing sheet row (AC4: PUT to prevent duplicate append)
         await updateSet(payload.sheetRow, payload, token);
         const updated: WorkoutSet & { sheetRow: number } = { ...payload };
-        activeWorkoutSets.value = activeWorkoutSets.value.map(s =>
-          s.workout_id === payload.workout_id &&
-          s.exercise_id === payload.exercise_id &&
-          s.exercise_order === payload.exercise_order &&
-          s.set_number === payload.set_number
-            ? { ...updated }
-            : s,
-        );
+        // Only the active workout's own set belongs in activeWorkoutSets (#374).
+        if (payload.workout_id === activeWorkoutId.value) {
+          activeWorkoutSets.value = activeWorkoutSets.value.map(s =>
+            s.workout_id === payload.workout_id &&
+            s.exercise_id === payload.exercise_id &&
+            s.exercise_order === payload.exercise_order &&
+            s.set_number === payload.set_number
+              ? { ...updated }
+              : s,
+          );
+        }
         sets.value = sets.value.map(s =>
           s.sheetRow === payload.sheetRow ? { ...updated } : s,
         );
@@ -100,7 +103,12 @@ export async function flushQueue(token: string): Promise<FlushResult> {
         await appendSet(payload, token);
         const allSets = await fetchSets(token);
         sets.value = allSets;
-        activeWorkoutSets.value = allSets.filter(s => s.workout_id === payload.workout_id);
+        // Re-derive the ACTIVE workout's rows (fresh sheetRows), never the
+        // queued set's: it may be from an earlier workout (#374).
+        const activeId = activeWorkoutId.value;
+        if (activeId) {
+          activeWorkoutSets.value = allSets.filter(s => s.workout_id === activeId);
+        }
       }
 
       dequeueByKey(entry.key);
