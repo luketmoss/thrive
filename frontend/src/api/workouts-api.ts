@@ -363,6 +363,10 @@ export async function updateExerciseNameInSets(
  * written in: in list order, `exercise_order` is the position, a warmup is
  * one row (set 1, blank `planned_reps`), anything else is `sets` rows with
  * the builder's reps. Weight, reps and effort are blank.
+ *
+ * An entry carrying `planned_reps_by_set` (#350) writes set `n` with entry
+ * `n - 1` of that list instead, falling back to `planned_reps` for a set the
+ * list does not cover.
  */
 export function builderExercisesToSets(workoutId: string, exercises: BuilderExercise[]): WorkoutSet[] {
   const rows: WorkoutSet[] = [];
@@ -381,7 +385,8 @@ export function builderExercisesToSets(workoutId: string, exercises: BuilderExer
       return;
     }
     for (let s = 1; s <= ex.sets; s++) {
-      rows.push({ ...base, section: ex.section || 'primary', set_number: s, planned_reps: ex.planned_reps });
+      const planned_reps = ex.planned_reps_by_set?.[s - 1] ?? ex.planned_reps;
+      rows.push({ ...base, section: ex.section || 'primary', set_number: s, planned_reps });
     }
   });
   return rows;

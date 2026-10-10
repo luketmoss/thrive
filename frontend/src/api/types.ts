@@ -96,6 +96,12 @@ export interface BuilderExercise {
   section: string;
   sets: number;
   planned_reps: string;
+  /**
+   * Per-set planned reps to write instead of `planned_reps` (#350): entry
+   * `i` is set `i + 1`. A set beyond the list gets `planned_reps`. Set only
+   * when an edited plan's entry kept its stored reps untouched.
+   */
+  planned_reps_by_set?: string[];
 }
 
 export interface Label {
