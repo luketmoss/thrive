@@ -23,7 +23,7 @@ vi.mock('../api/sync-queue', async (orig) => ({
   enqueueSet,
 }));
 
-const { saveSet } = await import('./actions');
+const { saveSet, SetRowStaleError } = await import('./actions');
 
 const row = (o: Partial<SetWithRow>): SetWithRow => ({
   workout_id: 'w1', exercise_id: 'e_row', exercise_name: 'Row BB', section: 'primary',
@@ -78,5 +78,33 @@ describe('#389 saveSet row targeting', () => {
     api.appendSet.mockRejectedValueOnce(new TypeError('Failed to fetch'));
     await expect(saveSet(ss1Edit, 'tok', -1)).rejects.toThrow(TypeError);
     expect(enqueueSet).toHaveBeenCalledWith({ ...ss1Edit, sheetRow: -1 });
+  });
+
+  describe('the own row is checked before it is written', () => {
+    it('refuses a row that now holds another exercise: nothing written or queued', async () => {
+      activeWorkoutSets.value = [row({ exercise_id: 'e_curl', exercise_name: 'Curl', sheetRow: 3 })];
+      await expect(saveSet(ss1Edit, 'tok', 3)).rejects.toBeInstanceOf(SetRowStaleError);
+      expect(api.updateSet).not.toHaveBeenCalled();
+      expect(api.appendSet).not.toHaveBeenCalled();
+      expect(enqueueSet).not.toHaveBeenCalled();
+    });
+
+    it('refuses a row missing from the workout, or holding another set number', async () => {
+      await expect(saveSet(ss1Edit, 'tok', 9)).rejects.toBeInstanceOf(SetRowStaleError);
+      await expect(saveSet({ ...ss1Edit, set_number: 2 }, 'tok', 3)).rejects.toBeInstanceOf(SetRowStaleError);
+      expect(api.updateSet).not.toHaveBeenCalled();
+    });
+
+    it('refuses the twin\'s row: same exercise and set number, other section and order', async () => {
+      // The primary copy's save, aimed by a stale row at the SS1 copy's row 3.
+      const primaryEdit = { ...ss1Edit, section: 'primary', exercise_order: 1 };
+      await expect(saveSet(primaryEdit, 'tok', 3)).rejects.toBeInstanceOf(SetRowStaleError);
+      expect(api.updateSet).not.toHaveBeenCalled();
+    });
+
+    it('accepts a section change at the same order', async () => {
+      await saveSet({ ...ss1Edit, section: 'SS2', exercise_order: 2 }, 'tok', 3);
+      expect(api.updateSet).toHaveBeenCalledWith(3, expect.objectContaining({ section: 'SS2' }), 'tok');
+    });
   });
 });

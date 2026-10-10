@@ -27,7 +27,7 @@ function parseRange(range: string) {
 }
 
 /** Every Sets write, in order: an update names its row, an append does not. */
-const writes: { kind: 'update' | 'append'; row?: number; values: Row }[] = [];
+const writes: { kind: 'update' | 'append' | 'delete'; row?: number; values: Row }[] = [];
 
 vi.mock('../../api/sheets', () => ({
   SheetsApiError: class extends Error { status = 0; },
@@ -50,7 +50,11 @@ vi.mock('../../api/sheets', () => ({
       sheet.Sets.push(row);
     }
   }),
-  sheetsDeleteRow: vi.fn(),
+  // A row delete shifts every row below it up by one, as Sheets does.
+  sheetsDeleteRow: vi.fn(async (_sheetId: number, rowIndex: number) => {
+    const [gone] = sheet.Sets.splice(rowIndex - 2, 1);
+    writes.push({ kind: 'delete', row: rowIndex, values: gone });
+  }),
   getSheetId: vi.fn(async () => 1),
 }));
 vi.mock('../../api/demo-data', () => ({
@@ -300,5 +304,65 @@ describe('#389 AC5: what does not change', () => {
     moveUp(1);
     await vi.advanceTimersByTimeAsync(3000);
     expect(writes).toHaveLength(0);
+  });
+});
+
+describe('#389 with #394: a save after a row delete never writes another set\'s row', () => {
+  // Bench S1 (row 2), Bench S2 (3), Row S1 (4), Curl S1 50x10 (5). Deleting
+  // Bench S2 shifts Row to 3 and Curl to 4; the tracker still holds 4 for Row.
+  const SPECS: Spec[] = [
+    ['e_bench', 'Bench', 'primary', 1, 1, '100', '5'],
+    ['e_bench', 'Bench', 'primary', 1, 2, '100', '5'],
+    ['e_row', 'Row', 'primary', 2, 1, '', ''],
+    ['e_curl', 'Curl', 'burnout', 3, 1, '50', '10'],
+  ];
+  const CURL = toRow(SPECS[3]);
+  const finishBtn = () => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Finish')!;
+
+  it('Remove set, then edit a set below it: Curl is not overwritten, and Finish saves Row to its own row', async () => {
+    await mount(SPECS);
+    fireEvent.click(setRows(0)[1].querySelector('.set-remove-btn')!);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sheet.Sets).toHaveLength(3);
+
+    type(1, '135');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(writes.filter((w) => w.kind !== 'delete')).toHaveLength(0);
+    expect(sheet.Sets[2]).toEqual(CURL);
+    expect(saved(1)).toBe(false);
+
+    fireEvent.click(finishBtn());
+    fireEvent.click(document.querySelector('[role="dialog"] button.btn-primary')!);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(sheet.Sets.map(brief)).toEqual([
+      ['e_bench', 'primary', 1, 1, '100'],
+      ['e_row', 'primary', 2, 1, '135'],
+      ['e_curl', 'burnout', 3, 1, '50'],
+    ]);
+  });
+
+  it('Remove exercise, then edit a set below it: no other row is written', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await mount(SPECS);
+    fireEvent.click(cards()[0].querySelector('.exercise-toolbar-remove')!);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sheet.Sets).toHaveLength(2);
+
+    type(0, '135');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(writes.filter((w) => w.kind !== 'delete')).toHaveLength(0);
+    expect(sheet.Sets[1]).toEqual(CURL);
+    vi.mocked(window.confirm).mockRestore();
+  });
+
+  it('a set above the deleted row still auto-saves to its own row', async () => {
+    await mount(SPECS);
+    fireEvent.click(setRows(0)[1].querySelector('.set-remove-btn')!);
+    await vi.advanceTimersByTimeAsync(0);
+    type(0, '110');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(writes[writes.length - 1]).toMatchObject({ kind: 'update', row: 2 });
+    expect(saved(0)).toBe(true);
+    expect(sheet.Sets[2]).toEqual(CURL);
   });
 });

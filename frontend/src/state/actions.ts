@@ -593,6 +593,14 @@ async function writePrepopulatedSets(
   return allSets.filter((s) => s.workout_id === workoutId);
 }
 
+/** `saveSet` refused a row that no longer holds the set it was given for (#389). */
+export class SetRowStaleError extends Error {
+  constructor(public readonly sheetRow: number) {
+    super(`Sets row ${sheetRow} no longer holds this set`);
+    this.name = 'SetRowStaleError';
+  }
+}
+
 /**
  * Writes one set. `ownRow` is the set's own sheet row as the caller holds it
  * (#389): given a row (> 0), that row is updated and nothing is looked up by
@@ -600,6 +608,14 @@ async function writePrepopulatedSets(
  * the row is looked up by `(exercise_id, exercise_order, set_number)` as
  * before (Finish's loop and the edit flows, #392). The offline fallback
  * queues the same row the save was aimed at.
+ *
+ * A given row is checked against `activeWorkoutSets`, which every row write
+ * and delete re-derives, before anything is written: it must hold this
+ * workout's set of the same exercise and set number, with the same section
+ * or the same order (a move changes only the order, a section change only
+ * the section). The tracker's cached row goes stale after a row delete
+ * above it (#394); a row that fails the check is never written. The save is
+ * refused instead, the set stays unsaved, and Finish saves it.
  */
 export async function saveSet(
   set: WorkoutSet,
@@ -613,6 +629,20 @@ export async function saveSet(
            s.set_number === set.set_number,
   );
   const targetRow = () => (ownRow !== undefined ? ownRow : findByOrder()?.sheetRow ?? -1);
+
+  if (ownRow !== undefined && ownRow > 0) {
+    const at = activeWorkoutSets.value.find((s) => s.sheetRow === ownRow);
+    const holdsThisSet = !!at &&
+      at.workout_id === set.workout_id &&
+      at.exercise_id === set.exercise_id &&
+      at.set_number === set.set_number &&
+      (at.section === set.section || at.exercise_order === set.exercise_order);
+    if (!holdsThisSet) {
+      showToast('Set not saved yet. It will be saved when you finish.', 'error');
+      throw new SetRowStaleError(ownRow);
+    }
+  }
+
   try {
     const row = targetRow();
 
