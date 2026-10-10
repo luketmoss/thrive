@@ -21,6 +21,13 @@ export interface PlannerExercise {
    */
   initial_reps?: string;
   stored_planned_reps?: string[];
+  /**
+   * Set only by the planned-workout editor (#380), warmups included, and
+   * never changed after open: the stored `exercise_order` this entry was
+   * built from, so its weight, reps and effort follow it on save. The
+   * planner passes it through untouched.
+   */
+  source_order?: number;
 }
 
 interface Props {

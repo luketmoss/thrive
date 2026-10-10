@@ -395,17 +395,46 @@ export function builderExercisesToSets(workoutId: string, exercises: BuilderExer
 const setKey = (s: Pick<WorkoutSet, 'exercise_id' | 'section' | 'set_number'>) =>
   `${s.exercise_id}\u0000${s.section}\u0000${s.set_number}`;
 
+const sourceKey = (exerciseId: string, order: number, setNumber: number) =>
+  `${exerciseId}\u0000${order}\u0000${setNumber}`;
+
 /**
  * The planner edits structure only, so every value it does not show is
  * carried from the stored set it replaces (#118, widened to reps and effort
- * by #349): same exercise + section + set number, warmups included. A set
- * with no stored match keeps the blanks it was built with.
+ * by #349), always from `stored` (the fresh read), never from the editor.
+ *
+ * Which stored set that is depends on where the entry came from (#380):
+ * - An entry with a `source_order` (built by the planned-workout editor from
+ *   stored rows) carries from the stored row with the same exercise, that
+ *   original `exercise_order` and the same set number, whatever its section
+ *   or position now. So a second same-section entry of a lift keeps its own
+ *   values, and a set with no such stored row is blank.
+ * - Any other entry (newly added) carries by exercise + section + set number,
+ *   first match wins, warmups included.
+ * A set with no stored match keeps the blanks it was built with.
+ *
+ * @param exercises the entries `desired` was built from by
+ *   `builderExercisesToSets`, so row `exercise_order` n is entry n - 1. Only
+ *   their `source_order` is read; it never reaches a row. Omitted, every row
+ *   uses the exercise + section + set number key.
  */
-export function carryPlannedSetValues(stored: WorkoutSet[], desired: WorkoutSet[]): WorkoutSet[] {
+export function carryPlannedSetValues(
+  stored: WorkoutSet[],
+  desired: WorkoutSet[],
+  exercises: Pick<BuilderExercise, 'source_order'>[] = [],
+): WorkoutSet[] {
   const byKey = new Map<string, WorkoutSet>();
-  for (const s of stored) if (!byKey.has(setKey(s))) byKey.set(setKey(s), s);
+  const bySource = new Map<string, WorkoutSet>();
+  for (const s of stored) {
+    if (!byKey.has(setKey(s))) byKey.set(setKey(s), s);
+    const k = sourceKey(s.exercise_id, Number(s.exercise_order), Number(s.set_number));
+    if (!bySource.has(k)) bySource.set(k, s);
+  }
   return desired.map((d) => {
-    const match = byKey.get(setKey(d));
+    const source = exercises[d.exercise_order - 1]?.source_order;
+    const match = source === undefined
+      ? byKey.get(setKey(d))
+      : bySource.get(sourceKey(d.exercise_id, source, d.set_number));
     return match ? { ...d, weight: match.weight, reps: match.reps, effort: match.effort } : d;
   });
 }
@@ -496,14 +525,21 @@ export function reconcileRequests(plan: SetsReconcilePlan, sheetId: number): obj
  * from that same read. When nothing differs, no request is made.
  *
  * @param desired the rows as `builderExercisesToSets` builds them.
+ * @param exercises the entries `desired` was built from, for each entry's
+ *   `source_order` (#380); see `carryPlannedSetValues`.
  */
-export async function replaceWorkoutSets(workoutId: string, desired: WorkoutSet[], token: string): Promise<void> {
+export async function replaceWorkoutSets(
+  workoutId: string,
+  desired: WorkoutSet[],
+  token: string,
+  exercises: Pick<BuilderExercise, 'source_order'>[] = [],
+): Promise<void> {
   if (isDemo()) return;
 
   await withReauth(token, async (t) => {
     const all = await fetchSetsRaw(t);
     const stored = all.filter((s) => s.workout_id === workoutId);
-    const plan = planSetsReconcile(stored, carryPlannedSetValues(stored, desired));
+    const plan = planSetsReconcile(stored, carryPlannedSetValues(stored, desired, exercises));
     if (isEmptyPlan(plan)) return;
     const sheetId = await getSheetId('Sets', t);
     await sheetsBatchUpdate(reconcileRequests(plan, sheetId), t);

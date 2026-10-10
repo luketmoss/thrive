@@ -169,8 +169,9 @@ describe('AC3: the planned-workout editor changes the estimate and never loses i
     expect(savePlannedWorkoutEdits.mock.calls[0][0]).toBe('w_plan');
     expect(lastPatch()).toEqual({ name: 'Upper Pull B' });
     expect(savePlannedWorkoutEdits.mock.calls[0][2]).toEqual([
-      // Reps untouched, so the stored per-set values ride along (#350).
-      { exercise_id: 'ex_row', exercise_name: 'Row BB', section: 'primary', sets: 3, planned_reps: '8', planned_reps_by_set: ['8', '8', '8'] },
+      // Reps untouched, so the stored per-set values ride along (#350), and
+      // the entry names the stored order it was built from (#380).
+      { exercise_id: 'ex_row', exercise_name: 'Row BB', section: 'primary', sets: 3, planned_reps: '8', planned_reps_by_set: ['8', '8', '8'], source_order: 1 },
     ]);
     expect(deleteWorkout).not.toHaveBeenCalled();
     expect(saveWorkoutForLater).not.toHaveBeenCalled();
