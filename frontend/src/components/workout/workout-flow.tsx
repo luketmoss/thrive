@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'preact/hooks';
 import { workouts, activeWorkoutId, activeWorkoutSets, activeWarmupExercises, sets, templates } from '../../state/store';
+import { templateWarmupsToRestore } from './template-warmups';
 import { startWorkout, saveWorkoutForLater } from '../../state/actions';
 import { useAuth } from '../../auth/auth-context';
 import { navigate } from '../../router/router';
@@ -75,23 +76,12 @@ export function WorkoutFlow({ workoutId, planDate }: Props) {
     // Load this workout's sets into activeWorkoutSets
     activeWorkoutSets.value = sets.value.filter((s) => s.workout_id === workoutId);
 
-    // Restore warmup exercises from template (exclude any already in sets)
-    if (workout.template_id) {
-      const tpl = templates.value.find((t) => t.id === workout.template_id);
-      if (tpl) {
-        const workoutSets = activeWorkoutSets.value;
-        activeWarmupExercises.value = tpl.exercises
-          .filter((ex) => ex.section === 'warmup')
-          .filter((ex) => !workoutSets.some(
-            (s) => s.exercise_id === ex.exercise_id && s.exercise_order === ex.order && s.section === 'warmup',
-          ))
-          .map((ex) => ({
-            exercise_id: ex.exercise_id,
-            exercise_name: ex.exercise_name,
-            exercise_order: ex.order,
-          }));
-      }
-    }
+    // Always reassign the warmup list from this workout alone, through the
+    // rule startPlannedWorkout uses: nothing left by another workout or a
+    // plan survives into this one (#351 AC3/AC4).
+    activeWarmupExercises.value = templateWarmupsToRestore(
+      workout.template_id, activeWorkoutSets.value, templates.value,
+    );
 
     if (workout.type === 'weight') {
       setStep('tracker');

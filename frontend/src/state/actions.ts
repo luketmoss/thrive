@@ -1,6 +1,7 @@
 import { batch } from '@preact/signals';
 import { journalEntries, journalSaveSeq, journalSavedSince, exercises, labels, templates, workouts, sets, loading, activeWorkoutId, activeWorkoutSets, activeWarmupExercises, isEditMode, showToast, syncLog, withingsSyncLog, syncRequests, syncAsk, demoSyncPressedAt, dailyHealth, bodyMeasurements, dailySummary } from './store';
-import type { HealthTabState } from './store';
+import type { HealthTabState, WarmupExerciseInfo } from './store';
+import { templateWarmupsToRestore } from '../components/workout/template-warmups';
 import type { JournalEntry } from '../api/types';
 import { fetchJournal } from '../api/journal-api';
 import { isNoteLocked } from '../panels/journal/drafts';
@@ -381,14 +382,12 @@ export async function saveWorkoutForLater(
     const withRow = await resolveNewWorkoutRow(workout, token);
     workouts.value = [withRow, ...workouts.value];
 
-    // Pre-populate set structure from template or builder exercises
+    // Write the plan's set rows. A plan is not the active workout, so the
+    // active signals are left exactly as they are, in every branch (#351 AC1).
     if (data.template_id) {
       await prepopulateSetsFromTemplate(workout.id, data.template_id, token);
     } else if (data.exercises && data.exercises.length > 0) {
       await prepopulateSetsFromBuilder(workout.id, data.exercises, token);
-    } else {
-      activeWorkoutSets.value = [];
-      activeWarmupExercises.value = [];
     }
 
     showToast('Workout saved for later', 'success');
@@ -417,25 +416,10 @@ export async function startPlannedWorkout(
     activeWorkoutId.value = workoutId;
     activeWorkoutSets.value = sets.value.filter((s) => s.workout_id === workoutId);
 
-    // Restore the template's warmups only for a plan with no warmup rows at
-    // all: one written before warmups were stored as set rows (#89). A plan
-    // with any warmup row has its warmups already, wherever the planned
-    // editor moved them, and one it removed stays removed (#349 AC5).
-    if (workout.template_id) {
-      const tpl = templates.value.find((t) => t.id === workout.template_id);
-      if (tpl) {
-        const hasWarmupRows = activeWorkoutSets.value.some((s) => s.section === 'warmup');
-        activeWarmupExercises.value = hasWarmupRows ? [] : tpl.exercises
-          .filter((ex) => ex.section === 'warmup')
-          .map((ex) => ({
-            exercise_id: ex.exercise_id,
-            exercise_name: ex.exercise_name,
-            exercise_order: ex.order,
-          }));
-      }
-    } else {
-      activeWarmupExercises.value = [];
-    }
+    // #349 AC5's rule, shared with the resume effect (#351 AC4).
+    activeWarmupExercises.value = templateWarmupsToRestore(
+      workout.template_id, activeWorkoutSets.value, templates.value,
+    );
 
     return workoutId;
   } catch (err) {
@@ -466,15 +450,15 @@ export async function startWorkout(
     workouts.value = [withRow, ...workouts.value];
     activeWorkoutId.value = workout.id;
 
-    // Pre-populate sets from template, builder exercises, or empty
-    if (data.template_id) {
-      await prepopulateSetsFromTemplate(workout.id, data.template_id, token);
-    } else if (data.exercises && data.exercises.length > 0) {
-      await prepopulateSetsFromBuilder(workout.id, data.exercises, token);
-    } else {
-      activeWorkoutSets.value = [];
-      activeWarmupExercises.value = [];
-    }
+    // Pre-populate sets from template, builder exercises, or empty. Only a
+    // started workout assigns the active signals from what was written (#351).
+    const written = data.template_id
+      ? await prepopulateSetsFromTemplate(workout.id, data.template_id, token)
+      : data.exercises && data.exercises.length > 0
+        ? await prepopulateSetsFromBuilder(workout.id, data.exercises, token)
+        : { rows: [], warmups: [] };
+    activeWorkoutSets.value = written.rows;
+    activeWarmupExercises.value = written.warmups;
 
     return workout.id;
   } catch (err) {
@@ -484,19 +468,26 @@ export async function startWorkout(
   }
 }
 
+/** What a prepopulate wrote for one workout: its set rows and its warmup list. */
+interface PrepopulatedSets {
+  rows: SetWithRow[];
+  warmups: WarmupExerciseInfo[];
+}
+
+/**
+ * Write a workout's set rows from a template and update `sets` (live and
+ * demo). Never touches the active signals: the caller decides (#351).
+ */
 async function prepopulateSetsFromTemplate(
   workoutId: string,
   templateId: string,
   token: string,
-): Promise<void> {
+): Promise<PrepopulatedSets> {
   const tpl = templates.value.find((t) => t.id === templateId);
-  if (!tpl) {
-    activeWorkoutSets.value = [];
-    return;
-  }
+  if (!tpl) return { rows: [], warmups: [] };
 
   const newSets: WorkoutSet[] = [];
-  const warmups: { exercise_id: string; exercise_name: string; exercise_order: number }[] = [];
+  const warmups: WarmupExerciseInfo[] = [];
 
   for (const ex of tpl.exercises) {
     if (ex.section === 'warmup') {
@@ -538,45 +529,36 @@ async function prepopulateSetsFromTemplate(
     }
   }
 
-  activeWarmupExercises.value = warmups;
-
-  if (isDemo()) {
-    // In demo mode, appendSets is a no-op and fetchSets returns static data
-    // that won't contain our new workout ID. Populate signals directly.
-    const baseRow = sets.value.length + 2;
-    const setsWithRows: SetWithRow[] = newSets.map((s, i) => ({
-      ...s,
-      effort: s.effort as SetWithRow['effort'],
-      sheetRow: baseRow + i,
-    }));
-    sets.value = [...sets.value, ...setsWithRows];
-    activeWorkoutSets.value = setsWithRows;
-    return;
-  }
-
-  // Batch append to Sheets
-  await appendSetsApi(newSets, token);
-
-  // Re-fetch to get correct sheetRow values
-  const allSets = await fetchSets(token);
-  sets.value = allSets;
-  activeWorkoutSets.value = allSets.filter((s) => s.workout_id === workoutId);
+  return { rows: await writePrepopulatedSets(workoutId, newSets, token), warmups };
 }
 
+/**
+ * Write a workout's set rows from builder exercises and update `sets` (live
+ * and demo). Never touches the active signals: the caller decides (#351).
+ */
 async function prepopulateSetsFromBuilder(
   workoutId: string,
   builderExercises: BuilderExercise[],
   token: string,
-): Promise<void> {
+): Promise<PrepopulatedSets> {
   // A warmup is persisted as a single set row so it survives across sessions.
   const newSets = builderExercisesToSets(workoutId, builderExercises);
   const warmups = newSets
     .filter((s) => s.section === 'warmup')
     .map((s) => ({ exercise_id: s.exercise_id, exercise_name: s.exercise_name, exercise_order: s.exercise_order }));
 
-  activeWarmupExercises.value = warmups;
+  return { rows: await writePrepopulatedSets(workoutId, newSets, token), warmups };
+}
 
+/** Append one workout's new set rows, update `sets`, and return its rows with their `sheetRow`s. */
+async function writePrepopulatedSets(
+  workoutId: string,
+  newSets: WorkoutSet[],
+  token: string,
+): Promise<SetWithRow[]> {
   if (isDemo()) {
+    // In demo mode, appendSets is a no-op and fetchSets returns static data
+    // that won't contain our new workout ID. Add the rows to `sets` directly.
     const baseRow = sets.value.length + 2;
     const setsWithRows: SetWithRow[] = newSets.map((s, i) => ({
       ...s,
@@ -584,14 +566,14 @@ async function prepopulateSetsFromBuilder(
       sheetRow: baseRow + i,
     }));
     sets.value = [...sets.value, ...setsWithRows];
-    activeWorkoutSets.value = setsWithRows;
-    return;
+    return setsWithRows;
   }
 
+  // Batch append to Sheets, then re-fetch to get correct sheetRow values
   await appendSetsApi(newSets, token);
   const allSets = await fetchSets(token);
   sets.value = allSets;
-  activeWorkoutSets.value = allSets.filter((s) => s.workout_id === workoutId);
+  return allSets.filter((s) => s.workout_id === workoutId);
 }
 
 export async function saveSet(
