@@ -1,4 +1,4 @@
-import { useRef } from 'preact/hooks';
+import { useId, useRef } from 'preact/hooks';
 import { useModalFocus } from '../shared/use-modal-focus';
 import { EffortToggle } from '../shared/effort-toggle';
 import type { Effort } from '../../api/types';
@@ -25,6 +25,9 @@ export function FinishWorkoutModal({
   finishing,
 }: FinishWorkoutModalProps) {
   const dialog = useRef<HTMLDivElement>(null);
+  const uid = useId();
+  const notesId = `finish-notes-${uid}`;
+  const effortLabelId = `finish-effort-label-${uid}`;
   // Escape and the backdrop do nothing while the save is in flight.
   useModalFocus(
     dialog,
@@ -59,8 +62,9 @@ export function FinishWorkoutModal({
         </h2>
 
         <div class="form-group" style="margin-bottom: var(--space-md);">
-          <label class="form-label">Workout Notes (optional)</label>
+          <label class="form-label" htmlFor={notesId}>Workout Notes (optional)</label>
           <textarea
+            id={notesId}
             class="form-textarea"
             placeholder="How did it go?"
             rows={3}
@@ -70,12 +74,13 @@ export function FinishWorkoutModal({
         </div>
 
         <div class="form-group" style="margin-bottom: var(--space-md);">
-          <label class="form-label">Session Effort (optional)</label>
+          <span class="form-label" id={effortLabelId}>Session Effort (optional)</span>
           <EffortToggle
             value={effort}
             onChange={onEffortChange}
             size="session"
             label="Session effort"
+            labelledBy={effortLabelId}
           />
         </div>
 
