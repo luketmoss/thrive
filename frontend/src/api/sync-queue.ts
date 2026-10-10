@@ -54,6 +54,33 @@ export function dequeueByKey(key: string): void {
   writeQueue(readQueue().filter(e => e.key !== key));
 }
 
+/**
+ * Follow a Sets row delete that landed (#394): the entry aimed at `row` was
+ * for the removed set and is dropped, and every entry aimed below it, from any
+ * workout, gets one less, as the sheet's rows did. Appends (no row) are kept.
+ */
+export function shiftQueueAfterDelete(row: number): void {
+  const queue = readQueue();
+  if (!queue.some(e => e.payload.sheetRow >= row)) return;
+  writeQueue(queue
+    .filter(e => e.payload.sheetRow !== row)
+    .map(e => e.payload.sheetRow > row
+      ? { ...e, payload: { ...e.payload, sheetRow: e.payload.sheetRow - 1 } }
+      : e));
+}
+
+/**
+ * Drop the queued append for a set with no row that was removed (#394). Only
+ * an entry with no row matches: one aimed at a row belongs to another set
+ * that happens to share the key (a duplicate's twin, a moved exercise).
+ */
+export function dropQueuedAppend(set: WorkoutSet): void {
+  const key = compositeKey(set);
+  const queue = readQueue();
+  if (!queue.some(e => e.key === key && !(e.payload.sheetRow > 0))) return;
+  writeQueue(queue.filter(e => !(e.key === key && !(e.payload.sheetRow > 0))));
+}
+
 /** Remove all queued entries. */
 export function clearQueue(): void {
   writeQueue([]);

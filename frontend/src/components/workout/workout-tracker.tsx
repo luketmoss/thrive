@@ -20,6 +20,16 @@ import { workoutToEditInputs, editInputsToPatch } from '../shared/edit-patch';
 import { EffortToggle } from '../shared/effort-toggle';
 import { newRowKey, useReorderFocus } from '../shared/reorder-focus';
 import type { MoveDirection } from '../shared/reorder-focus';
+import { shiftTrackerRows } from './row-shift';
+
+/**
+ * What removing sets from exercise `ex` does to `list`: the list after, and
+ * the sets it takes off (whose rows the tracker deletes in log mode).
+ */
+type Removal = (
+  list: TrackerExercise[],
+  ex: TrackerExercise,
+) => { exercises: TrackerExercise[]; removedSets: TrackerSet[] };
 
 interface Props {
   workoutId: string;
@@ -27,17 +37,55 @@ interface Props {
 }
 
 export function WorkoutTracker({ workoutId, workoutName }: Props) {
+  /** The row payload for removing tracker set `s` of exercise `ex`. */
+  const toSetWithRow = (ex: TrackerExercise, s: TrackerSet): SetWithRow => ({
+    workout_id: workoutId,
+    exercise_id: ex.exercise_id,
+    exercise_name: ex.exercise_name,
+    section: ex.section,
+    exercise_order: ex.exercise_order,
+    set_number: s.set_number,
+    planned_reps: s.planned_reps,
+    weight: s.weight,
+    reps: s.reps,
+    effort: s.effort,
+    sheetRow: s.sheetRow,
+  });
+
   const { token } = useAuth();
   const editMode = isEditMode.value;
   const workout = workouts.value.find((w) => w.id === workoutId);
 
-  const [exerciseList, setExerciseList] = useState<TrackerExercise[]>([]);
+  const [exerciseList, setExerciseListState] = useState<TrackerExercise[]>([]);
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [notes, setNotes] = useState(editMode ? (workout?.notes || '') : '');
   const [showFinishForm, setShowFinishForm] = useState(false);
   const reorder = useReorderFocus();
   const saveTimers = useRef<Map<string, number>>(new Map());
+
+  // #394: the latest list, ahead of the render. Every change goes through
+  // updateList, so a write that starts right after a row shift reads it here,
+  // never a list from an earlier render.
+  const listRef = useRef<TrackerExercise[]>([]);
+  const updateList = useCallback((fn: (prev: TrackerExercise[]) => TrackerExercise[]) => {
+    const next = fn(listRef.current);
+    listRef.current = next;
+    setExerciseListState(next);
+  }, []);
+
+  // #394: the tracker's writes to Sets rows (deletes and the debounced save)
+  // go out one at a time, in the order asked for. Each step reads its set from
+  // listRef when it starts. The returned promise is the step's own; the chain
+  // itself never rejects.
+  const writeChain = useRef<Promise<unknown>>(Promise.resolve());
+  const enqueueWrite = useCallback(<T,>(step: () => Promise<T>): Promise<T> => {
+    const run = writeChain.current.then(step);
+    writeChain.current = run.catch(() => undefined);
+    return run;
+  }, []);
+  // Remove set taps whose write has not finished: a repeat tap is ignored.
+  const pendingRemovals = useRef<Set<string>>(new Set());
 
   // Edit mode metadata
   // Pre-filled values, fixed at mount: a save writes only what differs (#172).
@@ -69,7 +117,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
   // skipped from activeWarmupExercises to avoid duplication.
   useEffect(() => {
     const tracked = buildExerciseList(activeWorkoutSets.value);
-    setExerciseList(mergeWarmups(tracked, activeWarmupExercises.value));
+    updateList(() => mergeWarmups(tracked, activeWarmupExercises.value));
   }, []);
 
   // Debounced save for a specific set (disabled in edit mode)
@@ -82,53 +130,57 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
     const existing = saveTimers.current.get(key);
     if (existing) clearTimeout(existing);
 
-    const timer = window.setTimeout(async () => {
+    const timer = window.setTimeout(() => {
       saveTimers.current.delete(key);
 
-      const ex = exerciseList.find(
-        (e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder,
-      );
-      if (!ex) return;
-
-      const currentSet = ex.sets.find((s) => s.set_number === set.set_number);
-      if (!currentSet) return;
-
-      try {
-        const result = await saveSet({
-          workout_id: workoutId,
-          exercise_id: exerciseId,
-          exercise_name: ex.exercise_name,
-          section: ex.section,
-          exercise_order: exerciseOrder,
-          set_number: set.set_number,
-          planned_reps: set.planned_reps,
-          weight: set.weight,
-          reps: set.reps,
-          effort: set.effort,
-        }, token);
-
-        // Mark as saved
-        setExerciseList((prev) =>
-          prev.map((e) =>
-            e.exercise_id === exerciseId && e.exercise_order === exerciseOrder
-              ? {
-                  ...e,
-                  sets: e.sets.map((s) =>
-                    s.set_number === set.set_number
-                      ? { ...s, saved: true, sheetRow: result.sheetRow }
-                      : s,
-                  ),
-                }
-              : e,
-          ),
+      // The write waits for any write ahead of it (a delete shifting rows),
+      // then reads the set from the latest list (#394).
+      void enqueueWrite(async () => {
+        const ex = listRef.current.find(
+          (e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder,
         );
-      } catch {
-        // Error toast shown by saveSet action
-      }
+        if (!ex) return;
+
+        const currentSet = ex.sets.find((s) => s.set_number === set.set_number);
+        if (!currentSet) return;
+
+        try {
+          const result = await saveSet({
+            workout_id: workoutId,
+            exercise_id: exerciseId,
+            exercise_name: ex.exercise_name,
+            section: ex.section,
+            exercise_order: exerciseOrder,
+            set_number: set.set_number,
+            planned_reps: set.planned_reps,
+            weight: set.weight,
+            reps: set.reps,
+            effort: set.effort,
+          }, token);
+
+          // Mark as saved: the exercise found above, wherever it is now.
+          updateList((prev) =>
+            prev.map((e) =>
+              e.rowKey === ex.rowKey
+                ? {
+                    ...e,
+                    sets: e.sets.map((s) =>
+                      s.set_number === set.set_number
+                        ? { ...s, saved: true, sheetRow: result.sheetRow }
+                        : s,
+                    ),
+                  }
+                : e,
+            ),
+          );
+        } catch {
+          // Error toast shown by saveSet action
+        }
+      });
     }, 1000);
 
     saveTimers.current.set(key, timer);
-  }, [token, workoutId, exerciseList, editMode]);
+  }, [token, workoutId, editMode]);
 
   const handleUpdateSet = (
     exerciseId: string,
@@ -136,7 +188,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
     setNumber: number,
     updates: Partial<TrackerSet>,
   ) => {
-    setExerciseList((prev) => {
+    updateList((prev) => {
       const next = prev.map((ex) => {
         if (ex.exercise_id !== exerciseId || ex.exercise_order !== exerciseOrder) return ex;
         return {
@@ -160,7 +212,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
   };
 
   const handleQuickFillWeight = (exerciseId: string, exerciseOrder: number, weight: string) => {
-    setExerciseList((prev) => {
+    updateList((prev) => {
       const next = applyQuickFillWeight(prev, exerciseId, exerciseOrder, weight);
       // Schedule save for filled sets that have reps (no-op in edit mode)
       if (weight) {
@@ -178,7 +230,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
   };
 
   const handleQuickFillReps = (exerciseId: string, exerciseOrder: number, reps: string) => {
-    setExerciseList((prev) => {
+    updateList((prev) => {
       const next = applyQuickFillReps(prev, exerciseId, exerciseOrder, reps);
       if (reps) {
         const ex = next.find((e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder);
@@ -195,7 +247,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
   };
 
   const handleQuickFillEffort = (exerciseId: string, exerciseOrder: number, effort: Effort | '') => {
-    setExerciseList((prev) => {
+    updateList((prev) => {
       const next = applyQuickFillEffort(prev, exerciseId, exerciseOrder, effort);
       if (effort) {
         const ex = next.find((e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder);
@@ -211,11 +263,83 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
     });
   };
 
-  const handleCopyDown = async (exerciseId: string, exerciseOrder: number, lastTimeSets: SetWithRow[]) => {
-    const ex = exerciseList.find(
+  /**
+   * Remove sets from one exercise in log mode (#394): Remove set, Copy-down
+   * onto fewer sets, Change section to warmup, Remove exercise. Runs as one
+   * tracker write. Each row is deleted bottom to top, reading the exercise
+   * (by its row key) and its rows from the latest list before every delete,
+   * and the whole list is shifted as soon as a delete lands. The removal is
+   * then applied to the list as it is at that point, so anything typed, saved
+   * or moved meanwhile is kept. A delete that fails stops it there: what was
+   * deleted stays on screen without a row, unsaved, and nothing is applied.
+   * Resolves true when the removal was applied.
+   */
+  const runRemoval = (rowKey: string, removal: Removal): Promise<boolean> =>
+    enqueueWrite(async () => {
+      if (!token) return false;
+      const current = () => listRef.current.find((e) => e.rowKey === rowKey);
+      const deleted = new Set<number>(); // set numbers whose row this run deleted
+
+      for (;;) {
+        const ex = current();
+        if (!ex) return false; // already gone: a repeat tap deletes nothing
+        const next = removal(listRef.current, ex).removedSets
+          .filter((s) => s.sheetRow > 0)
+          .sort((a, b) => b.sheetRow - a.sheetRow)[0];
+        if (!next) break;
+        try {
+          await removeSet(toSetWithRow(ex, next), token);
+        } catch {
+          return false; // Error toast shown by action
+        }
+        deleted.add(next.set_number);
+        updateList((prev) => shiftTrackerRows(prev, next.sheetRow));
+      }
+
+      const ex = current();
+      if (!ex) return false;
+      // Sets that never had a row: no request, only their queued append goes.
+      for (const s of removal(listRef.current, ex).removedSets) {
+        if (deleted.has(s.set_number)) continue;
+        try {
+          await removeSet(toSetWithRow(ex, s), token);
+        } catch {
+          // Nothing was requested; nothing to undo.
+        }
+      }
+
+      const latest = current();
+      if (!latest) return false;
+      const { exercises, removedSets } = removal(listRef.current, latest);
+      for (const s of removedSets) {
+        const key = `${latest.exercise_id}__${latest.exercise_order}__${s.set_number}`;
+        const timer = saveTimers.current.get(key);
+        if (timer) {
+          clearTimeout(timer);
+          saveTimers.current.delete(key);
+        }
+      }
+      updateList(() => exercises);
+      return true;
+    });
+
+  /** A removal applied without any request: edit mode, or nothing to delete. */
+  const applyRemoval = (rowKey: string, removal: Removal) => {
+    updateList((prev) => {
+      const ex = prev.find((e) => e.rowKey === rowKey);
+      return ex ? removal(prev, ex).exercises : prev;
+    });
+  };
+
+  const findExercise = (exerciseId: string, exerciseOrder: number) =>
+    listRef.current.find(
       (e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder,
     );
-    if (!ex) return;
+
+  const handleCopyDown = async (exerciseId: string, exerciseOrder: number, lastTimeSets: SetWithRow[]) => {
+    const ex = findExercise(exerciseId, exerciseOrder);
+    if (!ex?.rowKey) return;
+    const rowKey = ex.rowKey;
 
     // AC3: Confirmation when removing sets
     if (lastTimeSets.length < ex.sets.length) {
@@ -223,47 +347,23 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
       if (!ok) return;
     }
 
-    const { exercises: updated, removedSets } = applyCopyDown(
-      exerciseList, exerciseId, exerciseOrder, lastTimeSets,
-    );
+    const removal: Removal = (list, e) =>
+      applyCopyDown(list, e.exercise_id, e.exercise_order, lastTimeSets);
 
     // In edit mode, don't delete from API — just update local state
-    if (!editMode && token) {
-      const savedRemoved = removedSets
-        .filter((s) => s.sheetRow > 0)
-        .sort((a, b) => b.sheetRow - a.sheetRow);
-      for (const s of savedRemoved) {
-        try {
-          await removeSet({
-            workout_id: workoutId,
-            exercise_id: exerciseId,
-            exercise_name: ex.exercise_name,
-            section: ex.section,
-            exercise_order: exerciseOrder,
-            set_number: s.set_number,
-            planned_reps: s.planned_reps,
-            weight: s.weight,
-            reps: s.reps,
-            effort: s.effort,
-            sheetRow: s.sheetRow,
-          }, token);
-        } catch {
-          return; // Error toast shown by action
-        }
-      }
+    if (editMode || !token || removal(listRef.current, ex).removedSets.length === 0) {
+      applyRemoval(rowKey, removal);
+    } else if (!(await runRemoval(rowKey, removal))) {
+      return;
     }
-
-    setExerciseList(updated);
 
     // Trigger auto-save for all copied sets (no-op in edit mode)
     if (!editMode) {
-      const updatedEx = updated.find(
-        (e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder,
-      );
+      const updatedEx = listRef.current.find((e) => e.rowKey === rowKey);
       if (updatedEx) {
         for (const s of updatedEx.sets) {
           if (s.weight || s.reps) {
-            setTimeout(() => debouncedSave(exerciseOrder, exerciseId, s), 0);
+            setTimeout(() => debouncedSave(updatedEx.exercise_order, updatedEx.exercise_id, s), 0);
           }
         }
       }
@@ -271,7 +371,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
   };
 
   const handleAddSet = (exerciseId: string, exerciseOrder: number) => {
-    setExerciseList((prev) =>
+    updateList((prev) =>
       prev.map((ex) => {
         if (ex.exercise_id !== exerciseId || ex.exercise_order !== exerciseOrder) return ex;
         const maxSetNum = ex.sets.reduce((max, s) => Math.max(max, s.set_number), 0);
@@ -291,83 +391,53 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
 
   const handleRemoveSet = async (exerciseId: string, exerciseOrder: number, setNumber: number) => {
     if (!token) return;
+    const ex = findExercise(exerciseId, exerciseOrder);
+    if (!ex?.rowKey) return;
+
+    const removal: Removal = (list, e) => ({
+      exercises: list.map((x) =>
+        x.rowKey === e.rowKey ? { ...x, sets: x.sets.filter((s) => s.set_number !== setNumber) } : x,
+      ),
+      removedSets: e.sets.filter((s) => s.set_number === setNumber),
+    });
 
     // In edit mode, just remove from local state — deletion happens on save
-    if (!editMode) {
-      const ex = exerciseList.find(
-        (e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder,
-      );
-      const set = ex?.sets.find((s) => s.set_number === setNumber);
-
-      if (set && set.sheetRow > 0) {
-        try {
-          await removeSet({
-            workout_id: workoutId,
-            exercise_id: exerciseId,
-            exercise_name: ex!.exercise_name,
-            section: ex!.section,
-            exercise_order: exerciseOrder,
-            set_number: setNumber,
-            planned_reps: set.planned_reps,
-            weight: set.weight,
-            reps: set.reps,
-            effort: set.effort,
-            sheetRow: set.sheetRow,
-          }, token);
-        } catch {
-          return; // Error toast shown by action
-        }
-      }
+    if (editMode) {
+      applyRemoval(ex.rowKey, removal);
+      return;
     }
 
-    setExerciseList((prev) =>
-      prev.map((e) => {
-        if (e.exercise_id !== exerciseId || e.exercise_order !== exerciseOrder) return e;
-        return { ...e, sets: e.sets.filter((s) => s.set_number !== setNumber) };
-      }),
-    );
+    // A repeat tap while the first is still going does nothing (#394).
+    const tap = `${ex.rowKey}|${setNumber}`;
+    if (pendingRemovals.current.has(tap)) return;
+    pendingRemovals.current.add(tap);
+    try {
+      await runRemoval(ex.rowKey, removal);
+    } finally {
+      pendingRemovals.current.delete(tap);
+    }
   };
 
   const handleChangeSection = async (exerciseId: string, exerciseOrder: number, newSection: string) => {
     if (!token) return;
-    const { exercises: updated, removedSets } = applyChangeSection(exerciseList, exerciseId, exerciseOrder, newSection);
+    const ex = findExercise(exerciseId, exerciseOrder);
+    if (!ex?.rowKey) return;
+
+    const removal: Removal = (list, e) =>
+      applyChangeSection(list, e.exercise_id, e.exercise_order, newSection);
 
     // In edit mode, don't delete from API
-    if (!editMode) {
-      const savedRemoved = removedSets
-        .filter((s) => s.sheetRow > 0)
-        .sort((a, b) => b.sheetRow - a.sheetRow);
-      for (const s of savedRemoved) {
-        const ex = exerciseList.find(
-          (e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder,
-        );
-        try {
-          await removeSet({
-            workout_id: workoutId,
-            exercise_id: exerciseId,
-            exercise_name: ex?.exercise_name ?? '',
-            section: ex?.section ?? '',
-            exercise_order: exerciseOrder,
-            set_number: s.set_number,
-            planned_reps: s.planned_reps,
-            weight: s.weight,
-            reps: s.reps,
-            effort: s.effort,
-            sheetRow: s.sheetRow,
-          }, token);
-        } catch {
-          return; // Error toast shown by action
-        }
-      }
+    if (editMode || removal(listRef.current, ex).removedSets.length === 0) {
+      applyRemoval(ex.rowKey, removal);
+    } else {
+      await runRemoval(ex.rowKey, removal);
     }
-
-    setExerciseList(updated);
   };
 
   // #371: position and announcement come from the current list, outside the
   // state updater; a move from an end does nothing at all.
   const handleMove = (exerciseId: string, exerciseOrder: number, dir: MoveDirection) => {
-    const sorted = [...exerciseList].sort((a, b) => a.exercise_order - b.exercise_order);
+    const sorted = [...listRef.current].sort((a, b) => a.exercise_order - b.exercise_order);
     const from = sorted.findIndex(
       (e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder,
     );
@@ -375,52 +445,32 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
     if (from < 0 || to < 0 || to >= sorted.length) return;
     const moved = sorted[from];
     const apply = dir === 'up' ? applyMoveUp : applyMoveDown;
-    setExerciseList((prev) => apply(prev, exerciseId, exerciseOrder));
+    updateList((prev) => apply(prev, exerciseId, exerciseOrder));
     reorder.moved(moved.rowKey ?? '', dir, moved.exercise_name, to + 1, sorted.length);
   };
 
   const handleRemoveExercise = async (exerciseId: string, exerciseOrder: number) => {
     if (!token) return;
-    const ex = exerciseList.find(
-      (e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder,
-    );
-    if (!ex) return;
+    const ex = findExercise(exerciseId, exerciseOrder);
+    if (!ex?.rowKey) return;
 
     if (!confirm(`Remove ${ex.exercise_name}? Logged sets will be deleted.`)) return;
 
-    // In edit mode, just remove locally — deletion happens on save
-    if (!editMode) {
-      const savedSets = ex.sets
-        .filter((s) => s.sheetRow > 0)
-        .sort((a, b) => b.sheetRow - a.sheetRow);
-      for (const s of savedSets) {
-        try {
-          await removeSet({
-            workout_id: workoutId,
-            exercise_id: exerciseId,
-            exercise_name: ex.exercise_name,
-            section: ex.section,
-            exercise_order: exerciseOrder,
-            set_number: s.set_number,
-            planned_reps: s.planned_reps,
-            weight: s.weight,
-            reps: s.reps,
-            effort: s.effort,
-            sheetRow: s.sheetRow,
-          }, token);
-        } catch {
-          return; // Error toast shown by action
-        }
-      }
-    }
+    const removal: Removal = (list, e) => ({
+      exercises: list.filter((x) => x.rowKey !== e.rowKey),
+      removedSets: e.sets,
+    });
 
-    setExerciseList((prev) =>
-      prev.filter((e) => !(e.exercise_id === exerciseId && e.exercise_order === exerciseOrder)),
-    );
+    // In edit mode, just remove locally — deletion happens on save
+    if (editMode) {
+      applyRemoval(ex.rowKey, removal);
+    } else {
+      await runRemoval(ex.rowKey, removal);
+    }
   };
 
   const handleAddExercise = (ex: ExerciseWithRow) => {
-    const maxOrder = exerciseList.reduce((max, e) => Math.max(max, e.exercise_order), 0);
+    const maxOrder = listRef.current.reduce((max, e) => Math.max(max, e.exercise_order), 0);
     const newExercise: TrackerExercise = {
       exercise_id: ex.id,
       exercise_name: ex.name,
@@ -440,7 +490,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
       quickFillReps: '',
       quickFillEffort: '',
     };
-    setExerciseList((prev) => [...prev, newExercise]);
+    updateList((prev) => [...prev, newExercise]);
     setShowExercisePicker(false);
   };
 
@@ -461,7 +511,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
     setFinishing(true);
     try {
       // Every set, warmups included: a stored set left out is deleted (#177).
-      const editedSets = collectEditedSets(exerciseList);
+      const editedSets = collectEditedSets(listRef.current);
 
       await saveWorkoutEdits(
         workoutId,
@@ -487,26 +537,30 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
     try {
       await flushPendingSaves();
 
-      // Save any unsaved sets with data (skip warmup exercises — they are list-only)
-      for (const ex of exerciseList) {
-        if (isWarmupExercise(ex)) continue;
-        for (const set of ex.sets) {
-          if (!set.saved && (set.weight || set.reps)) {
-            await saveSet({
-              workout_id: workoutId,
-              exercise_id: ex.exercise_id,
-              exercise_name: ex.exercise_name,
-              section: ex.section,
-              exercise_order: ex.exercise_order,
-              set_number: set.set_number,
-              planned_reps: set.planned_reps,
-              weight: set.weight,
-              reps: set.reps,
-              effort: set.effort,
-            }, token);
+      // Save any unsaved sets with data (skip warmup exercises — they are
+      // list-only). One more tracker write: it starts only once every write
+      // ahead of it has finished, and reads the list as they left it (#394).
+      await enqueueWrite(async () => {
+        for (const ex of listRef.current) {
+          if (isWarmupExercise(ex)) continue;
+          for (const set of ex.sets) {
+            if (!set.saved && (set.weight || set.reps)) {
+              await saveSet({
+                workout_id: workoutId,
+                exercise_id: ex.exercise_id,
+                exercise_name: ex.exercise_name,
+                section: ex.section,
+                exercise_order: ex.exercise_order,
+                set_number: set.set_number,
+                planned_reps: set.planned_reps,
+                weight: set.weight,
+                reps: set.reps,
+                effort: set.effort,
+              }, token);
+            }
           }
         }
-      }
+      });
 
       await finishWorkout(workoutId, notes, finishEffort, token);
       navigate('/activities');

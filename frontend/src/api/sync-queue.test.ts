@@ -24,6 +24,8 @@ import {
   clearQueue,
   initPendingCount,
   flushQueue,
+  shiftQueueAfterDelete,
+  dropQueuedAppend,
 } from './sync-queue';
 import type { WorkoutSet } from './types';
 import * as store from '../state/store';
@@ -208,5 +210,46 @@ describe('flushQueue', () => {
     expect(readQueue()).toHaveLength(0);
     expect(store.pendingSyncCount.value).toBe(0);
     expect(store.isSyncing.value).toBe(false);
+  });
+});
+
+// ── #394: the queue follows a Sets row delete ──
+
+describe('shiftQueueAfterDelete (#394)', () => {
+  it('drops the entry aimed at the deleted row and gives every entry below it one less, from any workout', () => {
+    enqueueSet(makeSet({ set_number: 1, sheetRow: 3 }));
+    enqueueSet(makeSet({ set_number: 2, sheetRow: 4 }));
+    enqueueSet(makeSet({ workout_id: 'w2', sheetRow: 9 }));
+    enqueueSet(makeSet({ set_number: 3, sheetRow: -1 }));
+    enqueueSet(makeSet({ set_number: 4, sheetRow: 2 }));
+    shiftQueueAfterDelete(3);
+    expect(readQueue().map((e) => [e.payload.workout_id, e.payload.set_number, e.payload.sheetRow])).toEqual([
+      ['w1', 2, 3],
+      ['w2', 1, 8],
+      ['w1', 3, -1],
+      ['w1', 4, 2],
+    ]);
+    expect(store.pendingSyncCount.value).toBe(4);
+  });
+
+  it('leaves a queue with nothing at or below the row as it was', () => {
+    enqueueSet(makeSet({ sheetRow: 2 }));
+    shiftQueueAfterDelete(5);
+    expect(readQueue().map((e) => e.payload.sheetRow)).toEqual([2]);
+  });
+});
+
+describe('dropQueuedAppend (#394)', () => {
+  it('drops the removed set\'s queued append', () => {
+    enqueueSet(makeSet({ set_number: 2, sheetRow: -1 }));
+    enqueueSet(makeSet({ set_number: 1, sheetRow: 2 }));
+    dropQueuedAppend(makeSet({ set_number: 2 }));
+    expect(readQueue().map((e) => e.payload.set_number)).toEqual([1]);
+  });
+
+  it('never drops an entry aimed at a row, even under the same key (a twin or a moved exercise)', () => {
+    enqueueSet(makeSet({ set_number: 1, sheetRow: 5 }));
+    dropQueuedAppend(makeSet({ set_number: 1 }));
+    expect(readQueue().map((e) => e.payload.sheetRow)).toEqual([5]);
   });
 });

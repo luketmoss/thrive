@@ -10,7 +10,7 @@ import { demoSyncNowScenario } from '../api/sync-now-demo';
 import { fetchSyncLog, fetchWithingsSyncLog } from '../api/sync-log-api';
 import { fetchDailyHealth, fetchBodyMeasurements, fetchDailySummary } from '../api/health-api';
 import { SyncLogNotSetUpError } from '../api/sync-log-errors';
-import { enqueueSet, initPendingCount } from '../api/sync-queue';
+import { enqueueSet, initPendingCount, shiftQueueAfterDelete, dropQueuedAppend } from '../api/sync-queue';
 import { isDemo } from '../api/demo-data';
 import { throttled } from './page-visible';
 import { fetchExercises, createExercise, updateExercise as updateExerciseApi, deleteExercise as deleteExerciseApi } from '../api/exercises-api';
@@ -654,24 +654,51 @@ export async function saveSet(
   }
 }
 
+/**
+ * Rows after Sets row `row` was deleted (#394): the row's set is gone and
+ * every set below it holds one less, as in the sheet.
+ */
+export function dropAndShiftRows<T extends { sheetRow: number }>(rows: T[], row: number): T[] {
+  return rows
+    .filter((s) => s.sheetRow !== row)
+    .map((s) => (s.sheetRow > row ? { ...s, sheetRow: s.sheetRow - 1 } : s));
+}
+
+/**
+ * Delete a set's Sets row. Resolves once the delete has landed and `sets`,
+ * `activeWorkoutSets` and the offline queue follow it; rejects (with the
+ * "Failed to remove set" toast) having shifted nothing.
+ */
 export async function removeSet(
   set: SetWithRow,
   token: string,
 ): Promise<void> {
   try {
     if (set.sheetRow > 0) {
-      await deleteSetRow(set.sheetRow, token);
-      // Re-fetch to get correct sheetRow values
-      const allSets = await fetchSets(token);
-      sets.value = allSets;
-      activeWorkoutSets.value = allSets.filter((s) => s.workout_id === set.workout_id);
+      const row = set.sheetRow;
+      await deleteSetRow(row, token);
+      // The delete landed: every row below it moved up by one. Follow that
+      // here, as the tracker does, rather than re-fetching (#394): the same
+      // rule keeps memory and the tracker in step, and in demo mode, where
+      // nothing is deleted, a re-fetch would return the static data.
+      batch(() => {
+        sets.value = dropAndShiftRows(sets.value, row);
+        activeWorkoutSets.value = dropAndShiftRows(activeWorkoutSets.value, row);
+      });
+      try {
+        shiftQueueAfterDelete(row);
+      } catch {
+        // Storage unavailable: there is no queue to shift.
+      }
     } else {
-      // Not yet saved — just remove from local state
-      activeWorkoutSets.value = activeWorkoutSets.value.filter(
-        (s) => !(s.exercise_id === set.exercise_id &&
-                 s.exercise_order === set.exercise_order &&
-                 s.set_number === set.set_number),
-      );
+      // No row: no request, and no row in memory is touched. Never matched by
+      // exercise, order and set number, which a duplicate's twin or a moved
+      // exercise's row can share (#394). Only its queued append goes.
+      try {
+        dropQueuedAppend(set);
+      } catch {
+        // Storage unavailable: there is no queue to drop it from.
+      }
     }
   } catch (err) {
     if (isReauthFailure(err)) throw err;
