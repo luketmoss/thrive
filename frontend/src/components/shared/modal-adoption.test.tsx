@@ -1,4 +1,4 @@
-// #339: ConfirmModal, FinishWorkoutModal, PlanActionSheet and
+// #339: ConfirmModal, FinishWorkoutModal and
 // CustomMetricsPicker all run on useModalFocus: focus in, Tab trap, Escape,
 // focus back to the opener, busy guard, labelled dialog.
 import { describe, it, expect, afterEach, vi } from 'vitest';
@@ -7,7 +7,6 @@ import { h } from 'preact';
 import { useState } from 'preact/hooks';
 import { ConfirmModal } from './confirm-modal';
 import { FinishWorkoutModal } from '../workout/finish-modal';
-import { PlanActionSheet } from '../workout/plan-action-sheet';
 import { CustomMetricsPicker } from '../trends/custom-metrics-picker';
 
 afterEach(cleanup);
@@ -107,37 +106,6 @@ describe('FinishWorkoutModal', () => {
     render(h(FinishWorkoutModal as any, props({ onCancel })));
     fireEvent.keyDown(document.querySelector('textarea')!, { key: 'Escape', isComposing: true });
     expect(onCancel).not.toHaveBeenCalled();
-  });
-});
-
-describe('PlanActionSheet (no caller in the app; covered by test only)', () => {
-  const props = (over = {}) => ({
-    workoutName: 'Push day', starting: false, saving: false,
-    onStartNow: () => {}, onSaveForLater: () => {}, onCancel: () => {}, ...over,
-  });
-
-  it('focuses Start Now, traps Tab, is labelled, and returns focus on Escape', () => {
-    const opener = harness((c) => h(PlanActionSheet as any, props({ onCancel: c })));
-    const buttons = dialogOf().querySelectorAll('button');
-    expect(document.activeElement).toBe(buttons[0]);
-    expect(buttons[0].textContent).toBe('Start Now');
-    expectLabelled();
-    buttons[2].focus();
-    fireEvent.keyDown(document, { key: 'Tab' });
-    expect(document.activeElement).toBe(buttons[0]);
-    fireEvent.keyDown(document, { key: 'Escape' });
-    expect(document.activeElement).toBe(opener);
-  });
-
-  it.each([['starting'], ['saving']])('ignores Escape and the backdrop while %s', (flag) => {
-    const onCancel = vi.fn();
-    const r = render(h(PlanActionSheet as any, props({ onCancel, [flag]: true })));
-    fireEvent.keyDown(document, { key: 'Escape' });
-    fireEvent.click(document.querySelector('.modal-overlay')!);
-    expect(onCancel).not.toHaveBeenCalled();
-    r.rerender(h(PlanActionSheet as any, props({ onCancel })));
-    fireEvent.keyDown(document, { key: 'Escape' });
-    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 });
 
