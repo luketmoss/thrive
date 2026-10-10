@@ -65,3 +65,15 @@ describe('Editor control touch targets (#321)', () => {
     expect(css).not.toMatch(/\.template-exercise-row/);
   });
 });
+
+describe('Move buttons at the ends (#328)', () => {
+  it('dims only the glyph of an aria-disabled button, so its focus ring stays visible', () => {
+    expect(rule('.reorder-btn[aria-disabled="true"] > span')).toMatch(/opacity:\s*0\.25/);
+    expect(rule('.reorder-btn[aria-disabled="true"]')).not.toMatch(/opacity/);
+  });
+
+  it('gives an aria-disabled button no hover background', () => {
+    expect(css).toMatch(/\.reorder-btn:hover:not\(:disabled\):not\(\[aria-disabled="true"\]\)\s*\{/);
+    expect(css).not.toMatch(/\.reorder-btn:hover:not\(:disabled\)\s*\{/);
+  });
+});

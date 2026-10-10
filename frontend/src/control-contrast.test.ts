@@ -183,7 +183,8 @@ describe('AC4: nothing interactive is dimmed with opacity', () => {
       return o !== undefined && parseFloat(o) < 1;
     })
     .map(({ selector }) => selector)
-    .filter((selector) => !/:disabled/.test(selector) && !/^(from|to|\d+%)$/.test(selector) && !ALLOWED.includes(selector));
+    // An aria-disabled control (#328) is disabled too; it only keeps focus.
+    .filter((selector) => !/:disabled|\[aria-disabled="true"\]/.test(selector) &&!/^(from|to|\d+%)$/.test(selector) && !ALLOWED.includes(selector));
 
   it('only disabled controls and the allowlisted pill hover set opacity < 1', () => {
     expect(offenders).toEqual([]);

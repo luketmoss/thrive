@@ -40,14 +40,22 @@ export function ExerciseCompactCard({
           ? `${reps} reps`
           : '';
 
+  // At an end the button is aria-disabled, not disabled (#328): it keeps focus
+  // after a move puts the row there, and activating it does nothing.
+  const atTop = index === 0;
+  const atBottom = index === total - 1;
+
   return (
     <div class={editable ? 'compact-card compact-card-editable' : 'compact-card'}>
       {editable && (
         <div class="compact-card-reorder">
           <button
             class="reorder-btn"
-            onClick={onMoveUp}
-            disabled={index === 0}
+            onClick={() => {
+              if (!atTop) onMoveUp?.();
+            }}
+            aria-disabled={atTop ? 'true' : undefined}
+            data-move="up"
             type="button"
             aria-label={`Move ${exerciseName} up`}
           >
@@ -55,8 +63,11 @@ export function ExerciseCompactCard({
           </button>
           <button
             class="reorder-btn"
-            onClick={onMoveDown}
-            disabled={index === total - 1}
+            onClick={() => {
+              if (!atBottom) onMoveDown?.();
+            }}
+            aria-disabled={atBottom ? 'true' : undefined}
+            data-move="down"
             type="button"
             aria-label={`Move ${exerciseName} down`}
           >
