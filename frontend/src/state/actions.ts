@@ -622,6 +622,19 @@ export async function saveSet(
       // Append new row
       await appendSetApi(set, token);
 
+      if (isDemo()) {
+        // In demo mode the append is a no-op and a re-fetch returns static
+        // data without this row: add it in memory, one row below the last, as
+        // writePrepopulatedSets does, so a resume shows it (#394 AC4).
+        const lastRow = sets.value.reduce((max, s) => Math.max(max, s.sheetRow), 1);
+        const added: SetWithRow = { ...set, effort: set.effort as SetWithRow['effort'], sheetRow: lastRow + 1 };
+        batch(() => {
+          sets.value = [...sets.value, added];
+          activeWorkoutSets.value = [...activeWorkoutSets.value, added];
+        });
+        return added;
+      }
+
       // Re-fetch to get correct sheetRow
       const allSets = await fetchSets(token);
       sets.value = allSets;

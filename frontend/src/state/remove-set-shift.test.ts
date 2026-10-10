@@ -37,7 +37,7 @@ vi.mock('../api/demo-data', () => ({
 }));
 vi.mock('../auth/reauth', () => ({ attemptReauth: vi.fn(), ReauthFailedError: class extends Error {} }));
 
-const { removeSet, dropAndShiftRows } = await import('./actions');
+const { removeSet, saveSet, dropAndShiftRows } = await import('./actions');
 const { enqueueSet, readQueue, clearQueue } = await import('../api/sync-queue');
 
 const row = (w: string, ex: string, order: number, n: number, sheetRow: number): SetWithRow => ({
@@ -128,6 +128,23 @@ describe('#394 AC4: removeSet shifts memory instead of re-fetching', () => {
     ]);
     await removeSet({ ...ALL[2], set_number: 2, sheetRow: -1 }, 'tok');
     expect(readQueue().map((e) => e.payload.sheetRow)).toEqual([2]);
+  });
+});
+
+describe('#394 AC4: demo mode keeps a Build Custom workout\'s sets for a resume', () => {
+  it('a demo append is kept in memory below the last row, and a later remove shifts it like any other', async () => {
+    demo = true;
+    sets.value = [row('w0', 'e_bench', 1, 1, 2)];
+    activeWorkoutSets.value = [];
+    const { sheetRow: _r, ...first } = row('w1', 'e_bench', 1, 1, 0);
+    const a = await saveSet(first, 'tok');
+    const b = await saveSet({ ...first, set_number: 2 }, 'tok');
+    expect([a.sheetRow, b.sheetRow]).toEqual([3, 4]);
+    expect(calls).toEqual([]);
+    expect(rows(activeWorkoutSets.value)).toEqual([['w1', 'e_bench', 1, 3], ['w1', 'e_bench', 2, 4]]);
+
+    await removeSet(a, 'tok');
+    expect(rows(sets.value.filter((s) => s.workout_id === 'w1'))).toEqual([['w1', 'e_bench', 2, 3]]);
   });
 });
 
