@@ -36,7 +36,6 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
   const [showFinishForm, setShowFinishForm] = useState(false);
   const [reorderAnnouncement, setReorderAnnouncement] = useState('');
   const saveTimers = useRef<Map<string, number>>(new Map());
-  const finishBtnRef = useRef<HTMLButtonElement>(null);
 
   // Edit mode metadata
   // Pre-filled values, fixed at mount: a save writes only what differs (#172).
@@ -576,7 +575,6 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
           </button>
         ) : (
           <button
-            ref={finishBtnRef}
             class="btn btn-primary"
             onClick={() => {
               // AC7: Guard against finishing with unsynced sets
@@ -685,10 +683,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
           effort={finishEffort}
           onEffortChange={setFinishEffort}
           onFinish={handleFinish}
-          onCancel={() => {
-            setShowFinishForm(false);
-            finishBtnRef.current?.focus();
-          }}
+          onCancel={() => setShowFinishForm(false)}
           finishing={finishing}
         />
       )}

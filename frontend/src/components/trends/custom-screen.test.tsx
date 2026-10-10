@@ -114,6 +114,7 @@ describe('Custom group', () => {
   it('picking applies at once, is remembered, and focus returns to Edit metrics on Done, Escape and overlay', () => {
     const { container, getByText, getByLabelText } = renderScreen();
     const edit = getByText('Edit metrics');
+    edit.focus(); // a real click focuses it; the hook restores whatever held focus
     fireEvent.click(edit);
     expect(container.querySelector('[role="dialog"]')).not.toBeNull();
     fireEvent.click(getByLabelText('Resting HR'));
@@ -124,11 +125,13 @@ describe('Custom group', () => {
     expect(container.querySelector('[role="dialog"]')).toBeNull();
     expect(document.activeElement).toBe(edit);
 
+    edit.focus();
     fireEvent.click(edit);
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(container.querySelector('[role="dialog"]')).toBeNull();
     expect(document.activeElement).toBe(edit);
 
+    edit.focus();
     fireEvent.click(edit);
     fireEvent.click(container.querySelector('.modal-overlay')!);
     expect(container.querySelector('[role="dialog"]')).toBeNull();

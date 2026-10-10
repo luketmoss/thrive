@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks';
+import { useRef, useState } from 'preact/hooks';
 import { labels, labelUsageCount } from '../../state/store';
 import { addLabel, renameLabel, updateLabelColor, removeLabel } from '../../state/actions';
 import { useAuth } from '../../auth/auth-context';
@@ -16,6 +16,7 @@ export function ManageLabelsScreen() {
   const [newName, setNewName] = useState('');
   const [newColor, setNewColor] = useState(LABEL_COLORS[0].key);
   const [saving, setSaving] = useState(false);
+  const heading = useRef<HTMLHeadingElement>(null);
   const [deletingLabel, setDeletingLabel] = useState<LabelWithRow | null>(null);
 
   const startEdit = (label: LabelWithRow) => {
@@ -60,6 +61,12 @@ export function ManageLabelsScreen() {
     if (!token || !deletingLabel) return;
     await removeLabel(deletingLabel, token);
     setDeletingLabel(null);
+    // The Delete button leaves with its row, so the modal has no opener to
+    // return to: once the render settles, land on the heading, not <body>.
+    setTimeout(() => {
+      const a = document.activeElement;
+      if (!a || a === document.body || !a.isConnected) heading.current?.focus();
+    }, 0);
   };
 
   const allLabels = labels.value;
@@ -75,7 +82,7 @@ export function ManageLabelsScreen() {
         >
           &larr;
         </button>
-        <h1>Manage Labels</h1>
+        <h1 ref={heading} tabIndex={-1}>Manage Labels</h1>
       </header>
 
       <div class="screen-body">

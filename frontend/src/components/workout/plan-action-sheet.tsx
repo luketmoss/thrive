@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'preact/hooks';
+import { useRef } from 'preact/hooks';
+import { useModalFocus } from '../shared/use-modal-focus';
 
 interface Props {
   workoutName: string;
@@ -20,29 +21,23 @@ export function PlanActionSheet({
   onCancel,
 }: Props) {
   const titleId = 'plan-action-sheet-title';
-  const firstButtonRef = useRef<HTMLButtonElement>(null);
-
-  // Focus the first button when the sheet opens
-  useEffect(() => {
-    firstButtonRef.current?.focus();
-  }, []);
-
-  // Dismiss on Escape key
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCancel();
-    };
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
-  }, [onCancel]);
+  const dialog = useRef<HTMLDivElement>(null);
+  const busy = starting || saving;
+  // Escape does nothing while starting or saving; Start Now takes focus.
+  useModalFocus(
+    dialog,
+    () => {
+      if (!busy) onCancel();
+    },
+    { initialFocus: '[data-modal-initial]' },
+  );
 
   const handleBackgroundClick = (e: MouseEvent) => {
+    if (busy) return;
     if ((e.target as HTMLElement).classList.contains('modal-overlay')) {
       onCancel();
     }
   };
-
-  const busy = starting || saving;
 
   return (
     <div class="modal-overlay" onClick={handleBackgroundClick}>
@@ -51,6 +46,7 @@ export function PlanActionSheet({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        ref={dialog}
       >
         <h2 id={titleId} class="plan-action-sheet-title">
           {workoutName}
@@ -64,7 +60,7 @@ export function PlanActionSheet({
 
         <div class="plan-action-sheet-actions">
           <button
-            ref={firstButtonRef}
+            data-modal-initial
             class="btn btn-primary plan-action-sheet-btn"
             onClick={onStartNow}
             disabled={busy}

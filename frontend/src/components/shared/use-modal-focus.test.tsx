@@ -128,3 +128,31 @@ describe('useModalFocus', () => {
     expect(document.activeElement).not.toBe($('other'));
   });
 });
+
+// #339 AC4: Escape is not stolen from an IME or a control that handled it.
+describe('useModalFocus Escape guards (#339)', () => {
+  it('does not close on an IME composition Escape', () => {
+    const onClose = vi.fn();
+    open({ onClose });
+    fireEvent.keyDown(document, { key: 'Escape', isComposing: true });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  });
+
+  it('does not close when a nested control already handled Escape', () => {
+    const onClose = vi.fn();
+    open({ onClose });
+    $('search').addEventListener('keydown', (e) => e.preventDefault());
+    $('search').focus();
+    fireEvent.keyDown($('search'), { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('does not call preventDefault itself on a plain Escape', () => {
+    const onClose = vi.fn();
+    open({ onClose });
+    const notPrevented = fireEvent.keyDown(document, { key: 'Escape' });
+    expect(notPrevented).toBe(true);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
