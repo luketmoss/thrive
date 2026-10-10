@@ -4527,3 +4527,56 @@ a.training-card {
 .trends-state:focus {
   outline: none;
 }
+
+/* ===== Forced colors (#330) =====
+   Windows High Contrast drops author backgrounds and box-shadows, so a
+   selected state drawn only that way vanishes. System colours survive, so each
+   selected control becomes Highlight / HighlightText (no size change: only
+   colour), and the streak dots get a real border. Focus rings are outlines and
+   keep working; the selected cue is a fill, never an outline (AC5). Normal
+   rendering is untouched: everything is inside this one block. */
+@media (forced-colors: active) {
+  .theme-toggle-btn.active,
+  .library-switch-btn.active,
+  .sub-type-btn.active,
+  .sub-type-toggle .sub-type-btn.active,
+  .calendar-shade-toggle .sub-type-btn.active,
+  .trends-group-btn.active,
+  .filter-chip.active,
+  .tag-badge.active,
+  .tag-badge-colored.active,
+  .label-chip-active,
+  .label-chip-active.tag-badge-colored,
+  .bottom-nav-tab.active,
+  .calendar-day-selected,
+  .week-day-viewed,
+  .section-picker-pill-active,
+  .effort-btn.active,
+  .effort-btn-easy.active,
+  .effort-btn-medium.active,
+  .effort-btn-hard.active {
+    background: Highlight !important;
+    color: HighlightText !important;
+    border-color: Highlight;
+  }
+
+  .calendar-day-selected .calendar-day-num,
+  .week-day-viewed .week-day-num,
+  .bottom-nav-tab.active .bottom-nav-label {
+    color: HighlightText !important;
+  }
+
+  .streak-dot {
+    border: 2px solid CanvasText;
+  }
+
+  .streak-dot.filled {
+    background: Highlight;
+    border-color: Highlight;
+  }
+
+  .streak-dot.today {
+    outline: 2px solid CanvasText;
+    outline-offset: 1px;
+  }
+}
