@@ -5,6 +5,7 @@ import { useAuth } from '../../auth/auth-context';
 import { navigate } from '../../router/router';
 import { AddExerciseModal } from '../exercises/add-exercise-modal';
 import { ExerciseCompactCard } from '../shared/exercise-compact-card';
+import { newRowKey, swapAt, useReorderFocus, type MoveDirection } from '../shared/reorder-focus';
 import { SectionPicker } from '../shared/section-picker';
 import type { ExerciseWithRow } from '../../api/types';
 
@@ -24,6 +25,9 @@ export function TemplateEditor({ templateId }: Props) {
   const { token } = useAuth();
   const [name, setName] = useState('');
   const [exercises, setExercises] = useState<TemplateExerciseSlot[]>([]);
+  // Client-only row identities, parallel to `exercises` (#328).
+  const [rowKeys, setRowKeys] = useState<string[]>([]);
+  const reorder = useReorderFocus();
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [editingIndex, setEditingIndex] = useState(-1);
   const [saving, setSaving] = useState(false);
@@ -48,6 +52,7 @@ export function TemplateEditor({ templateId }: Props) {
       }));
       setName(tpl.name);
       setExercises(mapped);
+      setRowKeys(mapped.map(() => newRowKey()));
       initialState.current = { name: tpl.name, exercises: JSON.stringify(mapped) };
     }
   }, [templateId]);
@@ -61,6 +66,7 @@ export function TemplateEditor({ templateId }: Props) {
       reps: '',
     };
     setExercises((prev) => [...prev, slot]);
+    setRowKeys((prev) => [...prev, newRowKey()]);
     setShowExercisePicker(false);
     setEditingIndex(exercises.length); // open config for newly added
   };
@@ -71,30 +77,19 @@ export function TemplateEditor({ templateId }: Props) {
     );
   };
 
-  const moveUp = (index: number) => {
-    if (index === 0) return;
-    setExercises((prev) => {
-      const next = [...prev];
-      [next[index - 1], next[index]] = [next[index], next[index - 1]];
-      return next;
-    });
-    if (editingIndex === index) setEditingIndex(index - 1);
-    else if (editingIndex === index - 1) setEditingIndex(index);
-  };
-
-  const moveDown = (index: number) => {
-    if (index >= exercises.length - 1) return;
-    setExercises((prev) => {
-      const next = [...prev];
-      [next[index], next[index + 1]] = [next[index + 1], next[index]];
-      return next;
-    });
-    if (editingIndex === index) setEditingIndex(index + 1);
-    else if (editingIndex === index + 1) setEditingIndex(index);
+  const move = (index: number, dir: MoveDirection) => {
+    const to = dir === 'up' ? index - 1 : index + 1;
+    if (to < 0 || to >= exercises.length) return;
+    setExercises((prev) => swapAt(prev, index, to));
+    setRowKeys((prev) => swapAt(prev, index, to));
+    if (editingIndex === index) setEditingIndex(to);
+    else if (editingIndex === to) setEditingIndex(index);
+    reorder.moved(rowKeys[index], dir, exercises[index].exercise_name, to + 1, exercises.length);
   };
 
   const removeExercise = (index: number) => {
     setExercises((prev) => prev.filter((_, i) => i !== index));
+    setRowKeys((prev) => prev.filter((_, i) => i !== index));
     if (editingIndex === index) setEditingIndex(-1);
     else if (editingIndex > index) setEditingIndex(editingIndex - 1);
   };
@@ -188,7 +183,7 @@ export function TemplateEditor({ templateId }: Props) {
         />
       </div>
 
-      <div class="compact-card-list">
+      <div class="compact-card-list" ref={reorder.listRef}>
         {exercises.length === 0 && (
           <div class="empty-state">
             <p>No exercises yet</p>
@@ -197,7 +192,7 @@ export function TemplateEditor({ templateId }: Props) {
         )}
 
         {exercises.map((ex, i) => (
-          <div key={`${ex.exercise_id}-${i}`}>
+          <div key={rowKeys[i] ?? `pos-${i}`} data-row-key={rowKeys[i]}>
             <ExerciseCompactCard
               section={ex.section}
               exerciseName={ex.exercise_name}
@@ -206,8 +201,8 @@ export function TemplateEditor({ templateId }: Props) {
               editable
               index={i}
               total={exercises.length}
-              onMoveUp={() => moveUp(i)}
-              onMoveDown={() => moveDown(i)}
+              onMoveUp={() => move(i, 'up')}
+              onMoveDown={() => move(i, 'down')}
               onClick={() => setEditingIndex(editingIndex === i ? -1 : i)}
               expanded={editingIndex === i}
               onRemove={() => removeExercise(i)}
@@ -282,6 +277,11 @@ export function TemplateEditor({ templateId }: Props) {
           </button>
         </>
       )}
+
+      {/* Mounted empty with the screen so the first move is announced (#328). */}
+      <div role="status" aria-live="polite" class="sr-only">
+        {reorder.announcement}
+      </div>
 
       {showExercisePicker && (
         <AddExerciseModal

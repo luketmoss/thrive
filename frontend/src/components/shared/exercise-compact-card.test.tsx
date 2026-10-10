@@ -68,7 +68,8 @@ describe('ExerciseCompactCard editable controls (#321)', () => {
     expect(document.querySelector('.compact-card')!.classList.contains('compact-card-editable')).toBe(true);
   });
 
-  it('first: up disabled; middle: both enabled; last: down disabled; only: both disabled', () => {
+  // #328 AC2: an end is aria-disabled, never natively disabled, so it keeps focus.
+  it('first: up unavailable; middle: both available; last: down unavailable; only: both unavailable', () => {
     const cases: [number, number, boolean, boolean][] = [
       [0, 3, true, false],
       [1, 3, false, false],
@@ -76,13 +77,31 @@ describe('ExerciseCompactCard editable controls (#321)', () => {
       [0, 1, true, true],
     ];
     for (const [index, total, upOff, downOff] of cases) {
-      const { unmount } = render(<ExerciseCompactCard {...props} index={index} total={total} />);
+      const onMoveUp = vi.fn();
+      const onMoveDown = vi.fn();
+      const { unmount } = render(
+        <ExerciseCompactCard {...props} index={index} total={total} onMoveUp={onMoveUp} onMoveDown={onMoveDown} />,
+      );
       const b = btns('Row BB');
-      expect(b.up.disabled).toBe(upOff);
-      expect(b.down.disabled).toBe(downOff);
-      expect(b.remove.disabled).toBe(false);
+      for (const el of [b.up, b.down, b.remove]) expect(el.disabled).toBe(false);
+      expect(b.up.getAttribute('aria-disabled')).toBe(upOff ? 'true' : null);
+      expect(b.down.getAttribute('aria-disabled')).toBe(downOff ? 'true' : null);
+      fireEvent.click(b.up);
+      fireEvent.click(b.down);
+      expect(onMoveUp).toHaveBeenCalledTimes(upOff ? 0 : 1);
+      expect(onMoveDown).toHaveBeenCalledTimes(downOff ? 0 : 1);
       unmount();
     }
+  });
+
+  it('an end button can hold focus and keeps its name (#328 AC2)', () => {
+    render(<ExerciseCompactCard {...props} index={0} total={3} />);
+    const b = btns('Row BB');
+    b.up.focus();
+    expect(document.activeElement).toBe(b.up);
+    expect(b.up.getAttribute('aria-label')).toBe('Move Row BB up');
+    expect(b.up.dataset.move).toBe('up');
+    expect(b.down.dataset.move).toBe('down');
   });
 
   it('controls are not inside the row body; read-only cards have none', () => {

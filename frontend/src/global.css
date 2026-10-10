@@ -1382,7 +1382,7 @@ input, select, textarea {
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 
-.reorder-btn:hover:not(:disabled) {
+.reorder-btn:hover:not(:disabled):not([aria-disabled="true"]) {
   background: var(--color-border-light);
   color: var(--color-text);
 }
@@ -1390,6 +1390,16 @@ input, select, textarea {
 .reorder-btn:disabled {
   opacity: 0.25;
   cursor: default;
+}
+
+/* #328: an end button stays focusable (aria-disabled), so only the glyph is
+   dimmed: opacity on the button itself would fade its focus ring too. */
+.reorder-btn[aria-disabled="true"] {
+  cursor: default;
+}
+
+.reorder-btn[aria-disabled="true"] > span {
+  opacity: 0.25;
 }
 
 .template-exercise-config {
