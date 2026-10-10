@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
+import { useState, useEffect, useRef, useCallback, useId } from 'preact/hooks';
 import { activeWorkoutSets, activeWarmupExercises, isEditMode, workouts, pendingSyncCount, isSyncing, showToast } from '../../state/store';
 import { saveSet, removeSet, finishWorkout, deleteWorkout, saveWorkoutEdits, exitEditMode } from '../../state/actions';
 import { flushQueue } from '../../api/sync-queue';
@@ -61,6 +61,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
   });
 
   const { token } = useAuth();
+  const effortLabelId = `tracker-edit-effort-label-${useId()}`;
   const editMode = isEditMode.value;
   const workout = workouts.value.find((w) => w.id === workoutId);
 
@@ -706,12 +707,13 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
             />
           </div>
           <div class="form-group">
-            <label class="form-label">Session Effort (optional)</label>
+            <span class="form-label" id={effortLabelId}>Session Effort (optional)</span>
             <EffortToggle
               value={editEffort}
               onChange={setEditEffort}
               size="session"
               label="Session effort"
+              labelledBy={effortLabelId}
             />
           </div>
           <div class="form-group">

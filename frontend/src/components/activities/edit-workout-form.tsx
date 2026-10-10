@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks';
+import { useState, useId } from 'preact/hooks';
 import { workouts } from '../../state/store';
 import { saveSimpleWorkoutEdits } from '../../state/actions';
 import { useAuth } from '../../auth/auth-context';
@@ -16,6 +16,9 @@ interface Props {
 
 export function EditWorkoutForm({ workoutId }: Props) {
   const { token } = useAuth();
+  const uid = useId();
+  const typeLabelId = `edit-type-label-${uid}`;
+  const effortLabelId = `edit-effort-label-${uid}`;
   const workout = workouts.value.find((w) => w.id === workoutId);
 
   // What every input was pre-filled with, fixed at mount. A save writes only
@@ -128,12 +131,13 @@ export function EditWorkoutForm({ workoutId }: Props) {
           are asked for, so the two belong together (#129 AC2). */}
       {subTypeOptions(workout.type).length > 0 && (
         <div class="form-group">
-          <label class="form-label">Type (optional)</label>
+          <span class="form-label" id={typeLabelId}>Type (optional)</span>
           <SubTypeToggle
             workoutType={workout.type}
             value={subType}
             onChange={setSubType}
             label="Activity type"
+            labelledBy={typeLabelId}
           />
         </div>
       )}
@@ -147,12 +151,13 @@ export function EditWorkoutForm({ workoutId }: Props) {
       />
 
       <div class="form-group">
-        <label class="form-label">Session Effort (optional)</label>
+        <span class="form-label" id={effortLabelId}>Session Effort (optional)</span>
         <EffortToggle
           value={effort}
           onChange={setEffort}
           size="session"
           label="Session effort"
+          labelledBy={effortLabelId}
         />
       </div>
 
