@@ -4558,10 +4558,18 @@ a.training-card {
     background: Highlight !important;
     color: HighlightText !important;
     border-color: Highlight;
+    /* Opts out of Chrome's Canvas text backplate, which would paint the label
+       HighlightText-on-Canvas (unreadable) on the Highlight fill. */
+    forced-color-adjust: none;
+  }
+
+  .bottom-nav-tab.active {
+    box-shadow: none;
   }
 
   .calendar-day-selected .calendar-day-num,
   .week-day-viewed .week-day-num,
+  .week-day-viewed .week-day-letter,
   .bottom-nav-tab.active .bottom-nav-label {
     color: HighlightText !important;
   }
