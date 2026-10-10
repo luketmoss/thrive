@@ -564,6 +564,30 @@ describe('#394 AC3: the tracker\'s writes run one at a time', () => {
       ['w1', 'e_row', 'primary', 2, 2, '100'],
     ]);
   });
+  it('a tracker opened again while a delete is in flight follows it, and its writes wait for it', async () => {
+    const first = await mount(BENCH3_ROW);
+    const g = gate();
+    deleteGate = g.p;
+    fireEvent.click(removeSetBtn(card('Bench'), 0));
+    await settle();
+    first.unmount(); // leave for Activities...
+    render(<WorkoutTracker workoutId="w1" workoutName="Push A" />); // ...and resume
+    expect(setRows(card('Bench'))).toHaveLength(3); // built before the delete landed
+    fireEvent.click(removeSetBtn(card('Row'), 0)); // queued behind the first delete
+    await settle();
+    expect(deletes()).toEqual([]);
+
+    g.open();
+    deleteGate = null;
+    await settle();
+    expect(deletes()).toEqual([2, 4]); // Row's shifted row, never w2's
+    expect(setRows(card('Bench'))).toHaveLength(2);
+    expect(sheetBrief()).toEqual([
+      ['w1', 'e_bench', 'primary', 1, 2, '145'],
+      ['w1', 'e_bench', 'primary', 1, 3, '155'],
+      ['w2', 'e_curl', 'primary', 1, 1, '30'],
+    ]);
+  });
 });
 
 describe('#394 AC4: the offline queue follows the same shift', () => {

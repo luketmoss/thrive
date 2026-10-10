@@ -22,6 +22,14 @@ import { newRowKey, useReorderFocus } from '../shared/reorder-focus';
 import type { MoveDirection } from '../shared/reorder-focus';
 import { shiftTrackerRows } from './row-shift';
 
+// #394: the tracker's writes to Sets rows go out one at a time across every
+// tracker instance, so one opened again (leave and resume) while a delete is
+// still in flight waits for it.
+let trackerWrites: Promise<unknown> = Promise.resolve();
+// Every mounted tracker but the one deleting hears of a landed row delete, so
+// a list built before it landed follows the shift too.
+const rowDeleteListeners = new Set<(row: number) => void>();
+
 /**
  * What removing sets from exercise `ex` does to `list`: the list after, and
  * the sets it takes off (whose rows the tracker deletes in log mode).
@@ -75,14 +83,22 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
   }, []);
 
   // #394: the tracker's writes to Sets rows (deletes and the debounced save)
-  // go out one at a time, in the order asked for. Each step reads its set from
-  // listRef when it starts. The returned promise is the step's own; the chain
-  // itself never rejects.
-  const writeChain = useRef<Promise<unknown>>(Promise.resolve());
+  // go out one at a time, in the order asked for (`trackerWrites`). Each step
+  // reads its set from listRef when it starts. The returned promise is the
+  // step's own; the chain itself never rejects.
   const enqueueWrite = useCallback(<T,>(step: () => Promise<T>): Promise<T> => {
-    const run = writeChain.current.then(step);
-    writeChain.current = run.catch(() => undefined);
+    const run = trackerWrites.then(step);
+    trackerWrites = run.catch(() => undefined);
     return run;
+  }, []);
+  // Another tracker's delete landed: this list was built before it, so the
+  // set that held the row was removed there; drop it, and shift the rest.
+  const onOtherRowDelete = useCallback((row: number) => {
+    updateList((prev) => shiftTrackerRows(prev, row, { drop: true }));
+  }, []);
+  useEffect(() => {
+    rowDeleteListeners.add(onOtherRowDelete);
+    return () => { rowDeleteListeners.delete(onOtherRowDelete); };
   }, []);
   // Remove set taps whose write has not finished: a repeat tap is ignored.
   const pendingRemovals = useRef<Set<string>>(new Set());
@@ -294,6 +310,9 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
         }
         deleted.add(next.set_number);
         updateList((prev) => shiftTrackerRows(prev, next.sheetRow));
+        for (const listener of rowDeleteListeners) {
+          if (listener !== onOtherRowDelete) listener(next.sheetRow);
+        }
       }
 
       const ex = current();

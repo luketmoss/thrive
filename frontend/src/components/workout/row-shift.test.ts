@@ -32,3 +32,10 @@ describe('shiftTrackerRows (#394)', () => {
     expect(out[1].sets[0].sheetRow).toBe(4);
   });
 });
+
+describe('shiftTrackerRows with drop (#394)', () => {
+  it('takes off the set that held the row and shifts the rest', () => {
+    const list = [ex('bench', 1, 'primary', [2, 3, 4])];
+    expect(view(shiftTrackerRows(list, 3, { drop: true }))).toEqual([[[2, true], [3, true]]]);
+  });
+});
