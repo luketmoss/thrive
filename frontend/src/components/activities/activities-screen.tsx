@@ -73,10 +73,11 @@ export function ActivitiesScreen() {
   const weekDistance = getWeekCardioDistance(completed, todayStr);
   const weekAscent = getWeekCardioAscent(completed, todayStr);
 
-  // AC5: the visual cells are aria-hidden and the bar carries one label, so
-  // anything added to the markup alone is silently invisible to screen
-  // readers. Every figure below appears in both.
-  const statsAriaLabel = [
+  // #329 — the visual cells are aria-hidden and the figures are read from a
+  // visually hidden paragraph (an aria-label on a role-less div is not
+  // reliably announced), so anything added to the markup alone is silently
+  // invisible to screen readers. Every figure below appears in both.
+  const statsSummary = [
     `${pluralWorkout(weekCount)} this week, ${weekMinutes} minutes.`,
     `${pluralWorkout(lastWeekCount)} last week, ${lastWeekMinutes} minutes.`,
     `${pluralWorkout(monthCount)} this month, ${monthMinutes} minutes.`,
@@ -123,19 +124,17 @@ export function ActivitiesScreen() {
             <span key={d.date} class={`streak-label${d.isToday ? ' today' : ''}`}>{d.label}</span>
           ))}
         </div>
-        <div
-          class="stats-bar"
-          aria-label={statsAriaLabel}
-        >
-          <div class="stats-bar-cell" aria-hidden="true">
+        <p class="sr-only">{statsSummary}</p>
+        <div class="stats-bar" aria-hidden="true">
+          <div class="stats-bar-cell">
             <span class="stats-bar-label">This week</span>
             <span class="stats-bar-value">{pluralWorkout(weekCount)} · {weekMinutes} min</span>
           </div>
-          <div class="stats-bar-cell stats-bar-cell--center" aria-hidden="true">
+          <div class="stats-bar-cell stats-bar-cell--center">
             <span class="stats-bar-label">Last week</span>
             <span class="stats-bar-value">{pluralWorkout(lastWeekCount)} · {lastWeekMinutes} min</span>
           </div>
-          <div class="stats-bar-cell stats-bar-cell--right" aria-hidden="true">
+          <div class="stats-bar-cell stats-bar-cell--right">
             <span class="stats-bar-label">This month</span>
             <span class="stats-bar-value">{pluralWorkout(monthCount)} · {monthMinutes} min</span>
           </div>
