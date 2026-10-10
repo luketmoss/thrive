@@ -102,6 +102,13 @@ export interface BuilderExercise {
    * when an edited plan's entry kept its stored reps untouched.
    */
   planned_reps_by_set?: string[];
+  /**
+   * The stored `exercise_order` this entry was built from (#380), set only by
+   * the planned-workout editor. The save carries each set's weight, reps and
+   * effort from the stored row at that order and set number. Never written
+   * to `Sets`: `builderExercisesToSets` does not copy it onto a row.
+   */
+  source_order?: number;
 }
 
 export interface Label {

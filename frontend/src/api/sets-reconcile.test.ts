@@ -68,6 +68,78 @@ describe('carryPlannedSetValues (#118, widened to reps and effort)', () => {
   });
 });
 
+describe('carryPlannedSetValues: by the entry\'s source_order (#380)', () => {
+  /** Bench primary at order 2 (135/155, set 1 done 8 Hard), Bench primary again at order 4 (95/95), a warmup at 1. */
+  const STORED: WorkoutSet[] = [
+    { ...builderExercisesToSets(W, [ex('bench', 'warmup', 0)])[0], weight: '45' },
+    ...builderExercisesToSets(W, [ex('warm', 'warmup', 0), ex('bench', 'primary', 2)]).slice(1).map((s, i) => ({
+      ...s, weight: ['135', '155'][i], reps: i === 0 ? '8' : '', effort: (i === 0 ? 'Hard' : '') as WorkoutSet['effort'],
+    })),
+    ...builderExercisesToSets(W, [ex('a', 'x', 0), ex('b', 'x', 0), ex('c', 'x', 0), ex('bench', 'primary', 2)])
+      .filter((s) => s.exercise_id === 'bench')
+      .map((s, i) => ({ ...s, weight: '95', reps: i === 1 ? '10' : '', effort: (i === 1 ? 'Easy' : '') as WorkoutSet['effort'] })),
+  ];
+  const src = (e: BuilderExercise, source_order?: number): BuilderExercise =>
+    (source_order === undefined ? e : { ...e, source_order });
+  const carry = (plan: BuilderExercise[], from = STORED) =>
+    carryPlannedSetValues(from, builderExercisesToSets(W, plan), plan);
+  const vals = (rows: WorkoutSet[]) => rows.map((s) => [s.exercise_order, s.set_number, s.weight, s.reps, s.effort]);
+
+  it('AC1: an untouched duplicate keeps its own values; the key path would have borrowed the first', () => {
+    const plan = [src(ex('bench', 'warmup', 0), 1), src(ex('bench', 'primary', 2), 2), src(ex('x', 'SS1', 1)), src(ex('bench', 'primary', 2), 4)];
+    expect(vals(carry(plan).filter((s) => s.exercise_id === 'bench'))).toEqual([
+      [1, 1, '45', '', ''],
+      [2, 1, '135', '8', 'Hard'], [2, 2, '155', '', ''],
+      [4, 1, '95', '', ''], [4, 2, '95', '10', 'Easy'],
+    ]);
+    // Without provenance (the old behavior), the second Bench takes 135 / 155.
+    const keyed = carryPlannedSetValues(STORED, builderExercisesToSets(W, plan));
+    expect(keyed.filter((s) => s.exercise_order === 4).map((s) => s.weight)).toEqual(['135', '155']);
+  });
+
+  it('AC2: values follow the entry when it moves', () => {
+    const plan = [src(ex('bench', 'primary', 2), 4), src(ex('bench', 'primary', 2), 2)];
+    expect(vals(carry(plan))).toEqual([
+      [1, 1, '95', '', ''], [1, 2, '95', '10', 'Easy'],
+      [2, 1, '135', '8', 'Hard'], [2, 2, '155', '', ''],
+    ]);
+  });
+
+  it('AC2: a section change keeps the values, never blanked or swapped', () => {
+    const plan = [src(ex('bench', 'SS2', 2), 2), src(ex('bench', 'SS3', 2), 4)];
+    expect(carry(plan).map((s) => s.weight)).toEqual(['135', '155', '95', '95']);
+  });
+
+  it('AC2: to warmup keeps set 1 on its one row; a warmup changed to a section keeps set 1, further sets blank', () => {
+    expect(vals(carry([src(ex('bench', 'warmup', 0), 4)]))).toEqual([[1, 1, '95', '', '']]);
+    expect(vals(carry([src(ex('bench', 'primary', 3), 1)]))).toEqual([[1, 1, '45', '', ''], [1, 2, '', '', ''], [1, 3, '', '', '']]);
+  });
+
+  it('AC3: the set count changes per entry; the other entry is unaffected', () => {
+    const grow = carry([src(ex('bench', 'primary', 2), 2), src(ex('bench', 'primary', 3), 4)]);
+    expect(grow.map((s) => s.weight)).toEqual(['135', '155', '95', '95', '']);
+    const shrink = carry([src(ex('bench', 'primary', 2), 2), src(ex('bench', 'primary', 1), 4)]);
+    expect(shrink.map((s) => s.weight)).toEqual(['135', '155', '95']);
+  });
+
+  it('AC4: values come from the rows given (the fresh read); a missing source row is blank, never key-matched', () => {
+    const fresh = STORED.map((s) => (s.exercise_order === 4 && s.set_number === 1 ? { ...s, weight: '100' } : s));
+    expect(carry([src(ex('bench', 'primary', 2), 4)], fresh).map((s) => s.weight)).toEqual(['100', '95']);
+    const gone = STORED.filter((s) => s.exercise_order !== 4);
+    expect(carry([src(ex('bench', 'primary', 2), 4)], gone).map((s) => s.weight)).toEqual(['', '']);
+  });
+
+  it('AC5: an entry without source_order still uses the exercise + section + set key', () => {
+    const plan = [src(ex('bench', 'primary', 2), 4), src(ex('bench', 'primary', 2)), src(ex('row', 'primary', 1))];
+    expect(carry(plan).map((s) => s.weight)).toEqual(['95', '95', '135', '155', '']);
+  });
+
+  it('never puts source_order on a row', () => {
+    const rows = carry([src(ex('bench', 'primary', 2), 4)]);
+    expect(rows.every((s) => !('source_order' in s))).toBe(true);
+  });
+});
+
 describe('planSetsReconcile: stored rows + desired rows → requests', () => {
   const base = builderExercisesToSets(W, PLAN); // 6 rows
   const at10 = stored(base, 10);

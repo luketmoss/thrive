@@ -63,7 +63,8 @@ export function WorkoutEdit({ workoutId }: Props) {
  * The planned-workout editor's entries as the builder's (#350). An entry
  * whose Reps still equals its pre-fill keeps each set's stored
  * `planned_reps` (a set added beyond them gets the Reps value); a changed
- * Reps value applies to every set, as it always has.
+ * Reps value applies to every set, as it always has. An entry's
+ * `source_order` (#380) is passed on so its stored values follow it.
  */
 export function plannerToBuilderExercises(exercises: PlannerExercise[]): BuilderExercise[] {
   return exercises.map((ex) => {
@@ -77,6 +78,7 @@ export function plannerToBuilderExercises(exercises: PlannerExercise[]): Builder
     if (ex.stored_planned_reps && ex.reps === ex.initial_reps) {
       out.planned_reps_by_set = ex.stored_planned_reps;
     }
+    if (ex.source_order !== undefined) out.source_order = ex.source_order;
     return out;
   });
 }
@@ -111,6 +113,7 @@ function PlannedWorkoutEditor({ workoutId }: { workoutId: string }) {
         section: 'warmup',
         sets: '',
         reps: '',
+        source_order: s.exercise_order,
       });
       continue;
     }
@@ -128,6 +131,7 @@ function PlannedWorkoutEditor({ workoutId }: { workoutId: string }) {
       reps,
       initial_reps: reps,
       stored_planned_reps: own.map((ws) => ws.planned_reps),
+      source_order: s.exercise_order,
     });
   }
 

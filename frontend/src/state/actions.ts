@@ -1144,12 +1144,12 @@ export async function savePlannedWorkoutEdits(
       // the list (screens sort by order and set number), keeping their
       // sheetRows where they can so every sheetRow stays unique.
       const own = sets.value.filter((s) => s.workout_id === workoutId);
-      const rows = carryPlannedSetValues(own, desired);
+      const rows = carryPlannedSetValues(own, desired, exercises);
       const others = sets.value.filter((s) => s.workout_id !== workoutId);
       const baseRow = Math.max(1, ...sets.value.map((s) => s.sheetRow)) + 1;
       sets.value = [...others, ...rows.map((s, i) => ({ ...s, sheetRow: own[i]?.sheetRow ?? baseRow + i }))];
     } else {
-      await replaceWorkoutSetsApi(workoutId, desired, token);
+      await replaceWorkoutSetsApi(workoutId, desired, token, exercises);
       // Inside this try on purpose: if the refetch fails the store still
       // shows the old exercises, and a retry is harmless (an unchanged plan
       // writes nothing).
