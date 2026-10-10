@@ -307,9 +307,9 @@ describe('#389 AC5: what does not change', () => {
   });
 });
 
-describe('#389 with #394: a save after a row delete never writes another set\'s row', () => {
+describe('#389 with #394: a save after a row delete writes the set\'s own, shifted row', () => {
   // Bench S1 (row 2), Bench S2 (3), Row S1 (4), Curl S1 50x10 (5). Deleting
-  // Bench S2 shifts Row to 3 and Curl to 4; the tracker still holds 4 for Row.
+  // Bench S2 shifts Row to 3 and Curl to 4; the tracker shifts its rows too.
   const SPECS: Spec[] = [
     ['e_bench', 'Bench', 'primary', 1, 1, '100', '5'],
     ['e_bench', 'Bench', 'primary', 1, 2, '100', '5'],
@@ -317,9 +317,11 @@ describe('#389 with #394: a save after a row delete never writes another set\'s 
     ['e_curl', 'Curl', 'burnout', 3, 1, '50', '10'],
   ];
   const CURL = toRow(SPECS[3]);
-  const finishBtn = () => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Finish')!;
+  const nonDeletes = () => writes.filter((w) => w.kind !== 'delete');
+  const confirmYes = () => vi.spyOn(window, 'confirm').mockReturnValue(true);
+  afterEach(() => vi.restoreAllMocks());
 
-  it('Remove set, then edit a set below it: Curl is not overwritten, and Finish saves Row to its own row', async () => {
+  it('Remove set, then edit a set below it: Row\'s own row is updated, Curl is untouched', async () => {
     await mount(SPECS);
     fireEvent.click(setRows(0)[1].querySelector('.set-remove-btn')!);
     await vi.advanceTimersByTimeAsync(0);
@@ -327,22 +329,15 @@ describe('#389 with #394: a save after a row delete never writes another set\'s 
 
     type(1, '135');
     await vi.advanceTimersByTimeAsync(1000);
-    expect(writes.filter((w) => w.kind !== 'delete')).toHaveLength(0);
+    expect(nonDeletes()).toHaveLength(1);
+    expect(nonDeletes()[0]).toMatchObject({ kind: 'update', row: 3 });
+    expect(brief(nonDeletes()[0].values)).toEqual(['e_row', 'primary', 2, 1, '135']);
     expect(sheet.Sets[2]).toEqual(CURL);
-    expect(saved(1)).toBe(false);
-
-    fireEvent.click(finishBtn());
-    fireEvent.click(document.querySelector('[role="dialog"] button.btn-primary')!);
-    await vi.advanceTimersByTimeAsync(200);
-    expect(sheet.Sets.map(brief)).toEqual([
-      ['e_bench', 'primary', 1, 1, '100'],
-      ['e_row', 'primary', 2, 1, '135'],
-      ['e_curl', 'burnout', 3, 1, '50'],
-    ]);
+    expect(saved(1)).toBe(true);
   });
 
-  it('Remove exercise, then edit a set below it: no other row is written', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+  it('Remove exercise, then edit a set below it: only that set\'s row is written', async () => {
+    confirmYes();
     await mount(SPECS);
     fireEvent.click(cards()[0].querySelector('.exercise-toolbar-remove')!);
     await vi.advanceTimersByTimeAsync(0);
@@ -350,9 +345,72 @@ describe('#389 with #394: a save after a row delete never writes another set\'s 
 
     type(0, '135');
     await vi.advanceTimersByTimeAsync(1000);
-    expect(writes.filter((w) => w.kind !== 'delete')).toHaveLength(0);
+    expect(nonDeletes()).toHaveLength(1);
+    expect(nonDeletes()[0]).toMatchObject({ kind: 'update', row: 2 });
     expect(sheet.Sets[1]).toEqual(CURL);
-    vi.mocked(window.confirm).mockRestore();
+  });
+
+  it('an edit typed while the delete is pending lands after it, on the shifted row', async () => {
+    await mount(SPECS);
+    type(1, '135');
+    await vi.advanceTimersByTimeAsync(300);
+    fireEvent.click(setRows(0)[1].querySelector('.set-remove-btn')!);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(nonDeletes()).toHaveLength(1);
+    expect(nonDeletes()[0]).toMatchObject({ kind: 'update', row: 3 });
+    expect(sheet.Sets.map(brief)).toEqual([
+      ['e_bench', 'primary', 1, 1, '100'],
+      ['e_row', 'primary', 2, 1, '135'],
+      ['e_curl', 'burnout', 3, 1, '50'],
+    ]);
+  });
+
+  it('same-section duplicates after Remove exercise above them: the edit never hits the other copy', async () => {
+    // Curl added twice mid-workout: both copies are `primary`.
+    confirmYes();
+    await mount([
+      ['e_bench', 'Bench', 'primary', 1, 1, '100', '5'],
+      ['e_curl', 'Curl', 'primary', 2, 1, '', ''],
+      ['e_curl', 'Curl', 'primary', 3, 1, '50', '10'],
+    ]);
+    fireEvent.click(cards()[0].querySelector('.exercise-toolbar-remove')!);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sheet.Sets).toHaveLength(2);
+
+    type(0, '135');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(nonDeletes()).toHaveLength(1);
+    expect(nonDeletes()[0]).toMatchObject({ kind: 'update', row: 2 });
+    expect(sheet.Sets.map(brief)).toEqual([
+      ['e_curl', 'primary', 2, 1, '135'],
+      ['e_curl', 'primary', 3, 1, '50'],
+    ]);
+    expect(sheet.Sets[1]).toEqual(toRow(['e_curl', 'Curl', 'primary', 3, 1, '50', '10']));
+    expect(saved(0)).toBe(true);
+    expect(saved(1)).toBe(true);
+  });
+
+  it('duplicates in different sections, a delete above them, a move, then typing: the SS1 copy is untouched', async () => {
+    confirmYes();
+    await mount([
+      ['e_bench', 'Bench', 'primary', 1, 1, '100', '5'],
+      ['e_row', 'Row BB', 'primary', 2, 1, '', ''],
+      ['e_row', 'Row BB', 'SS1', 3, 1, '95', '8'],
+    ]);
+    fireEvent.click(cards()[0].querySelector('.exercise-toolbar-remove')!);
+    await vi.advanceTimersByTimeAsync(0);
+    // Move the primary copy below the SS1 copy: it takes order 3.
+    fireEvent.click(cards()[0].querySelector<HTMLButtonElement>('[data-move="down"]')!);
+    expect(cards()[1].querySelector('.section-badge-btn')!.textContent).toBe('primary');
+
+    type(1, '135');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(nonDeletes()).toHaveLength(1);
+    expect(nonDeletes()[0]).toMatchObject({ kind: 'update', row: 2 });
+    expect(brief(nonDeletes()[0].values)).toEqual(['e_row', 'primary', 3, 1, '135']);
+    expect(sheet.Sets[1]).toEqual(toRow(['e_row', 'Row BB', 'SS1', 3, 1, '95', '8']));
+    expect(saved(0)).toBe(true);
+    expect(saved(1)).toBe(true);
   });
 
   it('a set above the deleted row still auto-saves to its own row', async () => {

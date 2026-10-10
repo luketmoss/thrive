@@ -613,9 +613,10 @@ export class SetRowStaleError extends Error {
  * and delete re-derives, before anything is written: it must hold this
  * workout's set of the same exercise and set number, with the same section
  * or the same order (a move changes only the order, a section change only
- * the section). The tracker's cached row goes stale after a row delete
- * above it (#394); a row that fails the check is never written. The save is
- * refused instead, the set stays unsaved, and Finish saves it.
+ * the section). A backstop: the tracker shifts its cached rows after every
+ * delete (#394), so a row should never fail it. One that does is never
+ * written or queued; the save is refused, the set stays unsaved, and Finish
+ * saves it.
  */
 export async function saveSet(
   set: WorkoutSet,
