@@ -12,6 +12,8 @@ import { activeWorkoutId, activeWorkoutSets, activeWarmupExercises, isEditMode, 
 type Row = string[];
 let sheet: { Sets: Row[] };
 let updateFailure: Error | null = null;
+/** Thrown by the next Sets append, when set. */
+let appendFailure: Error | null = null;
 
 const colIndex = (letters: string) =>
   [...letters].reduce((n, c) => n * 26 + (c.charCodeAt(0) - 64), 0) - 1;
@@ -44,6 +46,11 @@ vi.mock('../../api/sheets', () => ({
     sheet.Sets[rowStart! - 2] = row;
   }),
   sheetsAppend: vi.fn(async (_range: string, values: (string | number)[][]) => {
+    if (appendFailure) {
+      const err = appendFailure;
+      appendFailure = null;
+      throw err;
+    }
     for (const v of values) {
       const row = v.map(String);
       writes.push({ kind: 'append', values: row });
@@ -70,7 +77,7 @@ vi.mock('../../state/actions', async (orig) => ({
 }));
 
 const { WorkoutTracker } = await import('./workout-tracker');
-const { readQueue, clearQueue } = await import('../../api/sync-queue');
+const { readQueue, clearQueue, flushQueue } = await import('../../api/sync-queue');
 const { fetchSets } = await import('../../api/workouts-api');
 
 /** [exercise_id, name, section, order, set #, weight, reps] */
@@ -114,6 +121,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   writes.length = 0;
   updateFailure = null;
+  appendFailure = null;
   clearQueue();
   activeWorkoutId.value = 'w1';
   activeWarmupExercises.value = [];
@@ -422,5 +430,83 @@ describe('#389 with #394: a save after a row delete writes the set\'s own, shift
     expect(writes[writes.length - 1]).toMatchObject({ kind: 'update', row: 2 });
     expect(saved(0)).toBe(true);
     expect(sheet.Sets[2]).toEqual(CURL);
+  });
+});
+
+describe('#389: a set whose offline append the queue flushed is not appended again', () => {
+  it('Add set, append fails, queue flushes, edit again: one row, updated in place', async () => {
+    await mount(BENCH_ROW_CURL);
+    fireEvent.click(cards()[1].querySelector('.add-set-btn')!);
+    appendFailure = new TypeError('Failed to fetch');
+    type(1, '135', 1);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(readQueue()).toHaveLength(1);
+    expect(sheet.Sets).toHaveLength(3);
+    expect(saved(1, 1)).toBe(false);
+
+    await flushQueue('test-token');
+    expect(readQueue()).toHaveLength(0);
+    expect(sheet.Sets).toHaveLength(4);
+
+    type(1, '140', 1);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(sheet.Sets).toHaveLength(4);
+    expect(writes[writes.length - 1]).toMatchObject({ kind: 'update', row: 5 });
+    expect(brief(sheet.Sets[3])).toEqual(['e_row', 'primary', 2, 2, '140']);
+    expect(saved(1, 1)).toBe(true);
+
+    // And the set now holds that row: a further edit updates it again.
+    type(1, '145', 1);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(sheet.Sets).toHaveLength(4);
+    expect(writes[writes.length - 1]).toMatchObject({ kind: 'update', row: 5 });
+  });
+
+  it('the same after a move: the flushed row (old order) is taken and given the new order', async () => {
+    await mount(BENCH_ROW_CURL);
+    fireEvent.click(cards()[1].querySelector('.add-set-btn')!);
+    appendFailure = new TypeError('Failed to fetch');
+    type(1, '135', 1);
+    await vi.advanceTimersByTimeAsync(1000);
+    await flushQueue('test-token');
+    moveUp(1);
+
+    type(0, '140', 1);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(sheet.Sets).toHaveLength(4);
+    expect(writes[writes.length - 1]).toMatchObject({ kind: 'update', row: 5 });
+    expect(brief(sheet.Sets[3])).toEqual(['e_row', 'primary', 1, 2, '140']);
+  });
+
+  it('a quick-fill after the flush re-saves every set of the card without a second row', async () => {
+    await mount(BENCH_ROW_CURL);
+    fireEvent.click(cards()[1].querySelector('.add-set-btn')!);
+    appendFailure = new TypeError('Failed to fetch');
+    type(1, '135', 1);
+    await vi.advanceTimersByTimeAsync(1000);
+    await flushQueue('test-token');
+
+    fireEvent.input(cards()[1].querySelector('.quick-fill-row .set-reps-input')!, { target: { value: '8' } });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(sheet.Sets.filter((r) => r[1] === 'e_row')).toHaveLength(2);
+    expect(writes[writes.length - 1]).toMatchObject({ kind: 'update', row: 5 });
+    expect(sheet.Sets[3][8]).toBe('8');
+  });
+
+  it('a duplicate\'s twin row is never taken, even when unclaimed rows exist for the same key', async () => {
+    // Twin copies: the primary copy holds row 2 (e_row, order 1, set 1).
+    await mount(ROWBB_TWINS);
+    fireEvent.click(cards()[1].querySelector('.add-set-btn')!);
+    appendFailure = new TypeError('Failed to fetch');
+    type(1, '135', 1);
+    await vi.advanceTimersByTimeAsync(1000);
+    await flushQueue('test-token');
+
+    type(1, '140', 1);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(sheet.Sets).toHaveLength(4);
+    expect(writes[writes.length - 1]).toMatchObject({ kind: 'update', row: 5 });
+    expect(sheet.Sets[0]).toEqual(toRow(ROWBB_TWINS[0]));
+    expect(brief(sheet.Sets[3])).toEqual(['e_row', 'SS1', 2, 2, '140']);
   });
 });

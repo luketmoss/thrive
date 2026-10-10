@@ -21,6 +21,7 @@ import { EffortToggle } from '../shared/effort-toggle';
 import { newRowKey, useReorderFocus } from '../shared/reorder-focus';
 import type { MoveDirection } from '../shared/reorder-focus';
 import { shiftTrackerRows } from './row-shift';
+import { unclaimedRowFor } from './adopt-row';
 
 // #394: the tracker's writes to Sets rows go out one at a time across every
 // tracker instance, so one opened again (leave and resume) while a delete is
@@ -176,6 +177,12 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
         const currentSet = current.sets.find((s) => s.set_number === set.set_number);
         if (!currentSet || (!currentSet.weight && !currentSet.reps)) return;
 
+        // A set with no row may already have one: an offline save the queue
+        // has since flushed. Take it rather than append a second (#389).
+        const ownRow = currentSet.sheetRow > 0
+          ? currentSet.sheetRow
+          : unclaimedRowFor(listRef.current, workoutId, current, currentSet, activeWorkoutSets.value);
+
         try {
           const result = await saveSet({
             workout_id: workoutId,
@@ -188,7 +195,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
             weight: currentSet.weight,
             reps: currentSet.reps,
             effort: currentSet.effort,
-          }, token, currentSet.sheetRow);
+          }, token, ownRow);
 
           // Mark as saved, on this exercise's own card wherever it now sits
           updateList((prev) =>
