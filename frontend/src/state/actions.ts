@@ -593,29 +593,70 @@ async function writePrepopulatedSets(
   return allSets.filter((s) => s.workout_id === workoutId);
 }
 
+/** `saveSet` refused a row that no longer holds the set it was given for (#389). */
+export class SetRowStaleError extends Error {
+  constructor(public readonly sheetRow: number) {
+    super(`Sets row ${sheetRow} no longer holds this set`);
+    this.name = 'SetRowStaleError';
+  }
+}
+
+/**
+ * Writes one set. `ownRow` is the set's own sheet row as the caller holds it
+ * (#389): given a row (> 0), that row is updated and nothing is looked up by
+ * order; given `-1`, the set has no row yet and one is appended. Left out,
+ * the row is looked up by `(exercise_id, exercise_order, set_number)` as
+ * before (Finish's loop and the edit flows, #392). The offline fallback
+ * queues the same row the save was aimed at.
+ *
+ * A given row is checked against `activeWorkoutSets`, which every row write
+ * and delete re-derives, before anything is written: it must hold this
+ * workout's set of the same exercise and set number, with the same section
+ * or the same order (a move changes only the order, a section change only
+ * the section). A backstop: the tracker shifts its cached rows after every
+ * delete (#394), so a row should never fail it. One that does is never
+ * written or queued; the save is refused, the set stays unsaved, and Finish
+ * saves it.
+ */
 export async function saveSet(
   set: WorkoutSet,
   token: string,
+  ownRow?: number,
 ): Promise<SetWithRow> {
-  try {
-    // Check if this set already exists
-    const existing = activeWorkoutSets.value.find(
-      (s) => s.workout_id === set.workout_id &&
-             s.exercise_id === set.exercise_id &&
-             s.exercise_order === set.exercise_order &&
-             s.set_number === set.set_number,
-    );
+  const findByOrder = () => activeWorkoutSets.value.find(
+    (s) => s.workout_id === set.workout_id &&
+           s.exercise_id === set.exercise_id &&
+           s.exercise_order === set.exercise_order &&
+           s.set_number === set.set_number,
+  );
+  const targetRow = () => (ownRow !== undefined ? ownRow : findByOrder()?.sheetRow ?? -1);
 
-    if (existing && existing.sheetRow > 0) {
+  if (ownRow !== undefined && ownRow > 0) {
+    const at = activeWorkoutSets.value.find((s) => s.sheetRow === ownRow);
+    const holdsThisSet = !!at &&
+      at.workout_id === set.workout_id &&
+      at.exercise_id === set.exercise_id &&
+      at.set_number === set.set_number &&
+      (at.section === set.section || at.exercise_order === set.exercise_order);
+    if (!holdsThisSet) {
+      showToast('Set not saved yet. It will be saved when you finish.', 'error');
+      throw new SetRowStaleError(ownRow);
+    }
+  }
+
+  try {
+    const row = targetRow();
+
+    if (row > 0) {
       // Update existing row
-      await updateSetApi(existing.sheetRow, set, token);
-      const updated: SetWithRow = { ...set, sheetRow: existing.sheetRow };
+      await updateSetApi(row, set, token);
+      const updated: SetWithRow = { ...set, sheetRow: row };
 
       activeWorkoutSets.value = activeWorkoutSets.value.map((s) =>
-        s.sheetRow === existing.sheetRow ? updated : s,
+        s.sheetRow === row ? updated : s,
       );
       sets.value = sets.value.map((s) =>
-        s.sheetRow === existing.sheetRow ? updated : s,
+        s.sheetRow === row ? updated : s,
       );
       return updated;
     } else {
@@ -641,25 +682,21 @@ export async function saveSet(
       const workoutSets = allSets.filter((s) => s.workout_id === set.workout_id);
       activeWorkoutSets.value = workoutSets;
 
-      // Return the newly added set
-      const added = workoutSets.find(
+      // The row just appended is the LAST match: an append lands below every
+      // existing row, so an earlier match is another set's row — a
+      // duplicate's twin at the same order and set number (#389).
+      const matches = workoutSets.filter(
         (s) => s.exercise_id === set.exercise_id &&
                s.exercise_order === set.exercise_order &&
                s.set_number === set.set_number,
       );
-      return added || { ...set, sheetRow: -1 };
+      return matches[matches.length - 1] || { ...set, sheetRow: -1 };
     }
   } catch (err) {
     if (isReauthFailure(err)) throw err;
     // Network failure (fetch rejection) or non-401 HTTP error → queue silently (AC1, AC6)
     if (err instanceof TypeError || (err instanceof SheetsApiError && err.status !== 401)) {
-      const existing = activeWorkoutSets.value.find(
-        (s) => s.workout_id === set.workout_id &&
-               s.exercise_id === set.exercise_id &&
-               s.exercise_order === set.exercise_order &&
-               s.set_number === set.set_number,
-      );
-      enqueueSet({ ...set, sheetRow: existing?.sheetRow ?? -1 });
+      enqueueSet({ ...set, sheetRow: targetRow() });
       throw err; // re-throw so caller leaves set as unsaved
     }
     showToast('Failed to save set', 'error');

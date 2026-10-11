@@ -21,6 +21,7 @@ import { EffortToggle } from '../shared/effort-toggle';
 import { newRowKey, useReorderFocus } from '../shared/reorder-focus';
 import type { MoveDirection } from '../shared/reorder-focus';
 import { shiftTrackerRows } from './row-shift';
+import { unclaimedRowFor } from './adopt-row';
 
 // #394: the tracker's writes to Sets rows go out one at a time across every
 // tracker instance, so one opened again (leave and resume) while a delete is
@@ -43,6 +44,17 @@ interface Props {
   workoutId: string;
   workoutName: string;
 }
+
+/**
+ * A card's identity across moves (#371). `rowKey` is always set by the list
+ * builders; the order-based fallback, as the render key uses, only covers a
+ * card that somehow lacks one. Client-only: never in a payload.
+ */
+const trackerRowKey = (ex: TrackerExercise): string =>
+  ex.rowKey ?? `${ex.exercise_id}-${ex.exercise_order}`;
+
+/** A pending save's timer: one per set of a card, whatever its order (#389). */
+const saveTimerKey = (exKey: string, setNumber: number): string => `${exKey}__${setNumber}`;
 
 export function WorkoutTracker({ workoutId, workoutName }: Props) {
   /** The row payload for removing tracker set `s` of exercise `ex`. */
@@ -137,13 +149,19 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
     updateList(() => mergeWarmups(tracked, activeWarmupExercises.value));
   }, []);
 
-  // Debounced save for a specific set (disabled in edit mode)
-  const debouncedSave = useCallback((exerciseOrder: number, exerciseId: string, set: TrackerSet) => {
+  // Debounced save for a specific set (disabled in edit mode). The timer is
+  // keyed by the exercise's row key, not its order, and everything the save
+  // writes (order, section, name, values, the set's own sheet row) is read
+  // from the latest list when its write starts: the exercise may have moved,
+  // and its rows shifted, since the edit (#389, #394). The row key itself
+  // never leaves the client.
+  const debouncedSave = useCallback((ex: TrackerExercise, set: TrackerSet) => {
     if (!token || editMode) return;
     // Only save if there's meaningful data
     if (!set.weight && !set.reps) return;
 
-    const key = `${exerciseId}__${exerciseOrder}__${set.set_number}`;
+    const exKey = trackerRowKey(ex);
+    const key = saveTimerKey(exKey, set.set_number);
     const existing = saveTimers.current.get(key);
     if (existing) clearTimeout(existing);
 
@@ -153,32 +171,36 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
       // The write waits for any write ahead of it (a delete shifting rows),
       // then reads the set from the latest list (#394).
       void enqueueWrite(async () => {
-        const ex = listRef.current.find(
-          (e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder,
-        );
-        if (!ex) return;
+        const current = listRef.current.find((e) => trackerRowKey(e) === exKey);
+        if (!current) return;
 
-        const currentSet = ex.sets.find((s) => s.set_number === set.set_number);
-        if (!currentSet) return;
+        const currentSet = current.sets.find((s) => s.set_number === set.set_number);
+        if (!currentSet || (!currentSet.weight && !currentSet.reps)) return;
+
+        // A set with no row may already have one: an offline save the queue
+        // has since flushed. Take it rather than append a second (#389).
+        const ownRow = currentSet.sheetRow > 0
+          ? currentSet.sheetRow
+          : unclaimedRowFor(listRef.current, workoutId, current, currentSet, activeWorkoutSets.value);
 
         try {
           const result = await saveSet({
             workout_id: workoutId,
-            exercise_id: exerciseId,
-            exercise_name: ex.exercise_name,
-            section: ex.section,
-            exercise_order: exerciseOrder,
-            set_number: set.set_number,
-            planned_reps: set.planned_reps,
-            weight: set.weight,
-            reps: set.reps,
-            effort: set.effort,
-          }, token);
+            exercise_id: current.exercise_id,
+            exercise_name: current.exercise_name,
+            section: current.section,
+            exercise_order: current.exercise_order,
+            set_number: currentSet.set_number,
+            planned_reps: currentSet.planned_reps,
+            weight: currentSet.weight,
+            reps: currentSet.reps,
+            effort: currentSet.effort,
+          }, token, ownRow);
 
-          // Mark as saved: the exercise found above, wherever it is now.
+          // Mark as saved, on this exercise's own card wherever it now sits
           updateList((prev) =>
             prev.map((e) =>
-              e.rowKey === ex.rowKey
+              trackerRowKey(e) === exKey
                 ? {
                     ...e,
                     sets: e.sets.map((s) =>
@@ -219,9 +241,9 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
       // Schedule save for the updated set (no-op in edit mode)
       const ex = next.find((e) => e.exercise_id === exerciseId && e.exercise_order === exerciseOrder);
       const set = ex?.sets.find((s) => s.set_number === setNumber);
-      if (set) {
-        // Defer to avoid stale closure
-        setTimeout(() => debouncedSave(exerciseOrder, exerciseId, set), 0);
+      if (ex && set) {
+        // Defer: schedule outside the state updater
+        setTimeout(() => debouncedSave(ex, set), 0);
       }
 
       return next;
@@ -237,7 +259,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
         if (ex) {
           for (const s of ex.sets) {
             if (s.reps) {
-              setTimeout(() => debouncedSave(exerciseOrder, exerciseId, s), 0);
+              setTimeout(() => debouncedSave(ex, s), 0);
             }
           }
         }
@@ -254,7 +276,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
         if (ex) {
           for (const s of ex.sets) {
             if (s.weight) {
-              setTimeout(() => debouncedSave(exerciseOrder, exerciseId, s), 0);
+              setTimeout(() => debouncedSave(ex, s), 0);
             }
           }
         }
@@ -271,7 +293,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
         if (ex) {
           for (const s of ex.sets) {
             if (s.weight || s.reps) {
-              setTimeout(() => debouncedSave(exerciseOrder, exerciseId, s), 0);
+              setTimeout(() => debouncedSave(ex, s), 0);
             }
           }
         }
@@ -332,7 +354,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
       if (!latest) return false;
       const { exercises, removedSets } = removal(listRef.current, latest);
       for (const s of removedSets) {
-        const key = `${latest.exercise_id}__${latest.exercise_order}__${s.set_number}`;
+        const key = saveTimerKey(trackerRowKey(latest), s.set_number);
         const timer = saveTimers.current.get(key);
         if (timer) {
           clearTimeout(timer);
@@ -383,7 +405,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
       if (updatedEx) {
         for (const s of updatedEx.sets) {
           if (s.weight || s.reps) {
-            setTimeout(() => debouncedSave(updatedEx.exercise_order, updatedEx.exercise_id, s), 0);
+            setTimeout(() => debouncedSave(updatedEx, s), 0);
           }
         }
       }
@@ -764,7 +786,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
           const sorted = [...exerciseList].sort((a, b) => a.exercise_order - b.exercise_order);
           return sorted.map((ex, idx) => (
             <ExerciseRow
-              key={ex.rowKey ?? `${ex.exercise_id}-${ex.exercise_order}`}
+              key={trackerRowKey(ex)}
               exercise={ex}
               currentWorkoutId={workoutId}
               onUpdateSet={(setNum, updates) =>
