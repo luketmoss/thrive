@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useCallback, useId } from 'preact/hooks';
 import { activeWorkoutSets, activeWarmupExercises, isEditMode, workouts, pendingSyncCount, isSyncing, showToast } from '../../state/store';
-import { saveSet, removeSet, finishWorkout, deleteWorkout, saveWorkoutEdits, exitEditMode } from '../../state/actions';
-import { flushQueue } from '../../api/sync-queue';
+import { saveSet, removeSet, finishWorkout, deleteWorkout, saveWorkoutEdits, exitEditMode, saveExerciseOrders } from '../../state/actions';
+import { flushQueue, remapQueuedOrders } from '../../api/sync-queue';
+import type { QueuedOrderMap } from '../../api/sync-queue';
+import { ReauthFailedError } from '../../auth/reauth';
 import { useAuth } from '../../auth/auth-context';
 import { navigate, goBack } from '../../router/router';
 import { AddExerciseModal } from '../exercises/add-exercise-modal';
@@ -22,6 +24,10 @@ import { newRowKey, useReorderFocus } from '../shared/reorder-focus';
 import type { MoveDirection } from '../shared/reorder-focus';
 import { shiftTrackerRows } from './row-shift';
 import { unclaimedRowFor } from './adopt-row';
+import { orderWrites, queuedOrderMap } from './order-writes';
+
+/** Finish's toast when the exercise order could not be written (#392 AC3). */
+export const ORDER_SAVE_FAILED = "Couldn't save the exercise order. Try again.";
 
 // #394: the tracker's writes to Sets rows go out one at a time across every
 // tracker instance, so one opened again (leave and resume) while a delete is
@@ -116,6 +122,75 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
   // Remove set taps whose write has not finished: a repeat tap is ignored.
   const pendingRemovals = useRef<Set<string>>(new Set());
 
+  /** Give this workout's queued sets the order they now have (#392 AC5). */
+  const remapQueue = (map: QueuedOrderMap) => {
+    try {
+      remapQueuedOrders(workoutId, map);
+    } catch {
+      // Storage unavailable: there is no queue to remap.
+    }
+  };
+
+  /**
+   * Bring every saved row of this workout to the order on screen, in one
+   * all-or-nothing write of `Sets!E` (#392). Runs as a tracker write, so it
+   * reads the list and the stored rows as they are when it starts, after any
+   * save or delete ahead of it. Nothing differs: no request.
+   */
+  const writeOrders = async (): Promise<void> => {
+    if (!token) return;
+    remapQueue(queuedOrderMap(listRef.current));
+    await saveExerciseOrders(workoutId, orderWrites(listRef.current, activeWorkoutSets.value, workoutId), token);
+  };
+
+  /**
+   * Save one set through its own row (#389): its row when it has one, a row a
+   * flushed offline append already gave it, or else one append. Never looked
+   * up by order. Read from the latest list; the card is marked saved with the
+   * row written. Rejects as `saveSet` does.
+   */
+  const saveOwnRow = async (exKey: string, setNumber: number): Promise<void> => {
+    if (!token) return;
+    const current = listRef.current.find((e) => trackerRowKey(e) === exKey);
+    const currentSet = current?.sets.find((s) => s.set_number === setNumber);
+    if (!current || !currentSet || (!currentSet.weight && !currentSet.reps)) return;
+
+    // A set with no row may already have one: an offline save the queue
+    // has since flushed. Take it rather than append a second (#389).
+    const ownRow = currentSet.sheetRow > 0
+      ? currentSet.sheetRow
+      : unclaimedRowFor(listRef.current, workoutId, current, currentSet, activeWorkoutSets.value);
+
+    const result = await saveSet({
+      workout_id: workoutId,
+      exercise_id: current.exercise_id,
+      exercise_name: current.exercise_name,
+      section: current.section,
+      exercise_order: current.exercise_order,
+      set_number: currentSet.set_number,
+      planned_reps: currentSet.planned_reps,
+      weight: currentSet.weight,
+      reps: currentSet.reps,
+      effort: currentSet.effort,
+    }, token, ownRow);
+
+    // Mark as saved, on this exercise's own card wherever it now sits
+    updateList((prev) =>
+      prev.map((e) =>
+        trackerRowKey(e) === exKey
+          ? {
+              ...e,
+              sets: e.sets.map((s) =>
+                s.set_number === setNumber
+                  ? { ...s, saved: true, sheetRow: result.sheetRow }
+                  : s,
+              ),
+            }
+          : e,
+      ),
+    );
+  };
+
   // Edit mode metadata
   // Pre-filled values, fixed at mount: a save writes only what differs (#172).
   const [editInitial] = useState(() => workoutToEditInputs(workout));
@@ -171,47 +246,8 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
       // The write waits for any write ahead of it (a delete shifting rows),
       // then reads the set from the latest list (#394).
       void enqueueWrite(async () => {
-        const current = listRef.current.find((e) => trackerRowKey(e) === exKey);
-        if (!current) return;
-
-        const currentSet = current.sets.find((s) => s.set_number === set.set_number);
-        if (!currentSet || (!currentSet.weight && !currentSet.reps)) return;
-
-        // A set with no row may already have one: an offline save the queue
-        // has since flushed. Take it rather than append a second (#389).
-        const ownRow = currentSet.sheetRow > 0
-          ? currentSet.sheetRow
-          : unclaimedRowFor(listRef.current, workoutId, current, currentSet, activeWorkoutSets.value);
-
         try {
-          const result = await saveSet({
-            workout_id: workoutId,
-            exercise_id: current.exercise_id,
-            exercise_name: current.exercise_name,
-            section: current.section,
-            exercise_order: current.exercise_order,
-            set_number: currentSet.set_number,
-            planned_reps: currentSet.planned_reps,
-            weight: currentSet.weight,
-            reps: currentSet.reps,
-            effort: currentSet.effort,
-          }, token, ownRow);
-
-          // Mark as saved, on this exercise's own card wherever it now sits
-          updateList((prev) =>
-            prev.map((e) =>
-              trackerRowKey(e) === exKey
-                ? {
-                    ...e,
-                    sets: e.sets.map((s) =>
-                      s.set_number === set.set_number
-                        ? { ...s, saved: true, sheetRow: result.sheetRow }
-                        : s,
-                    ),
-                  }
-                : e,
-            ),
-          );
+          await saveOwnRow(exKey, set.set_number);
         } catch {
           // Error toast shown by saveSet action
         }
@@ -487,8 +523,18 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
     if (from < 0 || to < 0 || to >= sorted.length) return;
     const moved = sorted[from];
     const apply = dir === 'up' ? applyMoveUp : applyMoveDown;
+    const before = listRef.current;
     updateList((prev) => apply(prev, exerciseId, exerciseOrder));
     reorder.moved(moved.rowKey ?? '', dir, moved.exercise_name, to + 1, sorted.length);
+
+    // Log mode: the move goes to the sheet (#392); edit mode writes the order
+    // at Save Changes. The queued sets take their new order now. The rows are
+    // written as a tracker write, after anything ahead of it, and the move
+    // never waits for it. A failure is silent: the next move, or Finish,
+    // writes every row still out of order.
+    if (editMode || !token) return;
+    remapQueue(queuedOrderMap(listRef.current, before));
+    void enqueueWrite(writeOrders).catch(() => undefined);
   };
 
   const handleRemoveExercise = async (exerciseId: string, exerciseOrder: number) => {
@@ -580,28 +626,40 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
       await flushPendingSaves();
 
       // Save any unsaved sets with data (skip warmup exercises — they are
-      // list-only). One more tracker write: it starts only once every write
-      // ahead of it has finished, and reads the list as they left it (#394).
+      // list-only), each through its own row, never looked up by order
+      // (#392). Then bring every saved row to the order on screen. One more
+      // tracker write: it starts only once every write ahead of it (a move's
+      // order write among them) has finished, and reads the list as they
+      // left it (#394).
       await enqueueWrite(async () => {
-        for (const ex of listRef.current) {
-          if (isWarmupExercise(ex)) continue;
+        const repairOrders = async () => {
+          try {
+            await writeOrders();
+          } catch (err) {
+            // Finish stops with the form as it is: nothing is marked finished.
+            if (!(err instanceof ReauthFailedError)) showToast(ORDER_SAVE_FAILED, 'error');
+            throw err;
+          }
+        };
+        // First the rows a failed move write left out of order: a saved set
+        // whose row differs in order (and in section, #395) would otherwise be
+        // refused by saveSet's own-row check on every Finish. No request when
+        // nothing differs.
+        await repairOrders();
+
+        for (const key of listRef.current.map(trackerRowKey)) {
+          const ex = listRef.current.find((e) => trackerRowKey(e) === key);
+          if (!ex || isWarmupExercise(ex)) continue;
           for (const set of ex.sets) {
             if (!set.saved && (set.weight || set.reps)) {
-              await saveSet({
-                workout_id: workoutId,
-                exercise_id: ex.exercise_id,
-                exercise_name: ex.exercise_name,
-                section: ex.section,
-                exercise_order: ex.exercise_order,
-                set_number: set.set_number,
-                planned_reps: set.planned_reps,
-                weight: set.weight,
-                reps: set.reps,
-                effort: set.effort,
-              }, token);
+              await saveOwnRow(key, set.set_number);
             }
           }
         }
+
+        // Then any row the saves left behind (a set's append, or a write a
+        // flush overtook).
+        await repairOrders();
       });
 
       await finishWorkout(workoutId, notes, finishEffort, token);

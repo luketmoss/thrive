@@ -546,6 +546,42 @@ export async function replaceWorkoutSets(
   });
 }
 
+/** One `Sets` row's new `exercise_order` (column E), by the row the client holds. */
+export interface SetOrderWrite {
+  sheetRow: number;
+  exercise_order: number;
+}
+
+/**
+ * The order writes as `batchUpdate` requests (#392): one `updateCells` per
+ * row, on column E only (`columnIndex: 4`), as a number, as `setToCells`
+ * writes it. No other column is named, so no other cell is touched.
+ */
+export function setOrderRequests(rows: SetOrderWrite[], sheetId: number): object[] {
+  return rows.map((r) => ({
+    updateCells: {
+      rows: [{ values: [{ userEnteredValue: { numberValue: r.exercise_order } }] }],
+      fields: 'userEnteredValue',
+      start: { sheetId, rowIndex: r.sheetRow - 1, columnIndex: 4 },
+    },
+  }));
+}
+
+/**
+ * Writes `exercise_order` to the given `Sets` rows in one `batchUpdate`
+ * (#392): all of them, or none if it fails, as `replaceWorkoutSets` does. No
+ * row is read, appended or deleted. Nothing to write makes no request; demo
+ * mode writes nothing (the caller updates memory).
+ */
+export async function updateSetOrders(rows: SetOrderWrite[], token: string): Promise<void> {
+  if (isDemo() || rows.length === 0) return;
+
+  await withReauth(token, async (t) => {
+    const sheetId = await getSheetId('Sets', t);
+    await sheetsBatchUpdate(setOrderRequests(rows, sheetId), t);
+  });
+}
+
 export async function deleteSetRow(sheetRow: number, token: string): Promise<void> {
   if (isDemo()) return;
 
