@@ -18,6 +18,10 @@
 // `{ enrichment: { workout_id, filled } }`, the fields it has filled there,
 // which are never written again. Hybrid Fitness (1200) takes the same path
 // (#194), without moving time: its `Workout Time` includes the rests.
+//
+// Any other activity new to Thrive completes the day's one plan of its type
+// instead of appending beside it (#403): the API answers `claimed`, counted as
+// created. Two or more such plans are a SyncLog note, and a new row as before.
 
 import { ActivityFormatError, ACTIVITY_FIELDS, normalizeActivity } from './normalize-activity.mjs';
 import { redact } from './redact.mjs';
@@ -165,11 +169,23 @@ export async function syncActivities({ archive, api, activityIds, syncedAt, fit 
         log(`  activity ${id}: its row was deleted in Thrive, so it was not recreated`);
         continue;
       }
+      if (!['created', 'updated', 'claimed'].includes(result.status)) {
+        fail(`activity ${id}: upsertSyncedWorkout answered an unknown status "${result.status}"`);
+        continue;
+      }
       const changed = !sameNormalized(result.written, lastWritten);
       const status = result.status === 'updated' && !changed ? 'unchanged' : result.status;
-      out[status] += 1;
+      // A claimed plan (#403) is the activity's first row in Thrive: SyncLog's n_new.
+      out[status === 'claimed' ? 'created' : status] += 1;
+      const what = status === 'claimed' ? 'claimed planned' : status;
       const kept = result.kept?.length ? `; kept Thrive edits to ${result.kept.join(', ')}` : '';
-      log(`  activity ${id} (${incoming.type}${incoming.sub_type ? `/${incoming.sub_type}` : ''}): ${status} ${result.id}${kept}`);
+      log(`  activity ${id} (${incoming.type}${incoming.sub_type ? `/${incoming.sub_type}` : ''}): ${what} ${result.id}${kept}`);
+      if (result.ambiguous_plans?.length) {
+        out.notes.push(
+          `${incoming.type} ${id} on ${incoming.date}: ambiguous, planned ${result.ambiguous_plans.join(', ')}; ` +
+          `no plan completed, a new row was written`
+        );
+      }
 
       if (changed) {
         await archive.writeNormalized(file.fileId, result.written);
