@@ -247,7 +247,7 @@ export function WorkoutDetail({ workoutId }: Props) {
       {/* Planned workout: compact card view + footer actions */}
       {isPlanned && workout.type === 'weight' && (() => {
         // Build planned exercise list from sets or template
-        const plannedExercises: { id: string; name: string; section: string; order: number; sets: string; reps: string }[] = [];
+        const plannedExercises: { id: string; name: string; section: string; order: number; sets: string; reps: string; repsBySet?: string[] }[] = [];
         const seen = new Set<string>();
 
         // Build from workout sets
@@ -269,16 +269,17 @@ export function WorkoutDetail({ workoutId }: Props) {
             continue;
           }
 
-          const setCount = workoutSets.filter(
-            (ws) => ws.exercise_id === s.exercise_id && ws.exercise_order === s.exercise_order,
-          ).length;
+          const own = workoutSets
+            .filter((ws) => ws.exercise_id === s.exercise_id && ws.exercise_order === s.exercise_order)
+            .sort((a, b) => a.set_number - b.set_number);
           plannedExercises.push({
             id: s.exercise_id,
             name: s.exercise_name,
             section: s.section,
             order: s.exercise_order,
-            sets: String(setCount),
+            sets: String(own.length),
             reps: s.planned_reps || '',
+            repsBySet: own.map((ws) => ws.planned_reps || ''),
           });
         }
 
@@ -293,6 +294,7 @@ export function WorkoutDetail({ workoutId }: Props) {
                   exerciseName={ex.name}
                   sets={ex.sets}
                   reps={ex.reps}
+                  repsBySet={ex.repsBySet}
                 />
               </div>
             ))}

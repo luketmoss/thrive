@@ -1,4 +1,4 @@
-import { useState, useRef } from 'preact/hooks';
+import { useState, useRef, useId } from 'preact/hooks';
 import { AddExerciseModal } from '../exercises/add-exercise-modal';
 import { ExerciseCompactCard } from '../shared/exercise-compact-card';
 import { newRowKey, swapAt, useReorderFocus, type MoveDirection } from '../shared/reorder-focus';
@@ -6,21 +6,28 @@ import { SectionPicker } from '../shared/section-picker';
 import type { ExerciseWithRow } from '../../api/types';
 import { toLocalDateStr } from '../activities/activities-helpers';
 import { estimateMinutesToSeconds, secondsToMinutesInput } from '../../api/duration';
+import { REPS_INPUT_PROPS, extendReps, heldReps, maxSetsOf, plannedSetCount, repsVary } from './planned-reps';
 
 export interface PlannerExercise {
   exercise_id: string;
   exercise_name: string;
   section: string;
+  /** As typed. Rows shown and sets saved: `plannedSetCount(sets)`. */
   sets: string;
-  reps: string;
   /**
-   * Set only by the planned-workout editor (#350), and never changed after
-   * open: the Reps value the entry was pre-filled with, and the stored
-   * `planned_reps` of the rows it was built from, in set order. The planner
-   * passes both through untouched.
+   * Each set's planned reps, in set order, as held (#375): seeded from the
+   * stored `planned_reps` (or the template's Reps), never reformatted, so an
+   * untouched row saves its stored text verbatim. It may run longer than
+   * Sets: the tail is remembered while the editor is open, so lowering Sets
+   * and raising it again loses nothing. Save sends `heldReps()` of it.
    */
-  initial_reps?: string;
-  stored_planned_reps?: string[];
+  reps_by_set: string[];
+  /**
+   * Set only by the planned-workout editor, and only for an entry stored
+   * with more than 20 sets: its stored count, which then replaces 20 as the
+   * Sets cap so an untouched save keeps every set.
+   */
+  max_sets?: number;
   /**
    * Set only by the planned-workout editor (#380), warmups included, and
    * never changed after open: the stored `exercise_order` this entry was
@@ -62,13 +69,16 @@ export function WorkoutPlanner({ initialName = '', initialExercises = [], initia
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [editingIndex, setEditingIndex] = useState(-1);
 
-  const initialSnapshot = useRef({ name: startName, date: startDate, estimate: startEstimate, exercises: JSON.stringify(initialExercises) });
+  // Compared as Save would write them, so a remembered tail is not a change.
+  const serialize = (list: PlannerExercise[]) =>
+    JSON.stringify(list.map((ex) => ({ ...ex, reps_by_set: heldReps(ex) })));
+  const initialSnapshot = useRef({ name: startName, date: startDate, estimate: startEstimate, exercises: serialize(initialExercises) });
 
   const isDirty = () => {
     if (name !== initialSnapshot.current.name) return true;
     if (date !== initialSnapshot.current.date) return true;
     if (estimate !== initialSnapshot.current.estimate) return true;
-    if (JSON.stringify(exercises) !== initialSnapshot.current.exercises) return true;
+    if (serialize(exercises) !== initialSnapshot.current.exercises) return true;
     return false;
   };
 
@@ -78,7 +88,7 @@ export function WorkoutPlanner({ initialName = '', initialExercises = [], initia
       exercise_name: ex.name,
       section: 'primary',
       sets: '1',
-      reps: '',
+      reps_by_set: [''],
     };
     setExercises((prev) => [...prev, slot]);
     setRowKeys((prev) => [...prev, newRowKey()]);
@@ -188,53 +198,20 @@ export function WorkoutPlanner({ initialName = '', initialExercises = [], initia
               section={ex.section}
               exerciseName={ex.exercise_name}
               sets={ex.sets}
-              reps={ex.reps}
+              reps=""
+              repsBySet={ex.section === 'warmup' ? [] : heldReps(ex)}
               editable
               index={i}
               total={exercises.length}
               onMoveUp={() => move(i, 'up')}
               onMoveDown={() => move(i, 'down')}
               onClick={() => setEditingIndex(editingIndex === i ? -1 : i)}
+              expanded={editingIndex === i}
               onRemove={() => removeExercise(i)}
             />
 
             {editingIndex === i && (
-              <div class="template-exercise-config">
-                <SectionPicker
-                  value={ex.section}
-                  onChange={(section) => updateExercise(i, { section })}
-                />
-
-                <div class="config-row" style={{ marginTop: 'var(--space-sm)' }}>
-                  <div class="form-group" style={{ flex: 1 }}>
-                    <label class="form-label">Sets</label>
-                    <input
-                      class="form-input"
-                      type="number"
-                      min="1"
-                      max="20"
-                      placeholder="e.g. 3"
-                      value={ex.sets}
-                      onInput={(e) =>
-                        updateExercise(i, { sets: (e.target as HTMLInputElement).value })
-                      }
-                    />
-                  </div>
-                  <div class="form-group" style={{ flex: 1 }}>
-                    <label class="form-label">Reps</label>
-                    <input
-                      class="form-input"
-                      type="number"
-                      min="0"
-                      placeholder="e.g. 10"
-                      value={ex.reps}
-                      onInput={(e) =>
-                        updateExercise(i, { reps: (e.target as HTMLInputElement).value })
-                      }
-                    />
-                  </div>
-                </div>
-              </div>
+              <PlannerExerciseConfig ex={ex} onChange={(updated) => updateExercise(i, updated)} />
             )}
           </div>
         ))}
@@ -269,6 +246,88 @@ export function WorkoutPlanner({ initialName = '', initialExercises = [], initia
           onSelect={handleExerciseSelected}
           onClose={() => setShowExercisePicker(false)}
         />
+      )}
+    </div>
+  );
+}
+
+/**
+ * An expanded entry (#375): section, Sets, "Reps, all sets", and a row per
+ * set. The rows shown are exactly the sets Save writes.
+ */
+function PlannerExerciseConfig({ ex, onChange }: { ex: PlannerExercise; onChange: (updated: Partial<PlannerExercise>) => void }) {
+  const uid = useId();
+  const maxSets = maxSetsOf(ex);
+  const count = plannedSetCount(ex.sets, maxSets);
+  const held = heldReps(ex);
+  const varies = repsVary(held);
+  const hintId = `${uid}-all-hint`;
+
+  const setRow = (index: number, value: string) => {
+    const next = extendReps(ex.reps_by_set, count).slice();
+    next[index] = value;
+    onChange({ reps_by_set: next });
+  };
+
+  return (
+    <div class="template-exercise-config planner-exercise-config">
+      <SectionPicker value={ex.section} onChange={(section) => onChange({ section })} />
+
+      <div class="config-row" style={{ marginTop: 'var(--space-sm)' }}>
+        <div class="form-group" style={{ flex: 1 }}>
+          <label class="form-label" for={`${uid}-sets`}>Sets</label>
+          <input
+            id={`${uid}-sets`}
+            class="form-input"
+            type="number"
+            min="1"
+            max={String(maxSets)}
+            placeholder="e.g. 3"
+            value={ex.sets}
+            onInput={(e) => {
+              const sets = (e.target as HTMLInputElement).value;
+              onChange({ sets, reps_by_set: extendReps(ex.reps_by_set, plannedSetCount(sets, maxSets)) });
+            }}
+          />
+        </div>
+        <div class="form-group" style={{ flex: 1 }}>
+          <label class="form-label" for={`${uid}-all`}>Reps, all sets</label>
+          <input
+            id={`${uid}-all`}
+            class="form-input"
+            {...REPS_INPUT_PROPS}
+            placeholder={varies ? 'Varies' : 'e.g. 10'}
+            aria-describedby={varies ? hintId : undefined}
+            value={varies ? '' : held[0]}
+            onInput={(e) => {
+              const value = (e.target as HTMLInputElement).value;
+              onChange({ reps_by_set: held.map(() => value) });
+            }}
+          />
+          {varies && (
+            <span id={hintId} class="sr-only">Sets differ. A value here replaces every set.</span>
+          )}
+        </div>
+      </div>
+
+      {ex.section !== 'warmup' && (
+        <fieldset class="cardio-fields planner-reps-per-set">
+          <legend class="cardio-fields-legend">
+            Reps per set<span class="sr-only">, {ex.exercise_name}</span>
+          </legend>
+          {held.map((value, s) => (
+            <div class="planner-set-row" key={s}>
+              <label class="form-label" for={`${uid}-set-${s}`}>Set {s + 1}</label>
+              <input
+                id={`${uid}-set-${s}`}
+                class="form-input"
+                {...REPS_INPUT_PROPS}
+                value={value}
+                onInput={(e) => setRow(s, (e.target as HTMLInputElement).value)}
+              />
+            </div>
+          ))}
+        </fieldset>
       )}
     </div>
   );

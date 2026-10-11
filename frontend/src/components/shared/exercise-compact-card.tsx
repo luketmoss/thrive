@@ -1,10 +1,17 @@
 import { sectionBadgeClass } from './section-utils';
+import { repsSummary } from '../workout/planned-reps';
 
 interface Props {
   section: string;
   exerciseName: string;
   sets: string;
   reps: string;
+  /**
+   * Each set's planned reps, in set order (#375). When given, the summary is
+   * built from it (`3 × 10/8/6`, with a screen-reader form) and `sets`/`reps`
+   * are not used for it; an empty list shows no summary (a warmup).
+   */
+  repsBySet?: string[];
   /** Show move arrows and remove button. */
   editable?: boolean;
   index?: number;
@@ -22,6 +29,7 @@ export function ExerciseCompactCard({
   exerciseName,
   sets,
   reps,
+  repsBySet,
   editable,
   index = 0,
   total = 0,
@@ -31,8 +39,10 @@ export function ExerciseCompactCard({
   expanded,
   onRemove,
 }: Props) {
-  const setsReps =
-    sets && reps
+  const perSet = repsBySet ? repsSummary(repsBySet) : null;
+  const setsReps = perSet
+    ? perSet.visual
+    : sets && reps
       ? `${sets} × ${reps}`
       : sets
         ? `${sets} sets`
@@ -101,7 +111,14 @@ export function ExerciseCompactCard({
         </div>
         {setsReps && (
           <div class="compact-card-meta">
-            <span>{setsReps}</span>
+            {perSet && perSet.spoken !== perSet.visual ? (
+              <>
+                <span aria-hidden="true">{setsReps}</span>
+                <span class="sr-only">{perSet.spoken}</span>
+              </>
+            ) : (
+              <span>{setsReps}</span>
+            )}
           </div>
         )}
       </div>
