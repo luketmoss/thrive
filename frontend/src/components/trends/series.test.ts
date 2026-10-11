@@ -59,12 +59,19 @@ describe('rolling', () => {
     expect(rolling(v, ['2026-09-03'], 3).has('2026-09-03')).toBe(false);
   });
 
-  it('needs at least ⌈N/2⌉ values in the window', () => {
-    // N = 7 needs 4.
-    const three = new Map([['2026-09-10', 5], ['2026-09-08', 5], ['2026-09-06', 5]]);
-    expect(rolling(three, ['2026-09-10'], 7).has('2026-09-10')).toBe(false);
-    three.set('2026-09-04', 9);
-    expect(rolling(three, ['2026-09-10'], 7).get('2026-09-10')).toBe(6);
+  it('needs at least min(⌈N/2⌉, 2) values in the window (#407)', () => {
+    // A weight read every 3 days: 7d averages with two readings.
+    const sparse = new Map([['2026-09-10', 5], ['2026-09-07', 7]]);
+    expect(rolling(sparse, ['2026-09-10'], 7).get('2026-09-10')).toBe(6);
+    // Alone in its window, a day has no average, however wide the window.
+    for (const n of [7, 14, 30]) expect(rolling(new Map([['2026-09-10', 5]]), ['2026-09-10'], n).has('2026-09-10')).toBe(false);
+    // A window of 2 or less still needs only ⌈N/2⌉.
+    expect(rolling(new Map([['2026-09-10', 5]]), ['2026-09-10'], 1).get('2026-09-10')).toBe(5);
+  });
+
+  it('leaves a day with no reading blank (#407 AC3)', () => {
+    const v = new Map([['2026-09-08', 5], ['2026-09-10', 7]]);
+    expect(rolling(v, ['2026-09-09'], 7).has('2026-09-09')).toBe(false);
   });
 
   it('counts a 0 and never fills a blank', () => {
@@ -81,6 +88,12 @@ describe('segments', () => {
     expect(segments(pts).map((s) => s.map((p) => p.date.slice(-2)))).toEqual([
       ['01', '02'], ['04', '05', '06'], ['09'],
     ]);
+  });
+
+  it('joins points up to maxGap days apart and breaks beyond it (#407)', () => {
+    const pts = ['2026-09-01', '2026-09-04', '2026-09-10', '2026-09-19'].map((date) => ({ date, value: 1 }));
+    expect(segments(pts, 7).map((s) => s.map((p) => p.date.slice(-2)))).toEqual([['01', '04', '10'], ['19']]);
+    expect(segments(pts, 3).map((s) => s.map((p) => p.date.slice(-2)))).toEqual([['01', '04'], ['10'], ['19']]);
   });
 
   it('sorts first and joins across a month end', () => {

@@ -62,8 +62,15 @@ describe('dots', () => {
 });
 
 describe('average line', () => {
-  it('breaks at a day without a point and is absent when Off', () => {
-    const pts = daily(30, () => 50, [10]);
+  it('joins across a gap shorter than its window (#407)', () => {
+    const { container } = renderCard(metric('a', daily(30, () => 50, [10])));
+    expect(container.querySelectorAll('path.trend-line')).toHaveLength(1);
+    // The dots still show the blank day.
+    expect(container.querySelectorAll('circle.trend-dot')).toHaveLength(29);
+  });
+
+  it('breaks at a gap longer than its window and is absent when Off', () => {
+    const pts = daily(30, () => 50, [10, 11, 12, 13, 14, 15, 16, 17]);
     const on = renderCard(metric('a', pts));
     expect(on.container.querySelectorAll('path.trend-line')).toHaveLength(2);
     for (const p of on.container.querySelectorAll('path.trend-line')) {
@@ -72,7 +79,7 @@ describe('average line', () => {
     cleanup();
     const off = renderCard(metric('a', pts), '1M', 0);
     expect(off.container.querySelectorAll('path.trend-line')).toHaveLength(0);
-    expect(off.container.querySelectorAll('circle.trend-dot')).toHaveLength(29);
+    expect(off.container.querySelectorAll('circle.trend-dot')).toHaveLength(22);
   });
 });
 
