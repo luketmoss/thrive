@@ -3,6 +3,7 @@
 // without a clock or a sheet.
 
 import type { SyncLogEntry } from './sync-log-api';
+import type { SyncLogState } from '../state/store';
 
 /**
  * The same threshold as the COROS watchdog (`sync/src/deadman.mjs`), so the
@@ -97,4 +98,55 @@ export function syncTone(s: SyncStatus): SyncTone {
   if (s.stale || s.newest.status === 'failed') return 'danger';
   if (s.newest.status !== 'ok') return 'warning';
   return 'neutral';
+}
+
+export interface DaySyncNote {
+  vendor: 'COROS' | 'Withings';
+  text: string;
+  tone: 'warning' | 'danger';
+}
+
+export interface DaySyncStatus {
+  /** The one line: "Synced 2 h ago", "No sync recorded yet", "Checking…" or "Couldn't read sync status". */
+  text: string;
+  tone: SyncTone;
+  /** One short phrase per vendor that failed, finished with errors or has gone quiet. Never error_detail or notes. */
+  notes: DaySyncNote[];
+}
+
+/**
+ * The Day view's one "Synced <age>" line (#409), collapsed from both vendors'
+ * logs. The age is the **older** newest run, so "Synced" never claims more
+ * freshness than the staler vendor has. A vendor whose log is not set up, or
+ * has no runs, is left out of it. Pure: every state is testable without a
+ * clock. Full per-vendor detail stays in Settings.
+ */
+export function collapseSyncStatus(coros: SyncLogState, withings: SyncLogState, now: Date): DaySyncStatus {
+  const vendors = [
+    { name: 'COROS' as const, log: coros, staleAfter: COROS_STALE_AFTER_HOURS },
+    { name: 'Withings' as const, log: withings, staleAfter: WITHINGS_STALE_AFTER_HOURS },
+  ];
+  let checking = false;
+  let unreadable = false;
+  const ages: number[] = [];
+  const notes: DaySyncNote[] = [];
+  for (const { name, log, staleAfter } of vendors) {
+    if (log.state === 'idle' || log.state === 'loading') { checking = true; continue; }
+    if (log.state === 'not-set-up') continue;
+    if (log.state === 'error') { unreadable = true; continue; }
+    const s = summarizeSyncLog(log.entries, now, staleAfter);
+    if (s.kind === 'unreadable') { unreadable = true; continue; }
+    if (s.kind === 'empty') continue;
+    ages.push(s.ageMs);
+    if (s.newest.status === 'failed') notes.push({ vendor: name, text: `${name} last run failed`, tone: 'danger' });
+    else if (s.stale) notes.push({ vendor: name, text: `${name} sync may have stopped`, tone: 'danger' });
+    else if (s.newest.status !== 'ok') {
+      const partial = s.newest.status === 'partial';
+      notes.push({ vendor: name, text: `${name} last run ${partial ? 'finished with errors' : 'status unknown'}`, tone: 'warning' });
+    }
+  }
+  if (unreadable) return { text: "Couldn't read sync status", tone: 'warning', notes };
+  if (checking) return { text: 'Checking…', tone: 'neutral', notes };
+  if (ages.length === 0) return { text: 'No sync recorded yet', tone: 'neutral', notes };
+  return { text: `Synced ${formatAge(Math.max(...ages))}`, tone: 'neutral', notes };
 }

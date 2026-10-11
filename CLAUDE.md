@@ -151,6 +151,10 @@ Google Sheet "Groundwork" with these tabs:
   and `frontend/src/api/sync-requests-api.ts` — change both together. Created
   by `scripts/migrate-314-sync-requests-tab.mjs`. Later columns are only ever
   appended.
+  The Day view (#409) shows "Synced <age>" (the older of COROS's and Withings's
+  newest runs) with a Sync now control that shares `useSyncNow` with Settings;
+  a request closing re-reads health, the sync logs and Workouts/Sets (held as
+  `src/state/refresh-hold.ts` holds them).
 
 `Created` on `Exercises`/`Workouts`/`Labels` is written but never read — a
 deliberate forensic trail, not dead weight to be removed.

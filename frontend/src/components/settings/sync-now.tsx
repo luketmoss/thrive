@@ -27,9 +27,11 @@ function entriesOf(log: SyncLogState) {
  * Everything Sync now needs (#315): the two vendor lines, whether any request
  * is open, and the press. Polls the sheet only while a request is open and the
  * page is visible. In demo mode the same views come from a simulated request on
- * a fake clock, and nothing is read or written.
+ * a fake clock, and nothing is read or written. `onLanded` (#409) is called
+ * once when a request goes from open to closed, for a screen that has to
+ * re-read what the sync wrote.
  */
-export function useSyncNow(token: string | null, email: string) {
+export function useSyncNow(token: string | null, email: string, onLanded?: () => void) {
   const [now, setNow] = useState(() => new Date());
   const demo = isDemo();
   const pressedAt = demoSyncPressedAt.value;
@@ -86,8 +88,13 @@ export function useSyncNow(token: string | null, email: string) {
   // Day's next read must not be swallowed by its 60 s limit after a requested run (AC4).
   const wasOpen = useRef(false);
   const openNow = open.coros || open.withings;
+  const landed = useRef(onLanded);
+  landed.current = onLanded;
   useEffect(() => {
-    if (wasOpen.current && !openNow) healthRefresh.invalidate();
+    if (wasOpen.current && !openNow) {
+      healthRefresh.invalidate();
+      landed.current?.();
+    }
     wasOpen.current = openNow;
   }, [openNow]);
 
