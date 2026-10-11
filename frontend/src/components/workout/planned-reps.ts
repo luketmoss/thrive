@@ -10,10 +10,34 @@ import type { PlannerExercise } from './workout-planner';
 export const MAX_PLANNED_SETS = 20;
 
 /**
- * Every Reps input in the planner — the per-set rows and "Reps, all sets" —
- * spreads this one set of props, so #376 can change them all together.
+ * Every planned-Reps input — the planner's per-set rows and "Reps, all sets",
+ * and the template editor's Reps — spreads this one set of props (#375,
+ * #376). Text, not `number`: a number input reports `""` for a partial or
+ * invalid entry and so cannot refuse one; `RepsField` refuses it instead.
  */
-export const REPS_INPUT_PROPS = { type: 'number', inputMode: 'numeric', min: '0' } as const;
+export const REPS_INPUT_PROPS = {
+  type: 'text',
+  inputMode: 'numeric',
+  pattern: '[0-9]*',
+  maxLength: 3,
+  autoComplete: 'off',
+} as const;
+
+const WHOLE_REPS = /^[1-9][0-9]{0,2}$/;
+
+/**
+ * Whether `text` is whole-number reps (#376): 1–999, no leading zero, sign
+ * or decimal. Any other non-blank stored value (`4-6`, `AMRAP`, `0`) is held
+ * text: shown read-only and saved exactly as stored until replaced.
+ */
+export function isWholeReps(text: string): boolean {
+  return WHOLE_REPS.test(text);
+}
+
+/** Stored, non-blank, and not whole-number reps: shown read-only, never edited. */
+export function isHeldReps(text: string): boolean {
+  return text !== '' && !isWholeReps(text);
+}
 
 /**
  * The number of sets a typed Sets value means: floored, clamped to

@@ -6,7 +6,8 @@ import { SectionPicker } from '../shared/section-picker';
 import type { ExerciseWithRow } from '../../api/types';
 import { toLocalDateStr } from '../activities/activities-helpers';
 import { estimateMinutesToSeconds, secondsToMinutesInput } from '../../api/duration';
-import { REPS_INPUT_PROPS, extendReps, heldReps, maxSetsOf, plannedSetCount, repsVary } from './planned-reps';
+import { RepsField } from '../shared/reps-field';
+import { extendReps, heldReps, maxSetsOf, plannedSetCount, repsVary } from './planned-reps';
 
 export interface PlannerExercise {
   exercise_id: string;
@@ -261,7 +262,6 @@ function PlannerExerciseConfig({ ex, onChange }: { ex: PlannerExercise; onChange
   const count = plannedSetCount(ex.sets, maxSets);
   const held = heldReps(ex);
   const varies = repsVary(held);
-  const hintId = `${uid}-all-hint`;
 
   const setRow = (index: number, value: string) => {
     const next = extendReps(ex.reps_by_set, count).slice();
@@ -292,21 +292,14 @@ function PlannerExerciseConfig({ ex, onChange }: { ex: PlannerExercise; onChange
         </div>
         <div class="form-group" style={{ flex: 1 }}>
           <label class="form-label" for={`${uid}-all`}>Reps, all sets</label>
-          <input
+          <RepsField
             id={`${uid}-all`}
-            class="form-input"
-            {...REPS_INPUT_PROPS}
-            placeholder={varies ? 'Varies' : 'e.g. 10'}
-            aria-describedby={varies ? hintId : undefined}
             value={varies ? '' : held[0]}
-            onInput={(e) => {
-              const value = (e.target as HTMLInputElement).value;
-              onChange({ reps_by_set: held.map(() => value) });
-            }}
+            onChange={(value) => onChange({ reps_by_set: held.map(() => value) })}
+            exerciseName={ex.exercise_name}
+            placeholder={varies ? 'Varies' : 'e.g. 10'}
+            hint={varies ? 'Sets differ. A value here replaces every set.' : undefined}
           />
-          {varies && (
-            <span id={hintId} class="sr-only">Sets differ. A value here replaces every set.</span>
-          )}
         </div>
       </div>
 
@@ -318,12 +311,12 @@ function PlannerExerciseConfig({ ex, onChange }: { ex: PlannerExercise; onChange
           {held.map((value, s) => (
             <div class="planner-set-row" key={s}>
               <label class="form-label" for={`${uid}-set-${s}`}>Set {s + 1}</label>
-              <input
+              <RepsField
                 id={`${uid}-set-${s}`}
-                class="form-input"
-                {...REPS_INPUT_PROPS}
                 value={value}
-                onInput={(e) => setRow(s, (e.target as HTMLInputElement).value)}
+                onChange={(v) => setRow(s, v)}
+                exerciseName={ex.exercise_name}
+                setNumber={s + 1}
               />
             </div>
           ))}

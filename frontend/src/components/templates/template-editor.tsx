@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'preact/hooks';
+import { useState, useEffect, useRef, useId } from 'preact/hooks';
 import { templates } from '../../state/store';
 import { addTemplate, editTemplate, removeTemplate } from '../../state/actions';
 import { useAuth } from '../../auth/auth-context';
@@ -7,6 +7,7 @@ import { AddExerciseModal } from '../exercises/add-exercise-modal';
 import { ExerciseCompactCard } from '../shared/exercise-compact-card';
 import { newRowKey, swapAt, useReorderFocus, type MoveDirection } from '../shared/reorder-focus';
 import { SectionPicker } from '../shared/section-picker';
+import { RepsField } from '../shared/reps-field';
 import type { ExerciseWithRow } from '../../api/types';
 
 export interface TemplateExerciseSlot {
@@ -209,42 +210,7 @@ export function TemplateEditor({ templateId }: Props) {
             />
 
             {editingIndex === i && (
-              <div class="template-exercise-config">
-                <SectionPicker
-                  value={ex.section}
-                  onChange={(section) => updateExercise(i, { section })}
-                />
-
-                <div class="config-row" style={{ marginTop: 'var(--space-sm)' }}>
-                  <div class="form-group" style={{ flex: 1 }}>
-                    <label class="form-label">Sets</label>
-                    <input
-                      class="form-input"
-                      type="number"
-                      min="1"
-                      max="20"
-                      placeholder="e.g. 3"
-                      value={ex.sets}
-                      onInput={(e) =>
-                        updateExercise(i, { sets: (e.target as HTMLInputElement).value })
-                      }
-                    />
-                  </div>
-                  <div class="form-group" style={{ flex: 1 }}>
-                    <label class="form-label">Reps</label>
-                    <input
-                      class="form-input"
-                      type="number"
-                      min="0"
-                      placeholder="e.g. 10"
-                      value={ex.reps}
-                      onInput={(e) =>
-                        updateExercise(i, { reps: (e.target as HTMLInputElement).value })
-                      }
-                    />
-                  </div>
-                </div>
-              </div>
+              <TemplateExerciseConfig ex={ex} onChange={(updated) => updateExercise(i, updated)} />
             )}
           </div>
         ))}
@@ -289,6 +255,45 @@ export function TemplateEditor({ templateId }: Props) {
           onClose={() => setShowExercisePicker(false)}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * An expanded template entry: section, Sets and Reps. Reps is the shared
+ * whole-number field (#376), so a stored range shows read-only and saves
+ * exactly as stored until replaced. Labels tied by `useId`.
+ */
+function TemplateExerciseConfig({ ex, onChange }: { ex: TemplateExerciseSlot; onChange: (updated: Partial<TemplateExerciseSlot>) => void }) {
+  const uid = useId();
+  return (
+    <div class="template-exercise-config">
+      <SectionPicker value={ex.section} onChange={(section) => onChange({ section })} />
+
+      <div class="config-row" style={{ marginTop: 'var(--space-sm)' }}>
+        <div class="form-group" style={{ flex: 1 }}>
+          <label class="form-label" for={`${uid}-sets`}>Sets</label>
+          <input
+            id={`${uid}-sets`}
+            class="form-input"
+            type="number"
+            min="1"
+            max="20"
+            placeholder="e.g. 3"
+            value={ex.sets}
+            onInput={(e) => onChange({ sets: (e.target as HTMLInputElement).value })}
+          />
+        </div>
+        <div class="form-group" style={{ flex: 1, minWidth: 0 }}>
+          <label class="form-label" for={`${uid}-reps`}>Reps</label>
+          <RepsField
+            id={`${uid}-reps`}
+            value={ex.reps}
+            onChange={(reps) => onChange({ reps })}
+            exerciseName={ex.exercise_name}
+          />
+        </div>
+      </div>
     </div>
   );
 }
