@@ -1439,7 +1439,7 @@ input, select, textarea {
   color: var(--color-text);
   font-size: var(--text-sm);
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .reps-field-held-line .reps-field-held {
@@ -1450,7 +1450,7 @@ input, select, textarea {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--space-sm);
+  gap: var(--space-xs);
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -1463,7 +1463,13 @@ input, select, textarea {
   flex: none;
   min-height: 44px;
   min-width: 44px;
-  padding: 0 var(--space-md);
+  padding: 0 var(--space-sm);
+}
+
+/* A row with long held text grows taller; its "Set n" label never wraps. */
+.planner-set-row > .form-label {
+  flex: none;
+  white-space: nowrap;
 }
 
 .section-select {
@@ -1548,7 +1554,7 @@ input, select, textarea {
    a run of digits and slashes offers the browser no break of its own. */
 .compact-card-meta > span {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .compact-card-remove {
