@@ -26,7 +26,7 @@ import { shiftTrackerRows } from './row-shift';
 import { unclaimedRowFor } from './adopt-row';
 import { orderWrites, queuedOrderMap } from './order-writes';
 
-/** Finish's toast when the exercise order could not be written (#392 AC3). */
+/** Finish's toast when the exercise order or sections could not be written (#392 AC3, #395). */
 export const ORDER_SAVE_FAILED = "Couldn't save the exercise order and sections. Try again.";
 
 // #394: the tracker's writes to Sets rows go out one at a time across every
@@ -122,7 +122,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
   // Remove set taps whose write has not finished: a repeat tap is ignored.
   const pendingRemovals = useRef<Set<string>>(new Set());
 
-  /** Give this workout's queued sets the order they now have (#392 AC5). */
+  /** Give this workout's queued sets the order and section they now have (#392 AC5, #395 AC3). */
   const remapQueue = (map: QueuedOrderMap) => {
     try {
       remapQueuedOrders(workoutId, map);

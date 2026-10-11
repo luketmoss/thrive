@@ -1,9 +1,9 @@
 // #392 — a Move up/down in a live workout is written to the sheet: the new
 // exercise_order goes to every saved Sets row of the exercises involved, in
 // one all-or-nothing batchUpdate of column E, on the tracker's one-at-a-time
-// write queue (#394). #395 adds the section (column D) to the same write. Finish saves each unsaved set through its own row
-// (#389) and repairs any row still out of order before the workout is marked
-// finished. The offline queue keys a saved set by its row and follows moves.
+// write queue (#394). #395 adds the section (column D) to the same write.
+// Finish saves each unsaved set through its own row (#389) and repairs any row
+// still out of order or section before the workout is marked finished. The offline queue keys a saved set by its row and follows moves.
 //
 // Drives the real WorkoutTracker and the real actions / sync-queue /
 // workouts-api over an in-memory Sets tab (the `../../api/sheets` harness of
@@ -708,6 +708,22 @@ describe('#395 AC2: only what differs is written; warmup and edit mode are uncha
     await vi.advanceTimersByTimeAsync(0);
     expect(log).toEqual(['delete', 'delete']);
     expect(batches).toHaveLength(0);
+  });
+
+  it('a change from warmup writes nothing until a value is typed, then that row is adopted with the new section', async () => {
+    await mount([
+      ['e_cat', 'Cat-Cow', 'warmup', 1, 1, '', '10'],
+      ['e_bench', 'Bench', 'primary', 2, 1, '100', '5'],
+    ]);
+    changeSection(0, 'primary');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(log).toEqual([]);
+
+    type(0, '20');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(writes.filter((w) => w.kind === 'update').map((w) => [w.row, w.values[3]])).toEqual([[2, 'primary']]);
+    expect(writes.filter((w) => w.kind === 'append')).toHaveLength(0);
+    expect(sheet.Sets).toHaveLength(2);
   });
 
   it('edit mode: a section change makes no write', async () => {

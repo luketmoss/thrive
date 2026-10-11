@@ -91,7 +91,7 @@ export function shiftQueueAfterDelete(row: number): void {
     }));
 }
 
-/** Where a set of the moved workout now sits, for `remapQueuedOrders`. */
+/** Where a set of the moved or re-sectioned workout now sits, for `remapQueuedOrders`. */
 export interface QueuedOrderMap {
   /**
    * Sets with a row: the row's set (exercise and set number, to check) and its
@@ -137,8 +137,8 @@ export function remapQueuedOrders(workoutId: string, map: QueuedOrderMap): void 
       const orderNow = order ?? p.exercise_order;
       section = map.sections?.find(s => s.exercise_id === p.exercise_id && s.exercise_order === orderNow)?.section;
     }
-    const newOrder = order !== undefined && order !== p.exercise_order ? order : p.exercise_order;
-    const newSection = section !== undefined && section !== p.section ? section : p.section;
+    const newOrder = order ?? p.exercise_order;
+    const newSection = section ?? p.section;
     if (newOrder === p.exercise_order && newSection === p.section) return e;
     changed = true;
     const payload = { ...p, exercise_order: newOrder, section: newSection };
