@@ -163,7 +163,11 @@ export async function flushQueue(token: string): Promise<FlushResult> {
   let synced = 0;
   let failed = 0;
 
-  for (const entry of queue) {
+  for (const queued of queue) {
+    // The entry as it is now, not as it was read: a move may have given it a
+    // new order since the flush began (#392). Gone meanwhile: nothing to send.
+    const entry = readQueue().find(e => (queued.id ? e.id === queued.id : e.key === queued.key));
+    if (!entry) continue;
     try {
       const { payload } = entry;
 

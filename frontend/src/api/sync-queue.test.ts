@@ -339,6 +339,27 @@ describe('remapQueuedOrders (#392 AC5)', () => {
   });
 });
 
+describe('flushQueue sends each entry as it is when its turn comes (#392)', () => {
+  it('an entry a move re-keyed during the flush goes out with its new order', async () => {
+    let release!: () => void;
+    vi.mocked(workoutsApi.updateSet)
+      .mockImplementationOnce(() => new Promise<void>((r) => { release = r; }))
+      .mockResolvedValue(undefined);
+    enqueueSet(makeSet({ sheetRow: 2, set_number: 1 }));
+    enqueueSet(makeSet({ sheetRow: 3, set_number: 2, exercise_order: 1 }));
+    const flushing = flushQueue('tok');
+    await Promise.resolve();
+    remapQueuedOrders('w1', {
+      byRow: new Map([[3, { exercise_id: 'ex1', set_number: 2, exercise_order: 4 }]]),
+      moves: [],
+    });
+    release();
+    await flushing;
+    expect(vi.mocked(workoutsApi.updateSet).mock.calls[1][1]).toMatchObject({ sheetRow: 3, exercise_order: 4 });
+    expect(readQueue()).toHaveLength(0);
+  });
+});
+
 describe('flushQueue updates the in-memory set by its row (#392 AC5)', () => {
   it("replaces the active set at the payload's row, never a twin at the same exercise, order and set number", async () => {
     vi.mocked(workoutsApi.updateSet).mockResolvedValue(undefined);

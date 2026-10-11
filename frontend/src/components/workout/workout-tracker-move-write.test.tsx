@@ -329,13 +329,14 @@ describe('AC3: Finish saves by row and leaves the sheet in the order shown', () 
     const rowWrites = writes.filter((w) => w.kind !== 'delete');
     expect(rowWrites).toHaveLength(1);
     expect(rowWrites[0]).toMatchObject({ kind: 'update', row: 3 });
-    // The repair ran after the save and before Finish: every row in order.
+    // Every row in order before Finish.
     expect(sheetBrief()).toEqual([
       ['e_row', 'primary', 2, 1, '95', '8'],
       ['e_row', 'SS1', 1, 1, '135', ''],
       ['e_curl', 'burnout', 3, 1, '', ''],
     ]);
-    expect(log.slice(-2)).toEqual(['update', 'batch']);
+    // The repair of the failed move ran first, then the save; nothing left after it.
+    expect(log.slice(-2)).toEqual(['batch', 'update']);
   });
 
   it('a set with no row is appended once at Finish, with its current order', async () => {
@@ -418,6 +419,27 @@ describe('AC3: Finish saves by row and leaves the sheet in the order shown', () 
     await vi.advanceTimersByTimeAsync(200);
     expect(finishWorkout).toHaveBeenCalledTimes(1);
     expect(finishWorkout.mock.calls[0]).toEqual(['w1', 'Felt strong', 'Hard', 'test-token']);
+    expect(sheetBrief().map((r) => r[2])).toEqual([2, 2, 1, 1, 3, 3]);
+  });
+});
+
+describe('AC3 with #395: a section that differs on the sheet does not leave Finish stuck', () => {
+  it('a failed move write, then an edit: Finish repairs the order first, so the own-row save is accepted', async () => {
+    await mount(BENCH_ROW_CURL);
+    // The sheet's section for Row differs from the card's (a log-mode section
+    // change is not written yet, #395): only the order can match.
+    activeWorkoutSets.value = activeWorkoutSets.value.map((s) =>
+      s.exercise_id === 'e_row' ? { ...s, section: 'SS2' } : s);
+    batchFailure = new TypeError('Failed to fetch');
+    moveUp(1);
+    await vi.advanceTimersByTimeAsync(0);
+    batchFailure = null;
+    type(0, '135'); // Row, now first
+    await finish();
+    expect(finishWorkout).toHaveBeenCalledTimes(1);
+    expect(toasts.value).toHaveLength(0);
+    expect(writes.filter((w) => w.kind === 'update').map((w) => w.row)).toEqual([4]);
+    expect(writes.filter((w) => w.kind === 'append')).toHaveLength(0);
     expect(sheetBrief().map((r) => r[2])).toEqual([2, 2, 1, 1, 3, 3]);
   });
 });

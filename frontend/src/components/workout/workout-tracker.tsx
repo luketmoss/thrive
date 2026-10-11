@@ -632,6 +632,21 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
       // order write among them) has finished, and reads the list as they
       // left it (#394).
       await enqueueWrite(async () => {
+        const repairOrders = async () => {
+          try {
+            await writeOrders();
+          } catch (err) {
+            // Finish stops with the form as it is: nothing is marked finished.
+            if (!(err instanceof ReauthFailedError)) showToast(ORDER_SAVE_FAILED, 'error');
+            throw err;
+          }
+        };
+        // First the rows a failed move write left out of order: a saved set
+        // whose row differs in order (and in section, #395) would otherwise be
+        // refused by saveSet's own-row check on every Finish. No request when
+        // nothing differs.
+        await repairOrders();
+
         for (const key of listRef.current.map(trackerRowKey)) {
           const ex = listRef.current.find((e) => trackerRowKey(e) === key);
           if (!ex || isWarmupExercise(ex)) continue;
@@ -642,13 +657,9 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
           }
         }
 
-        try {
-          await writeOrders();
-        } catch (err) {
-          // Finish stops with the form as it is: nothing is marked finished.
-          if (!(err instanceof ReauthFailedError)) showToast(ORDER_SAVE_FAILED, 'error');
-          throw err;
-        }
+        // Then any row the saves left behind (a set's append, or a write a
+        // flush overtook).
+        await repairOrders();
       });
 
       await finishWorkout(workoutId, notes, finishEffort, token);
