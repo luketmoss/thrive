@@ -1554,7 +1554,7 @@ input, select, textarea {
    a run of digits and slashes offers the browser no break of its own. */
 .compact-card-meta > span {
   min-width: 0;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 
 .compact-card-remove {
