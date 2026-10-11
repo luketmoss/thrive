@@ -1533,7 +1533,7 @@ export async function requestSyncNow(
     return;
   }
   syncAsk.value = 'asking';
-  let appended: string[][];
+  let appended: { rows: string[][]; token: string };
   try {
     appended = await appendSyncRequests(vendors, email, token);
   } catch (err) {
@@ -1543,14 +1543,16 @@ export async function requestSyncNow(
     return;
   }
   syncAsk.value = 'idle';
-  const dispatching = requestSync(appended.map((row) => row[0]), token);
-  await loadSyncRequests(token);
+  // The append may have re-authed; the token it succeeded with is the live one.
+  const live = appended.token;
+  const dispatching = requestSync(appended.rows.map((row) => row[0]), live);
+  await loadSyncRequests(live);
   const outcome = await dispatching;
   if (!outcome.ok) {
     console.warn(`Sync now: not dispatched at once (${outcome.kind}); the poller will pick it up.`);
     if (outcome.kind === 'no_api_url') return; // no call was made, so nothing has changed
   }
-  await loadSyncRequests(token);
+  await loadSyncRequests(live);
 }
 
 // ── Health data (#236) ───────────────────────────────────────────────

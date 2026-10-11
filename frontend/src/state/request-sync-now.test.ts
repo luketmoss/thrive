@@ -41,7 +41,7 @@ beforeEach(() => {
   syncAsk.value = 'idle';
   syncRequests.value = [];
   demoSyncPressedAt.value = null;
-  appendSyncRequests.mockReset().mockImplementation(async () => { events.push(`append:${syncAsk.value}`); return ROWS; });
+  appendSyncRequests.mockReset().mockImplementation(async () => { events.push(`append:${syncAsk.value}`); return { rows: ROWS, token: TOKEN }; });
   fetchSyncRequests.mockReset().mockImplementation(async () => { events.push('read'); return []; });
   requestSync.mockReset().mockImplementation(async () => { events.push(`call:${syncAsk.value}`); return { ok: true }; });
   warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -57,6 +57,13 @@ describe('requestSyncNow (#410)', () => {
     expect(events).toEqual(['append:asking', 'call:idle', 'read', 'read']);
     expect(syncAsk.value).toBe('idle');
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('uses the token the append re-authed to, for the call and both reads (#410 review)', async () => {
+    appendSyncRequests.mockResolvedValue({ rows: ROWS, token: 'ya29.fresh' });
+    await requestSyncNow(TOKEN, 'me@example.com', ['coros', 'withings']);
+    expect(requestSync).toHaveBeenCalledWith(['sr_0000c0c0', 'sr_0000a1a1'], 'ya29.fresh');
+    expect(fetchSyncRequests.mock.calls.map((c) => c[0])).toEqual(['ya29.fresh', 'ya29.fresh']);
   });
 
   it('re-reads after the call settles, not before', async () => {

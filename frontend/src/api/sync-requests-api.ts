@@ -63,18 +63,21 @@ export function newSyncRequestId(): string {
 /**
  * Ask for a sync (#315): one row per vendor, A:E only, status `requested`.
  * The poller owns F:I. In demo mode nothing is written. Returns the rows
- * appended, so a test can see exactly what went to the sheet.
+ * appended, so a test can see exactly what went to the sheet, and the token
+ * the append succeeded with: a 401 re-auths, and the caller's own token is
+ * then spent (#410's direct call would be refused with it).
  */
 export async function appendSyncRequests(
   vendors: readonly SyncRequestVendor[],
   email: string,
   token: string,
   now: Date = new Date(),
-): Promise<string[][]> {
-  const values = vendors.map((v) => [newSyncRequestId(), v, now.toISOString(), email, 'requested']);
-  if (values.length === 0 || isDemo()) return values;
-  await withReauth(token, (t) => sheetsAppend('SyncRequests!A:E', values, t));
-  return values;
+): Promise<{ rows: string[][]; token: string }> {
+  const rows = vendors.map((v) => [newSyncRequestId(), v, now.toISOString(), email, 'requested']);
+  if (rows.length === 0 || isDemo()) return { rows, token };
+  let used = token;
+  await withReauth(token, (t) => { used = t; return sheetsAppend('SyncRequests!A:E', rows, t); });
+  return { rows, token: used };
 }
 
 /** Every request row, in sheet order. Demo mode has none (its requests are simulated). */
