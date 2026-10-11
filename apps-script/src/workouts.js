@@ -673,10 +673,6 @@ function normalizeEditedFields(value) {
   return out;
 }
 
-/**
- * The merged fields of a workout as the sheet holds them, and which of them
- * the user has edited, in SYNC_MERGED_FIELDS order so a re-run is identical.
- */
 /** A row planned for this activity's day and type, not yet any activity's (#403). */
 function isClaimablePlan(row, incoming) {
   return cell(row[COL.STATUS]) === 'planned' &&
@@ -729,6 +725,10 @@ function claimPlan(sheet, plan, incoming, owned) {
   };
 }
 
+/**
+ * The merged fields of a workout as the sheet holds them, and which of them
+ * the user has edited, in SYNC_MERGED_FIELDS order so a re-run is identical.
+ */
 function pickSynced(workout, edited) {
   var out = {};
   for (var i = 0; i < SYNC_MERGED_FIELDS.length; i++) {

@@ -188,7 +188,9 @@ export function createThriveApi({
    * lean on:
    *  - upsertSyncedWorkout is keyed on (source, source_activity_id); a replay
    *    finds the row with every field already equal, keeps nothing, flags no
-   *    edit, and answers `updated`.
+   *    edit, and answers `updated`. A claim of a plan (#403) replays as an
+   *    `updated` that keeps the plan's name and flags it edited: the row is
+   *    what the claim wrote, counted as n_updated rather than n_new.
    *  - upsertDailyHealth (by date) and upsertBodyMeasurements (by grpid)
    *    carry the same synced_at and rewrite the same row.
    *  - rebuildDailySummary is a pure function of its sources and computed_at.
