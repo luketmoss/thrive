@@ -50,7 +50,7 @@ Demo mode auto-authenticates — no login screen, no OAuth popups. Just navigate
 
 ### Cloud sessions (no Browser pane)
 
-The `preview_*`/Browser pane tools exist only in the desktop app. Where they are missing, test visually with `.thrive/look.mjs` — never fall back to code inspection alone:
+The `preview_*`/Browser pane tools exist only in the desktop app. **If you have them, use them (above) and skip this section:** `.thrive/look.mjs` needs the cloud container's Playwright and fails on a desktop machine with `Cannot find module 'playwright'`. Only where the Browser pane is missing, test visually with `.thrive/look.mjs` — never fall back to code inspection alone:
 
 - `node .thrive/look.mjs /templates --width 375 --theme dark --out <scratchpad>/tpl.png` starts the dev server if needed, screenshots the demo app, and prints console errors. Open the PNG with `Read` to see it.
 - For AC flows, write a short script that does `import { open } from '<repo>/.thrive/look.mjs'` and drives `page` with Playwright: `getByRole(...).click()`, `fill`, `page.evaluate` for computed CSS, `page.screenshot`.

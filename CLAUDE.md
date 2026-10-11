@@ -34,7 +34,7 @@ Personal workout tracker: Preact SPA → Google Sheets REST API.
 ## Preview & Demo Mode
 - The app requires Google OAuth to function. For preview testing (QA, UX agents), use **demo mode** by navigating to `http://localhost:5173/thrive/?demo=true` after starting the dev server.
 - Demo mode provides a fake user and skips Google auth. Changes are not persisted.
-- Cloud sessions have no Browser pane. `node .thrive/look.mjs [route]` drives the demo app with the container's Playwright and Chromium instead; `/qa` says how.
+- Cloud sessions have no Browser pane. `node .thrive/look.mjs [route]` drives the demo app with the container's Playwright and Chromium instead; `/qa` says how. On the desktop app use the Browser pane (`preview_start`); `look.mjs` fails there because Playwright is not installed locally.
 
 ## Data Model
 Google Sheet "Groundwork" with these tabs:
