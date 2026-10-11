@@ -2,10 +2,10 @@
 // `gh` and dispatching to board.yml (#405). Stubs `gh` (and, for the
 // remote-dispatch cases, `curl`) as fake executables on PATH so these run with
 // no network and no real `gh`. Run with: node --test .thrive/board.test.mjs
-// (Linux only: the fakes are `#!` scripts. Anywhere else the real `gh` runs
-// and these tests move real board cards.)
+// (Not on Windows: the fakes are `#!` scripts it cannot run, so the real `gh`
+// would run and these tests would move real board cards. They skip there.)
 
-import { test } from 'node:test';
+import { test as nodeTest } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, chmodSync, readFileSync, existsSync } from 'node:fs';
@@ -16,12 +16,45 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const boardScript = join(here, 'board.mjs');
 
+// On Windows the fake `gh` does not run, so the real one would. Skip unless
+// something else stands in for `gh` and `curl` (BOARD_TEST_HERMETIC=1).
+const unsafe = process.platform === 'win32' && !process.env.BOARD_TEST_HERMETIC;
+const test = unsafe
+  ? (name, fn) => nodeTest(name, { skip: 'needs a non-Windows machine: the fake gh would not run' }, fn)
+  : nodeTest;
+
+// The environment the tests start from: nothing that routes a command to
+// board.yml or authenticates a dispatch leaks in from the machine running them.
+function cleanEnv() {
+  const { BOARD_REMOTE, BOARD_ARGS, GH_TOKEN, GITHUB_TOKEN, ...rest } = process.env;
+  return rest;
+}
+
+// A `curl` that refuses and records the call: a test that did not ask for a
+// dispatch must never reach a real one.
+function refusingCurlSource(refusedFile) {
+  return `#!${process.execPath}
+require('fs').appendFileSync(${JSON.stringify(refusedFile)}, process.argv.slice(2).join(' ') + '\\n');
+process.stderr.write('this test did not expect a dispatch\\n');
+process.exit(7);
+`;
+}
+
 function makeFakeBin(contents) {
   const dir = mkdtempSync(join(tmpdir(), 'board-test-bin-'));
   const path = join(dir, 'gh');
   writeFileSync(path, contents);
   chmodSync(path, 0o755);
+  writeFileSync(join(dir, 'curl'), refusingCurlSource(join(dir, 'curl.refused')));
+  chmodSync(join(dir, 'curl'), 0o755);
   return dir;
+}
+
+// A command that was dispatched to board.yml when the test did not ask for it.
+function assertNoStrayDispatch(binDir) {
+  if (existsSync(join(binDir, 'curl.refused'))) {
+    throw new Error('board.mjs dispatched to board.yml in a test that did not ask for it');
+  }
 }
 
 // A fake `gh` that logs every invocation (one line of JSON per call) to
@@ -119,14 +152,16 @@ function run(args, env = {}, opts = {}) {
     const stdout = execFileSync(process.execPath, [boardScript, ...args], {
       encoding: 'utf8',
       env: {
-        ...process.env,
+        ...cleanEnv(),
         PATH: `${binDir}:${process.env.PATH}`,
         GH_LOG: logFile,
         ...env,
       },
     });
+    assertNoStrayDispatch(binDir);
     return { stdout, log: readLog(logFile), dispatched: dispatched(), ghRan: existsSync(logFile) };
   } catch (err) {
+    assertNoStrayDispatch(binDir);
     return {
       stdout: err.stdout?.toString() ?? '',
       stderr: err.stderr?.toString() ?? '',
@@ -237,7 +272,7 @@ test('add is allowed through the remote-dispatch path (AC4)', () => {
   const stdout = execFileSync(process.execPath, [boardScript, 'add', '216', '--status', 'To Do'], {
     encoding: 'utf8',
     env: {
-      ...process.env,
+      ...cleanEnv(),
       // PATH holds only our fake `curl` — no real `gh` (CI runners ship one),
       // so hasGh() reliably fails and runRemotely takes over. The fake
       // curl's shebang is an absolute path to this same node, so PATH needs
@@ -395,11 +430,14 @@ process.stderr.write('unexpected gh invocation: ' + JSON.stringify(args) + '\\n'
 process.exit(1);
 `);
   chmodSync(path, 0o755);
+  writeFileSync(join(binDir, 'curl'), refusingCurlSource(join(binDir, 'curl.refused')));
+  chmodSync(join(binDir, 'curl'), 0o755);
   const logFile = join(binDir, 'gh.log');
   const stdout = execFileSync(process.execPath, [boardScript, 'list', '--status', 'Refined'], {
     encoding: 'utf8',
-    env: { ...process.env, PATH: `${binDir}:${process.env.PATH}`, GH_LOG: logFile },
+    env: { ...cleanEnv(), PATH: `${binDir}:${process.env.PATH}`, GH_LOG: logFile },
   });
+  assertNoStrayDispatch(binDir);
   assert.match(stdout, /#224\s+\[Refined\]\s+Test issue/);
   const log = readLog(logFile);
   assert.equal(log.length, 1);
@@ -419,7 +457,7 @@ test('a gh that cannot reach the project sends add to board.yml (#405 AC1)', () 
   // The one failed call and the probe: nothing was written before the dispatch.
   assert.equal(log.length, 2);
   assert.deepEqual(log[0].slice(0, 2), ['project', 'item-add']);
-  assert.equal(log[1][1], 'graphql');
+  assert.ok(log[1].some((a) => String(a).includes('node(id: $id)')), 'the second call is the project probe');
 });
 
 test('show with a gh that cannot reach the project is sent to board.yml too (#405 AC1)', () => {
@@ -429,6 +467,24 @@ test('show with a gh that cannot reach the project is sent to board.yml too (#40
   assert.equal(stdout.trim(), '#224  Test issue');
   assert.deepEqual(dispatched, ['show', '224']);
   assert.equal(log.length, 2);
+});
+
+test('set with a gh that cannot reach the project is sent to board.yml, with no mutation tried (#405 AC1)', () => {
+  const { stdout, log, dispatched } = run(['set', '224', '--status', 'Testing'], {
+    GH_GRAPHQL_FAIL: '1', GH_PROBE_FAIL: '1', GH_TOKEN: 'fake-token',
+  }, { curl: '#224: In Development -> Testing' });
+  assert.equal(stdout.trim(), '#224: In Development -> Testing');
+  assert.deepEqual(dispatched, ['set', '224', '--status', 'Testing']);
+  assert.equal(log.length, 2); // the failed lookup and the probe
+  assert.ok(!log.some((call) => call.some((a) => String(a).includes('mutation'))));
+});
+
+test('list with a gh that cannot reach the project is sent to board.yml too (#405 AC1)', () => {
+  const { stdout, dispatched } = run(['list', '--status', 'Refined'], {
+    GH_PROBE_FAIL: '1', GH_TOKEN: 'fake-token',
+  }, { curl: '#224  [Refined]  Test issue' });
+  assert.equal(stdout.trim(), '#224  [Refined]  Test issue');
+  assert.deepEqual(dispatched, ['list', '--status', 'Refined']);
 });
 
 test('a working gh makes no probe call and no extra read (#405 AC2)', () => {
@@ -459,6 +515,18 @@ test('add keeps "not found" for the wording the real gh uses for an issue URL th
   assert.equal(status, 1);
   assert.equal(stderr.trim(), 'Issue #99999999 not found in luketmoss/thrive.');
   assert.equal(dispatched, null);
+});
+
+test('show and set keep "not found" for the wording the real gh uses for a missing issue (#405 AC3)', () => {
+  for (const args of [['show', '99999999'], ['set', '99999999', '--status', 'Testing']]) {
+    const { stderr, status, dispatched } = run(args, {
+      GH_GRAPHQL_FAIL: '1', GH_FAIL_STDERR: 'gh: Could not resolve to an Issue with the number of 99999999.\n',
+      GH_PROBE_JSON: PROBE_OK, GH_TOKEN: 'fake-token',
+    }, { curl: 'must not run' });
+    assert.equal(status, 1);
+    assert.equal(stderr.trim(), 'Issue #99999999 not found in luketmoss/thrive.');
+    assert.equal(dispatched, null);
+  }
 });
 
 test('show: a failed lookup on a gh that reaches the project says what gh said (#405 AC3)', () => {
@@ -493,8 +561,19 @@ test('inside board.yml (BOARD_ARGS set) a failure is reported, never dispatched 
 test('sync still needs gh locally, even forced remote (#405 AC4)', () => {
   const { stderr, status, ghRan, dispatched } = run(['sync'], { BOARD_REMOTE: '1', GH_TOKEN: 'fake-token' }, { curl: 'must not run' });
   assert.equal(status, 1);
-  assert.equal(stderr.trim(), 'sync rewrites board.json locally; run it where gh is installed.');
+  assert.equal(stderr.trim(), 'sync rewrites board.json locally; run it where gh can reach the project.');
   assert.equal(ghRan, false);
+  assert.equal(dispatched, null);
+});
+
+test('a gh failure that ends at the missing token still shows what gh said (#405 AC5)', () => {
+  const { stderr, status, dispatched } = run(['show', '224'], {
+    GH_GRAPHQL_FAIL: '1', GH_FAIL_STDERR: 'API rate limit already exceeded\n', GH_PROBE_FAIL: '1',
+    GH_TOKEN: '', GITHUB_TOKEN: '',
+  }, { curl: 'must not run' });
+  assert.equal(status, 1);
+  assert.match(stderr, /gh said: API rate limit already exceeded/);
+  assert.match(stderr, /GH_TOKEN or GITHUB_TOKEN/);
   assert.equal(dispatched, null);
 });
 

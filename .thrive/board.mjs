@@ -53,6 +53,10 @@ function projectReachable() {
   }
 }
 
+// What `gh` says when the issue is not there: "Could not resolve to an issue"
+// from a query, "resource not found" for a URL that is not one.
+const ISSUE_NOT_FOUND = /could not resolve to an? issue|resource not found/i;
+
 // What `gh` said when a call failed: its stderr, else the error's own message.
 function ghSaid(err) {
   const said = String(err?.stderr ?? '').trim();
@@ -71,7 +75,7 @@ function gh(ghArgs, explain = (said) => `gh failed: ${said}`) {
     // The first `gh` call of a command failed, so nothing has been applied yet.
     // If this `gh` cannot reach the project, send the command to board.yml
     // instead (#405); otherwise the failure is real and is reported as it is.
-    if (ghCalls === 1 && !insideWorkflow && !projectReachable()) runRemotely(args); // the command's args, not ghArgs
+    if (ghCalls === 1 && !insideWorkflow && !projectReachable()) runRemotely(args, ghSaid(err)); // the command's args, not ghArgs
     return die(explain(ghSaid(err)));
   }
 }
@@ -120,7 +124,9 @@ function findItem(issue) {
     '-f', `owner=${config.owner}`,
     '-f', `repo=${repoName}`,
     '-F', `number=${issue}`,
-  ]);
+  ], (said) => (ISSUE_NOT_FOUND.test(said)
+    ? `Issue #${issue} not found in ${config.repo}.`
+    : `gh failed: ${said}`));
   const issueData = JSON.parse(raw).data?.repository?.issue;
   if (!issueData) die(`Issue #${issue} not found in ${config.repo}.`);
   const node = issueData.projectItems.nodes.find((n) => n.project.number === config.projectNumber);
@@ -196,11 +202,12 @@ function setItemStatus(itemId, status) {
   ]);
 }
 
-function runRemotely(args) {
-  if (args[0] === 'sync') die('sync rewrites board.json locally; run it where gh is installed.');
+function runRemotely(args, ghSaidText = '') {
+  if (args[0] === 'sync') die('sync rewrites board.json locally; run it where gh can reach the project.');
   if (!['show', 'add', 'set', 'list'].includes(args[0])) die('Usage: board.mjs <show|add|set|list|sync> ...');
   if (!(process.env.GH_TOKEN || process.env.GITHUB_TOKEN)) {
     die(
+      (ghSaidText ? `gh said: ${ghSaidText}\n` : '') +
       'No GH_TOKEN or GITHUB_TOKEN to dispatch the board workflow with. The dispatch route is used ' +
       'when gh is missing or cannot reach the project; set a token that can send repository_dispatch ' +
       `to ${config.repo}, or run this where gh can reach the project.`
@@ -281,15 +288,14 @@ switch (command) {
     const status = flag(argv, 'status');
     if (status) optionId(status); // refuse an unknown column before adding anything
 
-    // Only a `gh` that could resolve nothing means the issue is not there (it
-    // says "Could not resolve to an issue" or "resource not found" for a URL
-    // that is not one); any other failure is shown as `gh` said it (#405).
+    // Only a `gh` that could resolve nothing means the issue is not there; any
+    // other failure is shown as `gh` said it (#405).
     const raw = gh([
       'project', 'item-add', String(config.projectNumber),
       '--owner', config.owner,
       '--url', `https://github.com/${config.repo}/issues/${issue}`,
       '--format', 'json',
-    ], (said) => (/could not resolve to an? issue|resource not found/i.test(said)
+    ], (said) => (ISSUE_NOT_FOUND.test(said)
       ? `Issue #${issue} not found in ${config.repo}.`
       : `Issue #${issue}: ${said}`));
     const item = JSON.parse(raw);

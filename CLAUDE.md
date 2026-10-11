@@ -253,10 +253,11 @@ classic PAT with `project`, `repo` and `read:org`, and a `GH_TOKEN` or
 `GITHUB_TOKEN` in the session to send the dispatch with. It takes that route
 when `gh` is missing, or when a command's first `gh` call fails and a cheap read
 of the project then fails too (#405); `BOARD_REMOTE=1` forces it with no `gh`
-call. A `gh` that works, and a failure with a project it can reach (reported as
-`gh` said it), are unchanged, and `board.yml`'s own run never takes the route.
-Run `.thrive/board.test.mjs` only in CI or on Linux: its fake `gh` does not
-run on Windows, where the real one would move real cards.
+call. A `gh` that works makes the same calls as before; a failure with a project
+it can reach is reported as `gh` said it, and `board.yml`'s own run never takes
+the route. `.thrive/board.test.mjs` skips itself on Windows (its fake `gh` does
+not run there, so the real one would move real cards); run it in CI or on
+another machine.
 
 | Stage | Skill | Gate |
 |---|---|---|
