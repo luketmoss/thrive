@@ -48,4 +48,25 @@ describe('unclaimedRowFor', () => {
     expect(unclaimedRowFor(LIST, 'w1', SS1, SS1.sets[1], rows)).toBe(7);
     expect(unclaimedRowFor(LIST, 'w1', SS1, SS1.sets[1], rows.slice(0, 5))).toBe(6);
   });
+
+  it('contested by another card\'s set with no row: only the single unclaimed row at this card\'s order', () => {
+    // Two same-section copies, both with a set 2 not yet on a row: the
+    // unclaimed row 5 could be either one's flushed append.
+    const a = tex('primary', 1, [tset(1, 2), tset(2, -1)], 'a');
+    const b = tex('primary', 2, [tset(1, 3), tset(2, -1)], 'b');
+    const rows = [srow('primary', 1, 1, 2), srow('primary', 2, 1, 3), srow('primary', 1, 2, 5)];
+    // B (order 2) never takes row 5, which sits at A's order 1.
+    expect(unclaimedRowFor([a, b], 'w1', b, b.sets[1], rows)).toBe(-1);
+    // A takes it only as main's lookup by order would: the single unclaimed
+    // row at its own order.
+    expect(unclaimedRowFor([a, b], 'w1', a, a.sets[1], rows)).toBe(5);
+    expect(unclaimedRowFor([a, b], 'w1', a, a.sets[1], [...rows, srow('primary', 1, 2, 7)])).toBe(-1);
+    // Contested, a section match alone is not enough.
+    const aMoved = { ...a, exercise_order: 3 };
+    expect(unclaimedRowFor([aMoved, b], 'w1', aMoved, aMoved.sets[1], rows)).toBe(-1);
+    // Once B holds a row of its own, A may take row 5.
+    const bSaved = { ...b, sets: [b.sets[0], tset(2, 6)] };
+    expect(unclaimedRowFor([a, bSaved], 'w1', a, a.sets[1], [...rows, srow('primary', 2, 2, 6)])).toBe(5);
+  });
 });
+

@@ -509,4 +509,59 @@ describe('#389: a set whose offline append the queue flushed is not appended aga
     expect(sheet.Sets[0]).toEqual(toRow(ROWBB_TWINS[0]));
     expect(brief(sheet.Sets[3])).toEqual(['e_row', 'SS1', 2, 2, '140']);
   });
+
+  it('same-section copies: B never takes A\'s flushed row, and A takes it back on its next edit', async () => {
+    // Row added twice mid-workout: both copies `primary`.
+    await mount([
+      ['e_row', 'Row', 'primary', 1, 1, '95', '8'],
+      ['e_row', 'Row', 'primary', 2, 1, '90', '8'],
+      ['e_curl', 'Curl', 'burnout', 3, 1, '', ''],
+    ]);
+    // A's new set 2: the append fails, and the queue flush lands it as row 5.
+    fireEvent.click(cards()[0].querySelector('.add-set-btn')!);
+    appendFailure = new TypeError('Failed to fetch');
+    type(0, '135', 1);
+    await vi.advanceTimersByTimeAsync(1000);
+    await flushQueue('test-token');
+    expect(brief(sheet.Sets[3])).toEqual(['e_row', 'primary', 1, 2, '135']);
+
+    // B adds the same set number and types 200: appended, A's row untouched.
+    fireEvent.click(cards()[1].querySelector('.add-set-btn')!);
+    type(1, '200', 1);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(writes[writes.length - 1].kind).toBe('append');
+    expect(sheet.Sets).toHaveLength(5);
+    expect(brief(sheet.Sets[3])).toEqual(['e_row', 'primary', 1, 2, '135']);
+    expect(brief(sheet.Sets[4])).toEqual(['e_row', 'primary', 2, 2, '200']);
+    expect(saved(1, 1)).toBe(true);
+
+    // A's next edit now takes its own flushed row: no third row, B untouched.
+    type(0, '140', 1);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(writes[writes.length - 1]).toMatchObject({ kind: 'update', row: 5 });
+    expect(sheet.Sets).toHaveLength(5);
+    expect(brief(sheet.Sets[3])).toEqual(['e_row', 'primary', 1, 2, '140']);
+    expect(brief(sheet.Sets[4])).toEqual(['e_row', 'primary', 2, 2, '200']);
+  });
+
+  it('same-section copies: a blank added set on B does not stop A taking back its own flushed row', async () => {
+    await mount([
+      ['e_row', 'Row', 'primary', 1, 1, '95', '8'],
+      ['e_row', 'Row', 'primary', 2, 1, '90', '8'],
+      ['e_curl', 'Curl', 'burnout', 3, 1, '', ''],
+    ]);
+    fireEvent.click(cards()[0].querySelector('.add-set-btn')!);
+    appendFailure = new TypeError('Failed to fetch');
+    type(0, '135', 1);
+    await vi.advanceTimersByTimeAsync(1000);
+    await flushQueue('test-token');
+    fireEvent.click(cards()[1].querySelector('.add-set-btn')!); // B's set 2: blank, no row
+
+    type(0, '140', 1);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(writes[writes.length - 1]).toMatchObject({ kind: 'update', row: 5 });
+    expect(sheet.Sets).toHaveLength(4);
+    expect(brief(sheet.Sets[3])).toEqual(['e_row', 'primary', 1, 2, '140']);
+  });
 });
+
