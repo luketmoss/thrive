@@ -744,6 +744,43 @@ describe('#375 AC2: stored text the input cannot display is written back verbati
   });
 });
 
+describe('#375: a stored entry with more than 20 sets keeps every set', () => {
+  /** An agent scheduled Bench with 22 sets (the API allows it). */
+  const big = () => [
+    ...scheduledSets().filter((r) => !(r[0] === 'w_X' && r[1] === 'ex_pushup')),
+    ...Array.from({ length: 22 }, (_, i) => setRow('w_X', 'ex_bench', 'SS1', 3, i + 1, String(22 - i))),
+  ];
+  beforeEach(() => {
+    sheet.Sets = big();
+    load();
+  });
+  const benchReps = () => rowsOf('w_X').filter((r) => r[1] === 'ex_bench').map((r) => r[6]);
+
+  it('expanded and saved untouched: no Sets write, all 22 rows shown', async () => {
+    await saveFromEditor(() => {
+      const [setsInput] = open(2);
+      expect(setsInput.max).toBe('22');
+      expect(rowInputs()).toHaveLength(22);
+    });
+    expect(batchCalls()).toHaveLength(0);
+    expect(sheet.Sets).toEqual(big());
+  });
+
+  it('another exercise changed: all 22 sets are rewritten as stored', async () => {
+    await saveFromEditor(() => setValue(open(1)[1], '6'));
+    expect(batchCalls()).toHaveLength(1);
+    expect(benchReps()).toEqual(Array.from({ length: 22 }, (_, i) => String(22 - i)));
+  });
+
+  it('its cap is the stored count: 30 shows and saves 22', async () => {
+    await saveFromEditor(() => {
+      setValue(open(2)[0], '30');
+      expect(rowInputs()).toHaveLength(22);
+    });
+    expect(benchReps()).toHaveLength(22);
+  });
+});
+
 // ── The editor's entries as the builder's ───────────────────────────
 
 describe('#375: plannerToBuilderExercises', () => {

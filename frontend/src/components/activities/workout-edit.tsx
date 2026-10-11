@@ -7,7 +7,7 @@ import { WorkoutTracker } from '../workout/workout-tracker';
 import { EditWorkoutForm } from './edit-workout-form';
 import { WorkoutPlanner } from '../workout/workout-planner';
 import type { PlannerExercise } from '../workout/workout-planner';
-import { plannerToBuilderExercises } from '../workout/planned-reps';
+import { MAX_PLANNED_SETS, plannerToBuilderExercises } from '../workout/planned-reps';
 import { estimateMinutesToSeconds, secondsToMinutesInput } from '../../api/duration';
 
 interface Props {
@@ -109,6 +109,7 @@ function PlannedWorkoutEditor({ workoutId }: { workoutId: string }) {
       section: s.section || 'primary',
       sets: String(own.length),
       reps_by_set: own.map((ws) => ws.planned_reps),
+      ...(own.length > MAX_PLANNED_SETS ? { max_sets: own.length } : {}),
       source_order: s.exercise_order,
     });
   }

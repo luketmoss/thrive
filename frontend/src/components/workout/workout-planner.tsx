@@ -6,7 +6,7 @@ import { SectionPicker } from '../shared/section-picker';
 import type { ExerciseWithRow } from '../../api/types';
 import { toLocalDateStr } from '../activities/activities-helpers';
 import { estimateMinutesToSeconds, secondsToMinutesInput } from '../../api/duration';
-import { MAX_PLANNED_SETS, REPS_INPUT_PROPS, extendReps, heldReps, plannedSetCount, repsVary } from './planned-reps';
+import { REPS_INPUT_PROPS, extendReps, heldReps, maxSetsOf, plannedSetCount, repsVary } from './planned-reps';
 
 export interface PlannerExercise {
   exercise_id: string;
@@ -22,6 +22,12 @@ export interface PlannerExercise {
    * and raising it again loses nothing. Save sends `heldReps()` of it.
    */
   reps_by_set: string[];
+  /**
+   * Set only by the planned-workout editor, and only for an entry stored
+   * with more than 20 sets: its stored count, which then replaces 20 as the
+   * Sets cap so an untouched save keeps every set.
+   */
+  max_sets?: number;
   /**
    * Set only by the planned-workout editor (#380), warmups included, and
    * never changed after open: the stored `exercise_order` this entry was
@@ -251,7 +257,8 @@ export function WorkoutPlanner({ initialName = '', initialExercises = [], initia
  */
 function PlannerExerciseConfig({ ex, onChange }: { ex: PlannerExercise; onChange: (updated: Partial<PlannerExercise>) => void }) {
   const uid = useId();
-  const count = plannedSetCount(ex.sets);
+  const maxSets = maxSetsOf(ex);
+  const count = plannedSetCount(ex.sets, maxSets);
   const held = heldReps(ex);
   const varies = repsVary(held);
   const hintId = `${uid}-all-hint`;
@@ -274,12 +281,12 @@ function PlannerExerciseConfig({ ex, onChange }: { ex: PlannerExercise; onChange
             class="form-input"
             type="number"
             min="1"
-            max={String(MAX_PLANNED_SETS)}
+            max={String(maxSets)}
             placeholder="e.g. 3"
             value={ex.sets}
             onInput={(e) => {
               const sets = (e.target as HTMLInputElement).value;
-              onChange({ sets, reps_by_set: extendReps(ex.reps_by_set, plannedSetCount(sets)) });
+              onChange({ sets, reps_by_set: extendReps(ex.reps_by_set, plannedSetCount(sets, maxSets)) });
             }}
           />
         </div>

@@ -17,14 +17,20 @@ export const REPS_INPUT_PROPS = { type: 'number', inputMode: 'numeric', min: '0'
 
 /**
  * The number of sets a typed Sets value means: floored, clamped to
- * 1–{@link MAX_PLANNED_SETS}, and 1 for a blank, `0` or invalid value (the
- * old `|| 1`).
+ * 1–`max` ({@link MAX_PLANNED_SETS} unless the entry was stored with more),
+ * and 1 for a blank, `0` or invalid value (the old `|| 1`).
  */
-export function plannedSetCount(sets: string): number {
+export function plannedSetCount(sets: string, max = MAX_PLANNED_SETS): number {
   const n = Math.floor(Number(sets));
   if (!Number.isFinite(n) || n < 1) return 1;
-  return Math.min(n, MAX_PLANNED_SETS);
+  return Math.min(n, max);
 }
+
+/**
+ * An entry's most sets: 20, or its stored count when the sheet holds more
+ * (an agent can schedule more), so opening and saving it never drops a set.
+ */
+export const maxSetsOf = (ex: Pick<PlannerExercise, 'max_sets'>) => Math.max(MAX_PLANNED_SETS, ex.max_sets ?? 0);
 
 /**
  * `reps` grown to at least `n` values, each new position pre-filled from the
@@ -39,8 +45,8 @@ export function extendReps(reps: string[], n: number): string[] {
 }
 
 /** The values the entry's rows hold, one per set, exactly as Save writes them. */
-export function heldReps(ex: Pick<PlannerExercise, 'sets' | 'reps_by_set'>): string[] {
-  const n = plannedSetCount(ex.sets);
+export function heldReps(ex: Pick<PlannerExercise, 'sets' | 'reps_by_set' | 'max_sets'>): string[] {
+  const n = plannedSetCount(ex.sets, maxSetsOf(ex));
   return extendReps(ex.reps_by_set, n).slice(0, n);
 }
 
