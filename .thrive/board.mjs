@@ -10,9 +10,13 @@
 // Status option IDs are cached in board.json so routine moves cost one API call
 // instead of three. `sync` rewrites that cache after a column is added or renamed.
 //
-// Without `gh` (a cloud Claude Code session), the same command runs remotely in
-// .github/workflows/board.yml and its output is printed here. Those sessions can
-// reach only repo-scoped REST endpoints, so the board itself is out of reach.
+// Without a `gh` that can reach the project (a cloud Claude Code session: no
+// `gh`, or one whose token is invalid or repo-scoped), the same command runs
+// remotely in .github/workflows/board.yml and its output is printed here. Those
+// sessions can reach only repo-scoped REST endpoints, so the board itself is out
+// of reach. The route is chosen when a command's first `gh` call fails (a
+// working `gh` pays for nothing extra), or forced with BOARD_REMOTE=1 (#405).
+// board.yml's own run (BOARD_ARGS set) never takes it: that would loop.
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -23,11 +27,53 @@ const here = dirname(fileURLToPath(import.meta.url));
 const configPath = join(here, 'board.json');
 const config = JSON.parse(readFileSync(configPath, 'utf8'));
 
-function gh(args) {
+function ghRaw(args) {
   // Explicit stdio so a failing call's stderr is only ever captured (into the
   // thrown error), never also echoed straight to our own stderr — `add`
   // relies on catching and rewriting that error cleanly (AC3).
   return execFileSync('gh', args, { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
+}
+
+// board.yml runs this script with BOARD_ARGS set, and with a gh that works. It
+// must never dispatch itself again (#405).
+const insideWorkflow = Boolean(process.env.BOARD_ARGS);
+
+// One cheap read that says whether this `gh` can reach the project at all: an
+// invalid token and a repo-scoped one both fail it, whatever the error text.
+const PROJECT_PROBE_QUERY = `query($id: ID!) {
+  node(id: $id) { ... on ProjectV2 { number } }
+}`;
+
+function projectReachable() {
+  try {
+    const raw = ghRaw(['api', 'graphql', '-f', `query=${PROJECT_PROBE_QUERY}`, '-f', `id=${config.projectId}`]);
+    return JSON.parse(raw).data?.node?.number === config.projectNumber;
+  } catch {
+    return false;
+  }
+}
+
+// What `gh` said when a call failed: its stderr, else the error's own message.
+function ghSaid(err) {
+  const said = String(err?.stderr ?? '').trim();
+  return said || String(err?.message ?? err).trim();
+}
+
+let ghCalls = 0;
+
+// A failed call ends the run. `explain` words it when the command knows better
+// than "gh failed: <what gh said>" (`add` for an issue that does not exist).
+function gh(ghArgs, explain = (said) => `gh failed: ${said}`) {
+  ghCalls += 1;
+  try {
+    return ghRaw(ghArgs);
+  } catch (err) {
+    // The first `gh` call of a command failed, so nothing has been applied yet.
+    // If this `gh` cannot reach the project, send the command to board.yml
+    // instead (#405); otherwise the failure is real and is reported as it is.
+    if (ghCalls === 1 && !insideWorkflow && !projectReachable()) runRemotely(args); // the command's args, not ghArgs
+    return die(explain(ghSaid(err)));
+  }
 }
 
 function die(message) {
@@ -153,6 +199,13 @@ function setItemStatus(itemId, status) {
 function runRemotely(args) {
   if (args[0] === 'sync') die('sync rewrites board.json locally; run it where gh is installed.');
   if (!['show', 'add', 'set', 'list'].includes(args[0])) die('Usage: board.mjs <show|add|set|list|sync> ...');
+  if (!(process.env.GH_TOKEN || process.env.GITHUB_TOKEN)) {
+    die(
+      'No GH_TOKEN or GITHUB_TOKEN to dispatch the board workflow with. The dispatch route is used ' +
+      'when gh is missing or cannot reach the project; set a token that can send repository_dispatch ' +
+      `to ${config.repo}, or run this where gh can reach the project.`
+    );
+  }
   const workflow = 'actions/workflows/board.yml';
   const requestId = Math.random().toString(36).slice(2, 10);
   rest('POST', 'dispatches', { event_type: 'board', client_payload: { args, request_id: requestId } });
@@ -193,7 +246,9 @@ function runRemotely(args) {
 const args = process.env.BOARD_ARGS ? JSON.parse(process.env.BOARD_ARGS) : process.argv.slice(2);
 if (!Array.isArray(args) || !args.every((a) => typeof a === 'string')) die('BOARD_ARGS must be a JSON array of strings.');
 
-if (!hasGh()) runRemotely(args);
+// BOARD_REMOTE=1 forces the dispatch route with no `gh` call at all; no `gh`
+// takes it too. Neither applies inside board.yml's own run (#405).
+if (!insideWorkflow && (process.env.BOARD_REMOTE === '1' || !hasGh())) runRemotely(args);
 
 const [command, ...argv] = args;
 
@@ -226,18 +281,18 @@ switch (command) {
     const status = flag(argv, 'status');
     if (status) optionId(status); // refuse an unknown column before adding anything
 
-    let item;
-    try {
-      const raw = gh([
-        'project', 'item-add', String(config.projectNumber),
-        '--owner', config.owner,
-        '--url', `https://github.com/${config.repo}/issues/${issue}`,
-        '--format', 'json',
-      ]);
-      item = JSON.parse(raw);
-    } catch {
-      die(`Issue #${issue} not found in ${config.repo}.`);
-    }
+    // Only a `gh` that could resolve nothing means the issue is not there (it
+    // says "Could not resolve to an issue" or "resource not found" for a URL
+    // that is not one); any other failure is shown as `gh` said it (#405).
+    const raw = gh([
+      'project', 'item-add', String(config.projectNumber),
+      '--owner', config.owner,
+      '--url', `https://github.com/${config.repo}/issues/${issue}`,
+      '--format', 'json',
+    ], (said) => (/could not resolve to an? issue|resource not found/i.test(said)
+      ? `Issue #${issue} not found in ${config.repo}.`
+      : `Issue #${issue}: ${said}`));
+    const item = JSON.parse(raw);
 
     // item-add is idempotent: a re-run returns the same item. An item that was
     // already on the board carries whatever status it already had; a brand

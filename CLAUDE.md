@@ -230,10 +230,11 @@ These decisions were made with the user and must be respected by all agents:
 
 **Issue tracker: GitHub only.** All issue references mean GitHub issues; use the
 `gh` CLI exclusively. Project #4, `https://github.com/users/luketmoss/projects/4`.
-Cloud Claude Code sessions have no `gh`, and it would not help (their GitHub
-access is repo-scoped REST only). There, every `gh` step in a skill means the
-same operation through the GitHub MCP tools (`mcp__github__*`); the board still
-goes through `board.mjs`.
+Cloud Claude Code sessions have no usable `gh`: some containers have none, and
+where one is installed its token is invalid or repo-scoped (their GitHub access
+is repo-scoped REST only), so it cannot reach the project. There, every `gh`
+step in a skill means the same operation through the GitHub MCP tools
+(`mcp__github__*`); the board still goes through `board.mjs`.
 
 **All board writes go through `node .thrive/board.mjs`** — never hand-write
 GraphQL against the project and never call `gh project field-list` or
@@ -245,11 +246,17 @@ the board keeps its column (`set` moves it) — this is how a cloud session,
 which can create issues but cannot otherwise reach the project, gets a new
 issue onto the board.
 
-Cloud Claude Code sessions have no `gh` and cannot reach the project, so there
-`board.mjs` hands the same command to `.github/workflows/board.yml` (a
-`repository_dispatch`) and prints its result, 20–40 s later. That needs the
-`BOARD_TOKEN` repo secret: a classic PAT with `project`, `repo` and `read:org`.
-Nothing changes where `gh` is installed.
+Cloud Claude Code sessions cannot reach the project, so there `board.mjs` hands
+the same command to `.github/workflows/board.yml` (a `repository_dispatch`) and
+prints its result, 20–40 s later. That needs the `BOARD_TOKEN` repo secret: a
+classic PAT with `project`, `repo` and `read:org`, and a `GH_TOKEN` or
+`GITHUB_TOKEN` in the session to send the dispatch with. It takes that route
+when `gh` is missing, or when a command's first `gh` call fails and a cheap read
+of the project then fails too (#405); `BOARD_REMOTE=1` forces it with no `gh`
+call. A `gh` that works, and a failure with a project it can reach (reported as
+`gh` said it), are unchanged, and `board.yml`'s own run never takes the route.
+Run `.thrive/board.test.mjs` only in CI or on Linux: its fake `gh` does not
+run on Windows, where the real one would move real cards.
 
 | Stage | Skill | Gate |
 |---|---|---|
