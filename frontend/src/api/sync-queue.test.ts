@@ -325,6 +325,46 @@ describe('remapQueuedOrders (#392 AC5)', () => {
     expect(readQueue().map((e) => e.payload.exercise_order)).toEqual([1, 1]);
   });
 
+  it("gives a queued entry the section of the set holding its row, with the order, when it is the entry's own (#395)", () => {
+    enqueueSet(makeSet({ sheetRow: 2, exercise_order: 1, section: 'primary' }));
+    enqueueSet(makeSet({ sheetRow: 3, exercise_order: 1, section: 'primary', exercise_id: 'ex2' }));
+    remapQueuedOrders('w1', {
+      byRow: new Map([
+        [2, { exercise_id: 'ex1', set_number: 1, exercise_order: 1, section: 'SS1' }],
+        [3, { exercise_id: 'ex1', set_number: 1, exercise_order: 1, section: 'SS1' }], // another exercise's set: left alone
+      ]),
+      moves: [],
+    });
+    expect(readQueue().map((e) => [e.key, e.payload.section, e.payload.exercise_order])).toEqual([
+      ['w1|row:2', 'SS1', 1], ['w1|row:3', 'primary', 1],
+    ]);
+  });
+
+  it('maps an entry with no row by its exercise and its order after any move (#395)', () => {
+    enqueueSet(makeSet({ exercise_order: 1, section: 'primary', weight: 'A' }));
+    enqueueSet(makeSet({ exercise_order: 2, section: 'primary', weight: 'B' }));
+    enqueueSet(makeSet({ exercise_id: 'ex2', exercise_order: 1, section: 'primary', weight: 'C' }));
+    // Order 1 of ex1 moves to 2 and takes SS1; ex1 at order 2 goes to 1, section unchanged.
+    remapQueuedOrders('w1', {
+      byRow: new Map(),
+      moves: [{ exercise_id: 'ex1', from: 1, to: 2 }, { exercise_id: 'ex1', from: 2, to: 1 }],
+      sections: [{ exercise_id: 'ex1', exercise_order: 2, section: 'SS1' }],
+    });
+    expect(readQueue().map((e) => [e.key, e.payload.weight, e.payload.section])).toEqual([
+      ['w1|ex1|2|1', 'A', 'SS1'], ['w1|ex1|1|1', 'B', 'primary'], ['w1|ex2|1|1', 'C', 'primary'],
+    ]);
+  });
+
+  it("leaves other workouts' entries alone when the section changes (#395)", () => {
+    enqueueSet(makeSet({ workout_id: 'w2', exercise_order: 1, section: 'primary' }));
+    remapQueuedOrders('w1', {
+      byRow: new Map(),
+      moves: [],
+      sections: [{ exercise_id: 'ex1', exercise_order: 1, section: 'SS1' }],
+    });
+    expect(readQueue().map((e) => e.payload.section)).toEqual(['primary']);
+  });
+
   it('an entry re-keyed while it is being flushed is still removed once it lands', async () => {
     let release!: () => void;
     vi.mocked(workoutsApi.appendSet).mockImplementation(() => new Promise<void>((r) => { release = r; }));

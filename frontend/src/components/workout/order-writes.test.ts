@@ -38,6 +38,26 @@ describe('orderWrites', () => {
     const list = [ex('a', 'bench', 9, [4]), ex('b', 'row', 9, [2]), ex('c', 'curl', 9, [-1, 5])];
     expect(orderWrites(list, [...STORED.slice(0, 3), stored('w2', 'curl', 3, 1, 5)], 'w1')).toEqual([]);
   });
+
+  it('a row whose stored section differs is written with the section alone, a row that differs in both with both (#395)', () => {
+    const list = [
+      { ...ex('a', 'bench', 1, [2, 3]), section: 'SS1' },
+      { ...ex('b', 'row', 1, [4]), section: 'SS2' },
+      ex('c', 'curl', 3, [5]),
+    ];
+    expect(orderWrites(list, STORED, 'w1')).toEqual([
+      { sheetRow: 2, section: 'SS1' },
+      { sheetRow: 3, section: 'SS1' },
+      { sheetRow: 4, exercise_order: 1, section: 'SS2' },
+    ]);
+  });
+
+  it('nothing when the section matches what is stored, and never a set with no row (#395)', () => {
+    const list = [ex('a', 'bench', 1, [2, -1]), ex('b', 'row', 2, [4]), ex('c', 'curl', 3, [5])];
+    expect(orderWrites(list.map((e) => ({ ...e, section: 'primary' })), STORED, 'w1')).toEqual([]);
+    const moved = [{ ...ex('a', 'bench', 1, [-1]), section: 'SS1' }];
+    expect(orderWrites(moved, STORED, 'w1')).toEqual([]);
+  });
 });
 
 describe('queuedOrderMap', () => {
@@ -46,13 +66,24 @@ describe('queuedOrderMap', () => {
     const after = [ex('a', 'row', 2, [2]), ex('b', 'row', 1, [-1]), ex('c', 'curl', 3, [4])];
     const map = queuedOrderMap(after, before);
     expect([...map.byRow.entries()]).toEqual([
-      [2, { exercise_id: 'row', set_number: 1, exercise_order: 2 }],
-      [4, { exercise_id: 'curl', set_number: 1, exercise_order: 3 }],
+      [2, { exercise_id: 'row', set_number: 1, exercise_order: 2, section: 'primary' }],
+      [4, { exercise_id: 'curl', set_number: 1, exercise_order: 3, section: 'primary' }],
     ]);
     expect(map.moves).toEqual([
       { exercise_id: 'row', from: 1, to: 2 },
       { exercise_id: 'row', from: 2, to: 1 },
     ]);
+    expect(map.sections).toEqual([]);
     expect(queuedOrderMap(after).moves).toEqual([]);
+  });
+
+  it('maps a card whose section changed to its section at the order it has now (#395)', () => {
+    const before = [ex('a', 'row', 1, [2]), ex('b', 'row', 2, [-1]), ex('c', 'curl', 3, [4])];
+    const after = [before[0], { ...before[1], section: 'SS1' }, before[2]];
+    const map = queuedOrderMap(after, before);
+    expect(map.sections).toEqual([{ exercise_id: 'row', exercise_order: 2, section: 'SS1' }]);
+    expect(map.moves).toEqual([]);
+    expect(map.byRow.get(2)).toMatchObject({ section: 'primary' });
+    expect(queuedOrderMap(after).sections).toEqual([]);
   });
 });

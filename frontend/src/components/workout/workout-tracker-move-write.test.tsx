@@ -1,9 +1,9 @@
 // #392 — a Move up/down in a live workout is written to the sheet: the new
 // exercise_order goes to every saved Sets row of the exercises involved, in
 // one all-or-nothing batchUpdate of column E, on the tracker's one-at-a-time
-// write queue (#394). Finish saves each unsaved set through its own row
-// (#389) and repairs any row still out of order before the workout is marked
-// finished. The offline queue keys a saved set by its row and follows moves.
+// write queue (#394). #395 adds the section (column D) to the same write.
+// Finish saves each unsaved set through its own row (#389) and repairs any row
+// still out of order or section before the workout is marked finished. The offline queue keys a saved set by its row and follows moves.
 //
 // Drives the real WorkoutTracker and the real actions / sync-queue /
 // workouts-api over an in-memory Sets tab (the `../../api/sheets` harness of
@@ -84,7 +84,8 @@ vi.mock('../../api/sheets', () => ({
     batches.push(requests);
     for (const r of requests) {
       const { start, rows } = r.updateCells;
-      sheet.Sets[start.rowIndex - 1][start.columnIndex] = String(rows[0].values[0].userEnteredValue.numberValue);
+      const value = rows[0].values[0].userEnteredValue;
+      sheet.Sets[start.rowIndex - 1][start.columnIndex] = String(value.numberValue ?? value.stringValue);
     }
   })),
   getSheetId: vi.fn(async () => 1),
@@ -402,7 +403,7 @@ describe('AC3: Finish saves by row and leaves the sheet in the order shown', () 
 
     expect(finishWorkout).not.toHaveBeenCalled();
     expect(toasts.value.map((t) => t.text)).toEqual([ORDER_SAVE_FAILED]);
-    expect(ORDER_SAVE_FAILED).toBe("Couldn't save the exercise order. Try again.");
+    expect(ORDER_SAVE_FAILED).toBe("Couldn't save the exercise order and sections. Try again.");
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
     expect(document.querySelector<HTMLTextAreaElement>('[role="dialog"] textarea')!.value).toBe('Felt strong');
     expect([...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Hard')!
@@ -424,10 +425,11 @@ describe('AC3: Finish saves by row and leaves the sheet in the order shown', () 
 });
 
 describe('AC3 with #395: a section that differs on the sheet does not leave Finish stuck', () => {
-  it('a failed move write, then an edit: Finish repairs the order first, so the own-row save is accepted', async () => {
+  it('a failed move write, then an edit: Finish repairs order and section first, so the own-row save is accepted', async () => {
     await mount(BENCH_ROW_CURL);
-    // The sheet's section for Row differs from the card's (a log-mode section
-    // change is not written yet, #395): only the order can match.
+    // The sheet's section for Row differs from the card's (a section write that
+    // never landed): the own-row check could match on order alone.
+    sheet.Sets.forEach((r) => { if (r[1] === 'e_row') r[3] = 'SS2'; });
     activeWorkoutSets.value = activeWorkoutSets.value.map((s) =>
       s.exercise_id === 'e_row' ? { ...s, section: 'SS2' } : s);
     batchFailure = new TypeError('Failed to fetch');
@@ -441,6 +443,8 @@ describe('AC3 with #395: a section that differs on the sheet does not leave Fini
     expect(writes.filter((w) => w.kind === 'update').map((w) => w.row)).toEqual([4]);
     expect(writes.filter((w) => w.kind === 'append')).toHaveLength(0);
     expect(sheetBrief().map((r) => r[2])).toEqual([2, 2, 1, 1, 3, 3]);
+    // #395: the section is repaired with the order, in the same write.
+    expect(sheetBrief().map((r) => r[1])).toEqual(['primary', 'primary', 'primary', 'primary', 'burnout', 'burnout']);
   });
 });
 
@@ -584,5 +588,306 @@ describe('AC6: what does not change', () => {
     await finish();
     expect(JSON.stringify(batches)).not.toMatch(/rowKey|row-/);
     for (const w of writes) expect(w.values).toHaveLength(10);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #395 — a section change in a live workout is written to the saved rows.
+// ---------------------------------------------------------------------------
+
+const changeSection = (card: number, section: string) => {
+  fireEvent.click(cards()[card].querySelector('.section-badge-btn')!);
+  fireEvent.click([...cards()[card].querySelectorAll<HTMLButtonElement>('.section-picker-row button')]
+    .find((b) => b.textContent === section)!);
+};
+const badge = (card: number) => cards()[card].querySelector('.section-badge-btn')!.textContent;
+/** [row, column index, value] of every cell a batchUpdate wrote. */
+const cellValues = (requests: any[]) => requests.map((r) => {
+  expect(Object.keys(r)).toEqual(['updateCells']);
+  expect(r.updateCells.rows).toHaveLength(1);
+  expect(r.updateCells.rows[0].values).toHaveLength(1);
+  const value = r.updateCells.rows[0].values[0].userEnteredValue;
+  return [r.updateCells.start.rowIndex + 1, r.updateCells.start.columnIndex, value.numberValue ?? value.stringValue];
+});
+const sectionsOf = (id: string) => sheet.Sets.filter((r) => r[1] === id).map((r) => r[3]);
+const memSections = (list = activeWorkoutSets.value) => list.map((s) => [s.sheetRow, s.section]);
+
+describe('#395 AC1: a section change is written to the saved rows of that exercise, at once', () => {
+  it('Primary to SS1 on Row: one batchUpdate of Sets!D for Row\'s rows, nothing else', async () => {
+    await mount(BENCH_ROW_CURL);
+    changeSection(1, 'SS1');
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(batches).toHaveLength(1);
+    expect(cellValues(batches[0])).toEqual([[4, 3, 'SS1'], [5, 3, 'SS1']]);
+    expect(writes).toHaveLength(0); // no row updated whole, appended or deleted
+    expect(sheetBrief()).toEqual([
+      ['e_bench', 'primary', 1, 1, '100', '5'],
+      ['e_bench', 'primary', 1, 2, '', ''],
+      ['e_row', 'SS1', 2, 1, '90', '8'],
+      ['e_row', 'SS1', 2, 2, '', ''],
+      ['e_curl', 'burnout', 3, 1, '', ''],
+      ['e_curl', 'burnout', 3, 2, '', ''],
+    ]);
+    // The in-memory rows carry the new section.
+    expect(memSections()).toEqual([
+      [2, 'primary'], [3, 'primary'], [4, 'SS1'], [5, 'SS1'], [6, 'burnout'], [7, 'burnout'],
+    ]);
+    expect(memSections(sets.value)).toEqual(memSections());
+  });
+
+  it('leaving and resuming, or reloading from the sheet, shows Row in SS1', async () => {
+    await mount(BENCH_ROW_CURL);
+    changeSection(1, 'SS1');
+    await vi.advanceTimersByTimeAsync(0);
+    resume();
+    expect(badge(1)).toBe('SS1');
+    expect(cards()).toHaveLength(3);
+
+    const all = await fetchSets('test-token');
+    sets.value = all;
+    activeWorkoutSets.value = all;
+    resume();
+    expect(cards().map((_, i) => badge(i))).toEqual(['primary', 'SS1', 'burnout']);
+  });
+
+  it('a duplicate of the exercise keeps its own section: rows are matched by row', async () => {
+    await mount(ROWBB_TWINS);
+    changeSection(1, 'SS2'); // the SS1 copy
+    await vi.advanceTimersByTimeAsync(0);
+    expect(cellValues(batches[0])).toEqual([[3, 3, 'SS2']]);
+    expect(sheetBrief()).toEqual([
+      ['e_row', 'primary', 1, 1, '95', '8'],
+      ['e_row', 'SS2', 2, 1, '', ''],
+      ['e_curl', 'burnout', 3, 1, '', ''],
+    ]);
+  });
+
+  it('the change is instant: the badge shows it before the write finishes, with no toast', async () => {
+    await mount(BENCH_ROW_CURL);
+    let release!: () => void;
+    batchGate = new Promise((r) => { release = r; });
+    changeSection(1, 'SS1');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(badge(1)).toBe('SS1');
+    expect(batches).toHaveLength(0); // still in flight
+    expect(toasts.value).toHaveLength(0);
+    release();
+    batchGate = null;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sectionsOf('e_row')).toEqual(['SS1', 'SS1']);
+  });
+});
+
+describe('#395 AC2: only what differs is written; warmup and edit mode are unchanged', () => {
+  it('an exercise with no saved row makes no request', async () => {
+    activeWorkoutSets.value = [
+      { workout_id: 'w1', exercise_id: 'e_bench', exercise_name: 'Bench', section: 'primary', exercise_order: 1, set_number: 1, planned_reps: '8', weight: '100', reps: '5', effort: '', sheetRow: 2 },
+      { workout_id: 'w1', exercise_id: 'e_dip', exercise_name: 'Dip', section: 'primary', exercise_order: 2, set_number: 1, planned_reps: '8', weight: '', reps: '', effort: '', sheetRow: -1 },
+    ];
+    render(<WorkoutTracker workoutId="w1" workoutName="Pull A" />);
+    changeSection(1, 'SS1');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(badge(1)).toBe('SS1');
+    expect(log).toEqual([]);
+  });
+
+  it('changed to another section and back before the write runs: nothing differs, no request', async () => {
+    await mount(BENCH_ROW_CURL);
+    changeSection(1, 'SS1');
+    changeSection(1, 'primary');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(log).toEqual([]);
+    expect(sectionsOf('e_row')).toEqual(['primary', 'primary']);
+  });
+
+  it('a change to warmup deletes the exercise\'s rows as before and writes no section', async () => {
+    await mount(BENCH_ROW_CURL);
+    changeSection(1, 'warmup');
+    fireEvent.click([...cards()[1].querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Switch to Warmup')!);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(log).toEqual(['delete', 'delete']);
+    expect(batches).toHaveLength(0);
+  });
+
+  it('a change from warmup writes nothing until a value is typed, then that row is adopted with the new section', async () => {
+    await mount([
+      ['e_cat', 'Cat-Cow', 'warmup', 1, 1, '', '10'],
+      ['e_bench', 'Bench', 'primary', 2, 1, '100', '5'],
+    ]);
+    changeSection(0, 'primary');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(log).toEqual([]);
+
+    type(0, '20');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(writes.filter((w) => w.kind === 'update').map((w) => [w.row, w.values[3]])).toEqual([[2, 'primary']]);
+    expect(writes.filter((w) => w.kind === 'append')).toHaveLength(0);
+    expect(sheet.Sets).toHaveLength(2);
+  });
+
+  it('edit mode: a section change makes no write', async () => {
+    isEditMode.value = true;
+    await mount(BENCH_ROW_CURL);
+    changeSection(1, 'SS1');
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(badge(1)).toBe('SS1');
+    expect(log).toEqual([]);
+  });
+});
+
+describe('#395 AC3: the offline queue follows the section', () => {
+  it('queued sets of the exercise, with a row and without, take the new section; other exercises\' do not', async () => {
+    await mount(BENCH_ROW_CURL);
+    // Offline: Row set 1 (row 4) edited, a third Row set added (no row), Curl set 1 (row 6) edited.
+    updateFailure = new TypeError('Failed to fetch');
+    type(1, '100');
+    await vi.advanceTimersByTimeAsync(1000);
+    fireEvent.click(cards()[1].querySelector('.add-set-btn')!);
+    const appendSpy = vi.spyOn(await import('../../api/sheets'), 'sheetsAppend');
+    appendSpy.mockImplementationOnce(async () => { throw new TypeError('Failed to fetch'); });
+    type(1, '135', 2);
+    await vi.advanceTimersByTimeAsync(1000);
+    type(2, '20');
+    await vi.advanceTimersByTimeAsync(1000);
+    updateFailure = null;
+    expect(readQueue().map((e) => [e.key, e.payload.section])).toEqual([
+      ['w1|row:4', 'primary'],
+      ['w1|e_row|2|3', 'primary'],
+      ['w1|row:6', 'burnout'],
+    ]);
+
+    batchFailure = new TypeError('Failed to fetch'); // still offline
+    changeSection(1, 'SS1');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(readQueue().map((e) => [e.key, e.payload.section, e.payload.exercise_order])).toEqual([
+      ['w1|row:4', 'SS1', 2],
+      ['w1|e_row|2|3', 'SS1', 2],
+      ['w1|row:6', 'burnout', 3],
+    ]);
+    expect(JSON.stringify(readQueue())).not.toMatch(/rowKey/i);
+
+    // Back online: the flush never puts the old section back, nor appends a row with it.
+    batchFailure = null;
+    await flushQueue('test-token');
+    expect(readQueue()).toHaveLength(0);
+    expect(brief(sheet.Sets[2])).toEqual(['e_row', 'SS1', 2, 1, '100', '8']);
+    expect(brief(sheet.Sets[6])).toEqual(['e_row', 'SS1', 2, 3, '135', '']);
+    expect(brief(sheet.Sets[4])).toEqual(['e_curl', 'burnout', 3, 1, '20', '']);
+
+    // Finish settles the row the failed write left (Row set 2) and saves nothing twice.
+    await finish();
+    expect(finishWorkout).toHaveBeenCalledTimes(1);
+    expect(sectionsOf('e_row')).toEqual(['SS1', 'SS1', 'SS1']);
+    expect(sheet.Sets).toHaveLength(7); // the 6 rows + the one queued append, once
+  });
+});
+
+describe('#395 AC4: a section write that fails repairs itself, and Finish settles any that is left', () => {
+  it('a failed write is silent, keeps the section on screen, and the next write covers every differing row', async () => {
+    await mount(BENCH_ROW_CURL);
+    batchFailure = new TypeError('Failed to fetch');
+    changeSection(1, 'SS1');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(toasts.value).toHaveLength(0);
+    expect(badge(1)).toBe('SS1');
+    expect(sectionsOf('e_row')).toEqual(['primary', 'primary']); // not written
+
+    batchFailure = null;
+    moveUp(2); // Curl above Bench: any write repairs Row's rows too
+    await vi.advanceTimersByTimeAsync(0);
+    expect(batches).toHaveLength(1);
+    expect(sectionsOf('e_row')).toEqual(['SS1', 'SS1']);
+    expect(cellValues(batches[0]).filter((c) => c[1] === 3)).toEqual([[4, 3, 'SS1'], [5, 3, 'SS1']]);
+  });
+
+  it('Finish writes a section a failed write left, before the workout is marked finished', async () => {
+    await mount(BENCH_ROW_CURL);
+    batchFailure = new TypeError('Failed to fetch');
+    changeSection(1, 'SS1');
+    await vi.advanceTimersByTimeAsync(0);
+    batchFailure = null;
+    let sectionsAtFinish: string[] = [];
+    finishWorkout.mockImplementationOnce(async () => { sectionsAtFinish = sectionsOf('e_row'); });
+    await finish();
+    expect(finishWorkout).toHaveBeenCalledTimes(1);
+    expect(sectionsAtFinish).toEqual(['SS1', 'SS1']);
+    expect(toasts.value).toHaveLength(0);
+  });
+
+  it('a failed repair at Finish stops it with the new toast; the form stays and a retry works', async () => {
+    await mount(BENCH_ROW_CURL);
+    batchFailure = new Error('500');
+    changeSection(1, 'SS1');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(toasts.value).toHaveLength(0);
+
+    await finish();
+    expect(finishWorkout).not.toHaveBeenCalled();
+    expect(toasts.value.map((t) => t.text)).toEqual([ORDER_SAVE_FAILED]);
+    expect(ORDER_SAVE_FAILED).toBe("Couldn't save the exercise order and sections. Try again.");
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(badge(1)).toBe('SS1');
+
+    batchFailure = null;
+    fireEvent.click(saveAndFinish());
+    await vi.advanceTimersByTimeAsync(200);
+    expect(finishWorkout).toHaveBeenCalledTimes(1);
+    expect(sectionsOf('e_row')).toEqual(['SS1', 'SS1']);
+  });
+
+  it('a set saved after the change carries the new section', async () => {
+    await mount(BENCH_ROW_CURL);
+    changeSection(1, 'SS1');
+    await vi.advanceTimersByTimeAsync(0);
+    type(1, '135');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(writes.filter((w) => w.kind === 'update').map((w) => [w.row, w.values[3]])).toEqual([[4, 'SS1']]);
+  });
+
+  it('a save in flight with the old section, then the change: the write after it leaves the new section', async () => {
+    await mount(BENCH_ROW_CURL);
+    let release!: () => void;
+    updateGate = new Promise((r) => { release = r; });
+    type(1, '135'); // Row set 1
+    await vi.advanceTimersByTimeAsync(1000); // the save is in flight, with Primary
+    expect(log).toEqual(['update']);
+    changeSection(1, 'SS1');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(log).toEqual(['update']); // the section write waits for it
+    release();
+    updateGate = null;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(log).toEqual(['update', 'batch']);
+    expect(sectionsOf('e_row')).toEqual(['SS1', 'SS1']);
+    expect(brief(sheet.Sets[2])).toEqual(['e_row', 'SS1', 2, 1, '135', '8']);
+  });
+});
+
+describe('#395 AC5: a section change and a move together land together', () => {
+  it('both writes failed offline: the next write sets order and section in one request, and the own-row save is accepted', async () => {
+    await mount(BENCH_ROW_CURL);
+    batchFailure = new TypeError('Failed to fetch');
+    moveUp(1); // Row first
+    changeSection(0, 'SS1');
+    await vi.advanceTimersByTimeAsync(0);
+    batchFailure = null;
+    type(0, '135'); // Row set 1, before the debounce fires
+    await finish();
+
+    expect(finishWorkout).toHaveBeenCalledTimes(1);
+    expect(toasts.value).toHaveLength(0);
+    expect(batches).toHaveLength(1);
+    expect(cellValues(batches[0]).filter((c) => c[0] === 4).map((c) => [c[1], c[2]])).toEqual([[3, 'SS1'], [4, 1]]);
+    expect(writes.filter((w) => w.kind === 'update').map((w) => w.row)).toEqual([4]);
+    expect(writes.filter((w) => w.kind === 'append')).toHaveLength(0);
+    expect(sheetBrief()).toEqual([
+      ['e_bench', 'primary', 2, 1, '100', '5'],
+      ['e_bench', 'primary', 2, 2, '', ''],
+      ['e_row', 'SS1', 1, 1, '135', '8'],
+      ['e_row', 'SS1', 1, 2, '', ''],
+      ['e_curl', 'burnout', 3, 1, '', ''],
+      ['e_curl', 'burnout', 3, 2, '', ''],
+    ]);
   });
 });

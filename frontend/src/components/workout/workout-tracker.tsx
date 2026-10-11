@@ -26,8 +26,8 @@ import { shiftTrackerRows } from './row-shift';
 import { unclaimedRowFor } from './adopt-row';
 import { orderWrites, queuedOrderMap } from './order-writes';
 
-/** Finish's toast when the exercise order could not be written (#392 AC3). */
-export const ORDER_SAVE_FAILED = "Couldn't save the exercise order. Try again.";
+/** Finish's toast when the exercise order or sections could not be written (#392 AC3, #395). */
+export const ORDER_SAVE_FAILED = "Couldn't save the exercise order and sections. Try again.";
 
 // #394: the tracker's writes to Sets rows go out one at a time across every
 // tracker instance, so one opened again (leave and resume) while a delete is
@@ -122,7 +122,7 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
   // Remove set taps whose write has not finished: a repeat tap is ignored.
   const pendingRemovals = useRef<Set<string>>(new Set());
 
-  /** Give this workout's queued sets the order they now have (#392 AC5). */
+  /** Give this workout's queued sets the order and section they now have (#392 AC5, #395 AC3). */
   const remapQueue = (map: QueuedOrderMap) => {
     try {
       remapQueuedOrders(workoutId, map);
@@ -132,10 +132,11 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
   };
 
   /**
-   * Bring every saved row of this workout to the order on screen, in one
-   * all-or-nothing write of `Sets!E` (#392). Runs as a tracker write, so it
-   * reads the list and the stored rows as they are when it starts, after any
-   * save or delete ahead of it. Nothing differs: no request.
+   * Bring every saved row of this workout to the order and section on screen,
+   * in one all-or-nothing write of `Sets!E` and `Sets!D` (#392, #395). Runs as
+   * a tracker write, so it reads the list and the stored rows as they are when
+   * it starts, after any save or delete ahead of it. Nothing differs: no
+   * request.
    */
   const writeOrders = async (): Promise<void> => {
     if (!token) return;
@@ -506,7 +507,19 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
 
     // In edit mode, don't delete from API
     if (editMode || removal(listRef.current, ex).removedSets.length === 0) {
+      const before = listRef.current;
       applyRemoval(ex.rowKey, removal);
+      // Log mode (#395): the new section goes to the exercise's saved rows,
+      // and to its queued sets, as a move's order does (#392). Written as a
+      // tracker write, after anything ahead of it; the change never waits for
+      // it. A failure is silent: the next write, or Finish, writes every row
+      // still differing. Edit mode writes the section at Save Changes. A
+      // change to warmup has deleted its rows (below); one from warmup has
+      // none to write.
+      if (!editMode) {
+        remapQueue(queuedOrderMap(listRef.current, before));
+        void enqueueWrite(writeOrders).catch(() => undefined);
+      }
     } else {
       await runRemoval(ex.rowKey, removal);
     }
@@ -641,8 +654,8 @@ export function WorkoutTracker({ workoutId, workoutName }: Props) {
             throw err;
           }
         };
-        // First the rows a failed move write left out of order: a saved set
-        // whose row differs in order (and in section, #395) would otherwise be
+        // First the rows a failed move or section write left behind: a saved
+        // set whose row differs in both order and section would otherwise be
         // refused by saveSet's own-row check on every Finish. No request when
         // nothing differs.
         await repairOrders();

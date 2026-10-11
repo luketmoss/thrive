@@ -91,22 +91,32 @@ export function shiftQueueAfterDelete(row: number): void {
     }));
 }
 
-/** Where a set of the moved workout now sits, for `remapQueuedOrders`. */
+/** Where a set of the moved or re-sectioned workout now sits, for `remapQueuedOrders`. */
 export interface QueuedOrderMap {
-  /** Sets with a row: the row's set (exercise and set number, to check) and its exercise's order now. */
-  byRow: Map<number, { exercise_id: string; set_number: number; exercise_order: number }>;
+  /**
+   * Sets with a row: the row's set (exercise and set number, to check) and its
+   * exercise's order, and section when given, now.
+   */
+  byRow: Map<number, { exercise_id: string; set_number: number; exercise_order: number; section?: string }>;
   /** Sets with no row: each exercise whose order a move changed, from and to. */
   moves: { exercise_id: string; from: number; to: number }[];
+  /**
+   * Sets with no row: each exercise whose section changed (#395), at the order
+   * it has after the change.
+   */
+  sections?: { exercise_id: string; exercise_order: number; section: string }[];
 }
 
 /**
- * Give a workout's queued entries the order their exercise has now (#392 AC5),
- * so a later flush never writes back the order from before a move. An entry
- * aimed at a row takes the order of the set holding that row, when that set
- * is the entry's own (same exercise and set number). An entry with no row is
- * mapped by the move: every change is applied at once, so a swap of two
- * orders swaps their entries rather than merging them. Other workouts'
- * entries are untouched. Never carries a row key: entries hold sets only.
+ * Give a workout's queued entries the order (#392 AC5) and section (#395 AC3)
+ * their exercise has now, so a later flush never writes back the order from
+ * before a move or the section from before a change: an entry holds a whole
+ * row. An entry aimed at a row takes the values of the set holding that row,
+ * when that set is the entry's own (same exercise and set number). An entry
+ * with no row is mapped by the move and by the section change: every change
+ * is applied at once, so a swap of two orders swaps their entries rather than
+ * merging them. Other workouts' entries are untouched. Never carries a row
+ * key: entries hold sets only.
  */
 export function remapQueuedOrders(workoutId: string, map: QueuedOrderMap): void {
   const queue = readQueue();
@@ -115,15 +125,23 @@ export function remapQueuedOrders(workoutId: string, map: QueuedOrderMap): void 
     const p = e.payload;
     if (p.workout_id !== workoutId) return e;
     let order: number | undefined;
+    let section: string | undefined;
     if (p.sheetRow > 0) {
       const at = map.byRow.get(p.sheetRow);
-      if (at && at.exercise_id === p.exercise_id && at.set_number === p.set_number) order = at.exercise_order;
+      if (at && at.exercise_id === p.exercise_id && at.set_number === p.set_number) {
+        order = at.exercise_order;
+        section = at.section;
+      }
     } else {
       order = map.moves.find(m => m.exercise_id === p.exercise_id && m.from === p.exercise_order)?.to;
+      const orderNow = order ?? p.exercise_order;
+      section = map.sections?.find(s => s.exercise_id === p.exercise_id && s.exercise_order === orderNow)?.section;
     }
-    if (order === undefined || order === p.exercise_order) return e;
+    const newOrder = order ?? p.exercise_order;
+    const newSection = section ?? p.section;
+    if (newOrder === p.exercise_order && newSection === p.section) return e;
     changed = true;
-    const payload = { ...p, exercise_order: order };
+    const payload = { ...p, exercise_order: newOrder, section: newSection };
     return { ...e, key: compositeKey(payload), payload };
   });
   if (changed) writeQueue(next);
