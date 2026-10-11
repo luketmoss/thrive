@@ -16,8 +16,8 @@ import { throttled } from './page-visible';
 import { fetchExercises, createExercise, updateExercise as updateExerciseApi, deleteExercise as deleteExerciseApi } from '../api/exercises-api';
 import { fetchLabels, createLabel as createLabelApi, updateLabel as updateLabelApi, deleteLabel as deleteLabelApi, appendLabels } from '../api/labels-api';
 import { fetchTemplateRows, groupTemplateRows, createTemplate as createTemplateApi, updateTemplate as updateTemplateApi, deleteTemplate as deleteTemplateApi, updateExerciseNameInTemplates } from '../api/templates-api';
-import { fetchWorkouts, fetchSets, createWorkout as createWorkoutApi, updateWorkout as updateWorkoutApi, deleteWorkoutRows, appendSet as appendSetApi, appendSets as appendSetsApi, updateSet as updateSetApi, deleteSetRow, updateExerciseNameInSets, findWorkoutRow, WorkoutRowMismatchError, builderExercisesToSets, carryPlannedSetValues, replaceWorkoutSets as replaceWorkoutSetsApi } from '../api/workouts-api';
-import type { WorkoutPatch } from '../api/workouts-api';
+import { fetchWorkouts, fetchSets, createWorkout as createWorkoutApi, updateWorkout as updateWorkoutApi, deleteWorkoutRows, appendSet as appendSetApi, appendSets as appendSetsApi, updateSet as updateSetApi, deleteSetRow, updateExerciseNameInSets, findWorkoutRow, WorkoutRowMismatchError, builderExercisesToSets, carryPlannedSetValues, replaceWorkoutSets as replaceWorkoutSetsApi, updateSetOrders } from '../api/workouts-api';
+import type { WorkoutPatch, SetOrderWrite } from '../api/workouts-api';
 import { toLocalDateStr, formatPlannedDate } from '../components/activities/activities-helpers';
 import { colorKeyFromName } from '../api/label-colors';
 import type { TemplateExerciseInput } from '../api/templates-api';
@@ -606,7 +606,7 @@ export class SetRowStaleError extends Error {
  * (#389): given a row (> 0), that row is updated and nothing is looked up by
  * order; given `-1`, the set has no row yet and one is appended. Left out,
  * the row is looked up by `(exercise_id, exercise_order, set_number)` as
- * before (Finish's loop and the edit flows, #392). The offline fallback
+ * before (the tracker passes its own row everywhere since #392). The offline fallback
  * queues the same row the save was aimed at.
  *
  * A given row is checked against `activeWorkoutSets`, which every row write
@@ -755,6 +755,33 @@ export async function removeSet(
     showToast('Failed to remove set', 'error');
     throw err;
   }
+}
+
+/**
+ * Write a live workout's exercise order to its saved `Sets` rows (#392): one
+ * all-or-nothing write of column E, then `sets` and `activeWorkoutSets` carry
+ * the new orders, by row, so a resume shows them (live and demo). Only rows
+ * of `workoutId` are changed in memory. No toast: the tracker decides what a
+ * failure means (a move swallows it, Finish reports it). Rejects having
+ * changed nothing in memory.
+ */
+export async function saveExerciseOrders(
+  workoutId: string,
+  rows: SetOrderWrite[],
+  token: string,
+): Promise<void> {
+  if (rows.length === 0) return;
+  await updateSetOrders(rows, token);
+  const orderOf = new Map(rows.map((r) => [r.sheetRow, r.exercise_order]));
+  const apply = <T extends SetWithRow>(list: T[]): T[] =>
+    list.map((s) => {
+      const order = s.workout_id === workoutId ? orderOf.get(s.sheetRow) : undefined;
+      return order === undefined || order === s.exercise_order ? s : { ...s, exercise_order: order };
+    });
+  batch(() => {
+    sets.value = apply(sets.value);
+    activeWorkoutSets.value = apply(activeWorkoutSets.value);
+  });
 }
 
 export async function finishWorkout(

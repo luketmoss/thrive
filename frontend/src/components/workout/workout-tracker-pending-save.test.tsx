@@ -62,8 +62,18 @@ vi.mock('../../api/sheets', () => ({
     const [gone] = sheet.Sets.splice(rowIndex - 2, 1);
     writes.push({ kind: 'delete', row: rowIndex, values: gone });
   }),
+  // #392: a move's order write, `updateCells` on column E only.
+  sheetsBatchUpdate: vi.fn(async (requests: any[]) => {
+    for (const r of requests) {
+      const { start, rows } = r.updateCells;
+      orderWrites.push({ row: start.rowIndex + 1, order: rows[0].values[0].userEnteredValue.numberValue });
+      sheet.Sets[start.rowIndex - 1][start.columnIndex] = String(rows[0].values[0].userEnteredValue.numberValue);
+    }
+  }),
   getSheetId: vi.fn(async () => 1),
 }));
+/** #392's order writes (`Sets!E`), kept apart from `writes`. */
+const orderWrites: { row: number; order: number }[] = [];
 vi.mock('../../api/demo-data', () => ({
   isDemo: () => false, DEMO_WORKOUTS: [], DEMO_SETS: [], shiftDemoWorkouts: (w: unknown) => w,
 }));
@@ -120,6 +130,7 @@ const brief = (r: Row) => [r[1], r[3], Number(r[4]), Number(r[5]), r[7]];
 beforeEach(() => {
   vi.useFakeTimers();
   writes.length = 0;
+  orderWrites.length = 0;
   updateFailure = null;
   appendFailure = null;
   clearQueue();
@@ -175,7 +186,7 @@ describe('#389 AC2: a duplicate\'s twin is never written or marked', () => {
     expect(cards()[0].querySelector('.section-badge-btn')!.textContent).toBe('SS1');
     expect(saved(0)).toBe(true);
     // The primary copy keeps its row, values and saved state.
-    expect(sheet.Sets[0]).toEqual(toRow(ROWBB_TWINS[0]));
+    expect(sheet.Sets[0]).toEqual(toRow(['e_row', 'Row BB', 'primary', 2, 1, '95', '8'])); // #392: its order written, values kept
     expect(saved(1)).toBe(true);
     expect(weightInput(1).value).toBe('95');
 
@@ -229,7 +240,7 @@ describe('#389 AC3: a set with no row yet is appended once and keeps that row', 
     type(0, '140', 1);
     await vi.advanceTimersByTimeAsync(1000);
     expect(writes[1]).toMatchObject({ kind: 'update', row: 5 });
-    expect(sheet.Sets[1]).toEqual(toRow(['e_row', 'Row BB', 'primary', 1, 2, '95', '8']));
+    expect(sheet.Sets[1]).toEqual(toRow(['e_row', 'Row BB', 'primary', 2, 2, '95', '8']));
   });
 });
 
@@ -257,7 +268,7 @@ describe('#389 AC4: saving a set after a move updates its own row', () => {
     expect(writes).toHaveLength(1);
     expect(writes[0]).toMatchObject({ kind: 'update', row: 3 });
     expect(brief(writes[0].values)).toEqual(['e_row', 'SS1', 1, 1, '135']);
-    expect(sheet.Sets[0]).toEqual(toRow(ROWBB_TWINS[0]));
+    expect(sheet.Sets[0]).toEqual(toRow(['e_row', 'Row BB', 'primary', 2, 1, '95', '8']));
   });
 });
 
@@ -416,7 +427,7 @@ describe('#389 with #394: a save after a row delete writes the set\'s own, shift
     expect(nonDeletes()).toHaveLength(1);
     expect(nonDeletes()[0]).toMatchObject({ kind: 'update', row: 2 });
     expect(brief(nonDeletes()[0].values)).toEqual(['e_row', 'primary', 3, 1, '135']);
-    expect(sheet.Sets[1]).toEqual(toRow(['e_row', 'Row BB', 'SS1', 3, 1, '95', '8']));
+    expect(sheet.Sets[1]).toEqual(toRow(['e_row', 'Row BB', 'SS1', 2, 1, '95', '8']));
     expect(saved(0)).toBe(true);
     expect(saved(1)).toBe(true);
   });

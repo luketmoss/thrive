@@ -9,7 +9,16 @@ const STORAGE_KEY = 'gw_sync_queue';
 export interface SyncEntry {
   key: string;
   payload: WorkoutSet & { sheetRow: number };
+  /**
+   * The entry's own identity, kept when its key changes (a move or a row
+   * shift re-keys it while a flush may be sending it), so the flush removes
+   * exactly the entry it sent (#392). Absent on entries queued before.
+   */
+  id?: string;
 }
+
+const newEntryId = (): string =>
+  `q${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 
 export interface FlushResult {
   synced: number;
@@ -17,7 +26,15 @@ export interface FlushResult {
   remaining: number;
 }
 
-function compositeKey(s: WorkoutSet): string {
+/**
+ * An entry's key. A set with a sheet row is keyed by workout and row (#392):
+ * after a move, a duplicate's two copies can share exercise, order and set
+ * number, and must never replace each other's entry. A set with no row keeps
+ * the exercise / order / set number key. Entries stored under the old key
+ * still flush once each: the flush dequeues by the key it read.
+ */
+function compositeKey(s: WorkoutSet & { sheetRow?: number }): string {
+  if (s.sheetRow !== undefined && s.sheetRow > 0) return `${s.workout_id}|row:${s.sheetRow}`;
   return `${s.workout_id}|${s.exercise_id}|${s.exercise_order}|${s.set_number}`;
 }
 
@@ -40,11 +57,14 @@ function writeQueue(entries: SyncEntry[]): void {
 export function enqueueSet(payload: WorkoutSet & { sheetRow: number }): void {
   const key = compositeKey(payload);
   const queue = readQueue();
-  const idx = queue.findIndex(e => e.key === key);
+  // A set with a row replaces the entry aimed at that row, whatever key it
+  // was stored under (one queued before #392 carries the old key).
+  const idx = queue.findIndex(e => e.key === key ||
+    (payload.sheetRow > 0 && e.payload.workout_id === payload.workout_id && e.payload.sheetRow === payload.sheetRow));
   if (idx >= 0) {
-    queue[idx] = { key, payload };
+    queue[idx] = { key, payload, id: queue[idx].id ?? newEntryId() };
   } else {
-    queue.push({ key, payload });
+    queue.push({ key, payload, id: newEntryId() });
   }
   writeQueue(queue);
 }
@@ -64,9 +84,49 @@ export function shiftQueueAfterDelete(row: number): void {
   if (!queue.some(e => e.payload.sheetRow >= row)) return;
   writeQueue(queue
     .filter(e => e.payload.sheetRow !== row)
-    .map(e => e.payload.sheetRow > row
-      ? { ...e, payload: { ...e.payload, sheetRow: e.payload.sheetRow - 1 } }
-      : e));
+    .map(e => {
+      if (!(e.payload.sheetRow > row)) return e;
+      const payload = { ...e.payload, sheetRow: e.payload.sheetRow - 1 };
+      return { ...e, key: compositeKey(payload), payload };
+    }));
+}
+
+/** Where a set of the moved workout now sits, for `remapQueuedOrders`. */
+export interface QueuedOrderMap {
+  /** Sets with a row: the row's set (exercise and set number, to check) and its exercise's order now. */
+  byRow: Map<number, { exercise_id: string; set_number: number; exercise_order: number }>;
+  /** Sets with no row: each exercise whose order a move changed, from and to. */
+  moves: { exercise_id: string; from: number; to: number }[];
+}
+
+/**
+ * Give a workout's queued entries the order their exercise has now (#392 AC5),
+ * so a later flush never writes back the order from before a move. An entry
+ * aimed at a row takes the order of the set holding that row, when that set
+ * is the entry's own (same exercise and set number). An entry with no row is
+ * mapped by the move: every change is applied at once, so a swap of two
+ * orders swaps their entries rather than merging them. Other workouts'
+ * entries are untouched. Never carries a row key: entries hold sets only.
+ */
+export function remapQueuedOrders(workoutId: string, map: QueuedOrderMap): void {
+  const queue = readQueue();
+  let changed = false;
+  const next = queue.map(e => {
+    const p = e.payload;
+    if (p.workout_id !== workoutId) return e;
+    let order: number | undefined;
+    if (p.sheetRow > 0) {
+      const at = map.byRow.get(p.sheetRow);
+      if (at && at.exercise_id === p.exercise_id && at.set_number === p.set_number) order = at.exercise_order;
+    } else {
+      order = map.moves.find(m => m.exercise_id === p.exercise_id && m.from === p.exercise_order)?.to;
+    }
+    if (order === undefined || order === p.exercise_order) return e;
+    changed = true;
+    const payload = { ...p, exercise_order: order };
+    return { ...e, key: compositeKey(payload), payload };
+  });
+  if (changed) writeQueue(next);
 }
 
 /**
@@ -113,13 +173,9 @@ export async function flushQueue(token: string): Promise<FlushResult> {
         const updated: WorkoutSet & { sheetRow: number } = { ...payload };
         // Only the active workout's own set belongs in activeWorkoutSets (#374).
         if (payload.workout_id === activeWorkoutId.value) {
+          // By its row, never by exercise, order and set number (#392).
           activeWorkoutSets.value = activeWorkoutSets.value.map(s =>
-            s.workout_id === payload.workout_id &&
-            s.exercise_id === payload.exercise_id &&
-            s.exercise_order === payload.exercise_order &&
-            s.set_number === payload.set_number
-              ? { ...updated }
-              : s,
+            s.sheetRow === payload.sheetRow ? { ...updated } : s,
           );
         }
         sets.value = sets.value.map(s =>
@@ -138,7 +194,9 @@ export async function flushQueue(token: string): Promise<FlushResult> {
         }
       }
 
-      dequeueByKey(entry.key);
+      // By its id when it has one: a move may have re-keyed it meanwhile.
+      if (entry.id) writeQueue(readQueue().filter(e => e.id !== entry.id));
+      else dequeueByKey(entry.key);
       synced++;
     } catch {
       failed++;

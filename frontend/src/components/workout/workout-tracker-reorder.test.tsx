@@ -11,7 +11,9 @@ import type { SetWithRow } from '../../api/types';
 const saveSet = vi.fn(async (..._args: unknown[]) => ({ sheetRow: 99 }));
 const saveWorkoutEdits = vi.fn(async (..._args: unknown[]) => undefined);
 const finishWorkout = vi.fn(async (..._args: unknown[]) => undefined);
+const saveExerciseOrders = vi.fn(async (..._args: unknown[]) => undefined);
 vi.mock('../../state/actions', () => ({
+  saveExerciseOrders: (...args: unknown[]) => saveExerciseOrders(...args),
   saveSet: (...args: unknown[]) => saveSet(...args),
   removeSet: vi.fn(),
   finishWorkout: (...args: unknown[]) => finishWorkout(...args),
@@ -43,6 +45,7 @@ beforeEach(() => {
   activeWarmupExercises.value = [];
   workouts.value = [];
   saveSet.mockClear();
+  saveExerciseOrders.mockClear();
   saveWorkoutEdits.mockClear();
   finishWorkout.mockClear();
 });
@@ -162,6 +165,7 @@ describe('AC6: the row key never reaches a payload', () => {
     const edited = saveWorkoutEdits.mock.calls[0][2] as Record<string, unknown>[];
     expect(JSON.stringify(saveWorkoutEdits.mock.calls[0])).not.toContain('row-');
     for (const s of edited) expect(Object.keys(s)).not.toContain('rowKey');
+    expect(saveExerciseOrders).not.toHaveBeenCalled(); // #392 AC6: edit mode writes at Save Changes
     const orderOf = (section: string) => edited.find((s) => s.section === section)!.exercise_order;
     expect(orderOf('SS1')).toBe(2);
     expect(edited.find((s) => s.exercise_id === 'e2')!.exercise_order).toBe(3);
@@ -179,5 +183,8 @@ describe('AC6: the row key never reaches a payload', () => {
     const payload = saveSet.mock.calls[saveSet.mock.calls.length - 1][0] as Record<string, unknown>;
     expect(Object.keys(payload)).not.toContain('rowKey');
     expect(payload).toMatchObject({ exercise_id: 'e1', section: 'SS1', exercise_order: 2, weight: '135' });
+    // #392: the order writes carry rows and orders only.
+    expect(saveExerciseOrders).toHaveBeenCalled();
+    expect(JSON.stringify(saveExerciseOrders.mock.calls)).not.toMatch(/rowKey|row-/);
   });
 });
