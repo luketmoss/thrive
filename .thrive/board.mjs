@@ -197,7 +197,7 @@ function rest(method, path, body) {
   return text ? JSON.parse(text) : null;
 }
 
-function setItemStatus(itemId, status) {
+function setItemStatus(itemId, status, explain) {
   gh([
     'api', 'graphql', '-f', `query=mutation {
       updateProjectV2ItemFieldValue(input: {
@@ -207,7 +207,7 @@ function setItemStatus(itemId, status) {
         value: { singleSelectOptionId: "${optionId(status)}" }
       }) { projectV2Item { id } }
     }`,
-  ]);
+  ], explain);
 }
 
 function runRemotely(args, ghSaidText = '') {
@@ -300,8 +300,8 @@ switch (command) {
     // on the board, and adding it again for `--status` would move its card. An
     // issue already in a column is left alone; one on the board with no column
     // takes the one asked for; only an issue that is not on the board is added.
-    const said = (what) => `Issue #${issue}: ${what}`;
-    const { node } = lookupIssue(issue, said);
+    const issueError = (what) => `Issue #${issue}: ${what}`;
+    const { node } = lookupIssue(issue, issueError);
     const current = node?.fieldValueByName?.name ?? null;
 
     if (node && current !== null) {
@@ -311,7 +311,7 @@ switch (command) {
       break;
     }
     if (node) {
-      if (status) setItemStatus(node.id, status);
+      if (status) setItemStatus(node.id, status, issueError);
       console.log(status
         ? `#${issue}: already on the board, set to ${status}`
         : `#${issue}: already on the board`);
@@ -323,10 +323,10 @@ switch (command) {
       '--owner', config.owner,
       '--url', `https://github.com/${config.repo}/issues/${issue}`,
       '--format', 'json',
-    ], said);
+    ], issueError);
     const item = JSON.parse(raw);
 
-    if (status) setItemStatus(item.id, status);
+    if (status) setItemStatus(item.id, status, issueError);
     console.log(status ? `#${issue}: added (${status})` : `#${issue}: added to the board`);
     break;
   }

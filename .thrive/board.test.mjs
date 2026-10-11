@@ -81,7 +81,8 @@ if (args[0] === 'api' && args[1] === 'graphql') {
     process.stdout.write(process.env.GH_PROBE_JSON || '{}');
     process.exit(0);
   }
-  if (process.env.GH_GRAPHQL_FAIL === '1') {
+  if (process.env.GH_GRAPHQL_FAIL === '1' ||
+      (process.env.GH_MUTATION_FAIL === '1' && args.some((a) => a.includes('mutation')))) {
     process.stderr.write(process.env.GH_FAIL_STDERR || 'HTTP 401: Bad credentials\\n');
     process.exit(1);
   }
@@ -284,6 +285,28 @@ test('add refuses a non-numeric issue (AC3)', () => {
   assert.equal(status, 1);
   assert.match(stderr, /Usage: board\.mjs add/);
   assert.equal(log.length, 0);
+});
+
+test('add: the status mutation failing after item-add says what gh said, with no probe and no dispatch (#416 AC4)', () => {
+  const { stderr, status, log, dispatched } = run(['add', '216', '--status', 'To Do'], {
+    GH_GRAPHQL_JSON: NOT_ON_BOARD(), GH_ITEM_ADD_JSON: ITEM_ADDED,
+    GH_MUTATION_FAIL: '1', GH_FAIL_STDERR: 'HTTP 502: Bad Gateway\n', GH_TOKEN: 'fake-token',
+  }, { curl: 'must not run' });
+  assert.equal(status, 1);
+  assert.equal(stderr.trim(), 'Issue #216: HTTP 502: Bad Gateway');
+  assert.equal(log.length, 3); // lookup, item-add, the failed mutation
+  assert.equal(dispatched, null);
+});
+
+test('add: the status mutation failing on a card with no column says what gh said (#416 AC4)', () => {
+  const { stderr, status, log, dispatched } = run(['add', '216', '--status', 'To Do'], {
+    GH_GRAPHQL_JSON: ON_BOARD(null, 'PVTI_nocolumn'),
+    GH_MUTATION_FAIL: '1', GH_FAIL_STDERR: 'HTTP 502: Bad Gateway\n', GH_TOKEN: 'fake-token',
+  }, { curl: 'must not run' });
+  assert.equal(status, 1);
+  assert.equal(stderr.trim(), 'Issue #216: HTTP 502: Bad Gateway');
+  assert.equal(log.length, 2); // lookup, the failed mutation
+  assert.equal(dispatched, null);
 });
 
 test('add reports an issue that does not exist as not found (#416 AC4)', () => {
@@ -562,7 +585,7 @@ test('add: item-add failing after the lookup says what gh said, with no probe an
   assert.equal(dispatched, null);
 });
 
-test('add keeps "not found" for the wording the real gh uses for an issue URL that is not one (#405 AC3)', () => {
+test('add reports "not found" for the "resource not found, please check the URL" wording as well (#405 AC3)', () => {
   const { stderr, status, dispatched } = run(['add', '99999999'], {
     GH_GRAPHQL_FAIL: '1', GH_FAIL_STDERR: 'resource not found, please check the URL\n', GH_PROBE_JSON: PROBE_OK, GH_TOKEN: 'fake-token',
   }, { curl: 'must not run' });
