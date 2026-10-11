@@ -415,3 +415,54 @@ test('#260 AC3: sportTypeField sends only a whole-number code', () => {
     assert.deepEqual(sportTypeField(bad), {}, String(bad));
   }
 });
+
+/** The fake API, answering the activity's first upsert as #403's API would. */
+function claimingApi(answer) {
+  const api = fakeApi();
+  const upsert = api.upsertSyncedWorkout;
+  let first = true;
+  api.upsertSyncedWorkout = async (payload) => {
+    if (!first) return upsert(payload);
+    first = false;
+    const res = await upsert(payload);
+    return answer(payload, res);
+  };
+  return api;
+}
+
+test('#403 AC1/AC5: a claimed plan counts as new, is logged as claimed, and its written is stored as normalized', async () => {
+  const { drive, archive } = await archiveWith([GRAVEL]);
+  const api = claimingApi((payload, res) => ({
+    ...res, status: 'claimed', id: 'w_plan0001',
+    written: { ...payload.incoming, name: 'Zone 2 - 90 min', edited: ['name'] }, kept: ['name'],
+  }));
+  const lines = [];
+  const out = await syncActivities({ archive, api, activityIds: [GRAVEL.activity_id], syncedAt: SYNCED, log: (l) => lines.push(l) });
+  assert.equal(out.created, 1);
+  assert.equal(out.updated, 0);
+  assert.deepEqual(out.failures, []);
+  assert.deepEqual(out.notes, []);
+  assert.ok(lines.some((l) => /: claimed planned w_plan0001; kept Thrive edits to name$/.test(l)), lines.join('\n'));
+  const file = fileOf(drive, GRAVEL.activity_id);
+  assert.equal(file.data.normalized.name, 'Zone 2 - 90 min');
+  assert.deepEqual(file.data.normalized.edited, ['name']);
+});
+
+test('#403 AC2: ambiguous plans are a SyncLog note naming them, not a failure, and the row is still created', async () => {
+  const { archive } = await archiveWith([GRAVEL]);
+  const api = claimingApi((_payload, res) => ({ ...res, ambiguous_plans: ['w_plan000a', 'w_plan000b'] }));
+  const out = await syncActivities({ archive, api, activityIds: [GRAVEL.activity_id], syncedAt: SYNCED, log: () => {} });
+  assert.equal(out.created, 1);
+  assert.deepEqual(out.failures, []);
+  assert.equal(out.notes.length, 1);
+  assert.match(out.notes[0], new RegExp(`^bike ${GRAVEL.activity_id} on \\d{4}-\\d{2}-\\d{2}: ambiguous, planned w_plan000a, w_plan000b;`));
+});
+
+test('#403: a status the sync does not know fails that activity rather than counting it silently', async () => {
+  const { archive } = await archiveWith([GRAVEL]);
+  const api = claimingApi((_payload, res) => ({ ...res, status: 'merged' }));
+  const out = await syncActivities({ archive, api, activityIds: [GRAVEL.activity_id], syncedAt: SYNCED, log: () => {} });
+  assert.equal(out.created, 0);
+  assert.equal(out.failures.length, 1);
+  assert.match(out.failures[0], /unknown status "merged"/);
+});

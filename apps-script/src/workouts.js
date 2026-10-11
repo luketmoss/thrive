@@ -285,6 +285,15 @@ function normalizeSyncedFields(data, where, required) {
  * tracking the vendor for that activity (sync plan §8).
  * - Two or more rows: refused, naming them. Picking one would be a guess.
  *
+ * A new activity completes its plan (#403). Before appending, the create path
+ * looks for rows planned for that day: `status = planned`, the activity's
+ * `type` and `date`, `source` and `source_activity_id` blank. Sub-type and
+ * time are not compared. Exactly one is claimed: written in place as the
+ * activity's row, reported as `claimed`. Two or more: appended as before, no
+ * plan touched, and their ids returned as `ambiguous_plans`. Only the create
+ * path claims, so an activity already in Thrive, or one whose row the user
+ * deleted, never takes over a plan.
+ *
  * Source-generic: #159's Garmin import comes through here too.
  * Key-only: a write, so it never joins #144's token read allow-list.
  *
@@ -292,6 +301,9 @@ function normalizeSyncedFields(data, where, required) {
  *   written?: Object, kept?: string[] }}  `written` is every merged field as
  *   the sheet now holds it, plus `edited`, for the sync to store as the next
  *   `last_written`. `kept` is the fields this call declined to overwrite.
+ *   `status` is `created`, `updated`, `claimed` (#403) or `deleted`; a
+ *   `created` with two or more plans for that day also carries
+ *   `ambiguous_plans`, their ids.
  */
 function upsertSyncedWorkout(payload) {
   payload = payload || {};
@@ -354,6 +366,14 @@ function upsertSyncedWorkout(payload) {
     if (lastWritten) {
       return { status: 'deleted', source: source, source_activity_id: activityId };
     }
+    var plans = [];
+    for (var pr = 0; pr < rows.length; pr++) {
+      if (isClaimablePlan(rows[pr], incoming)) {
+        plans.push({ rowNum: pr + 2, id: cell(rows[pr][COL.ID]) });
+      }
+    }
+    if (plans.length === 1) return claimPlan(sheet, plans[0], incoming, owned);
+
     var data = {};
     for (var k in incoming) {
       if (Object.prototype.hasOwnProperty.call(incoming, k)) data[k] = incoming[k];
@@ -362,10 +382,14 @@ function upsertSyncedWorkout(payload) {
       if (Object.prototype.hasOwnProperty.call(owned, o)) data[o] = owned[o];
     }
     var created = createWorkout(data);
-    return {
+    var result = {
       status: 'created', id: created.id, sheetRow: created.sheetRow,
       written: pickSynced(created, []), kept: [],
     };
+    if (plans.length > 1) {
+      result.ambiguous_plans = plans.map(function (p) { return p.id; });
+    }
+    return result;
   }
 
   // Row-index drift (sync plan §10): the scan and this write are one
@@ -653,6 +677,58 @@ function normalizeEditedFields(value) {
  * The merged fields of a workout as the sheet holds them, and which of them
  * the user has edited, in SYNC_MERGED_FIELDS order so a re-run is identical.
  */
+/** A row planned for this activity's day and type, not yet any activity's (#403). */
+function isClaimablePlan(row, incoming) {
+  return cell(row[COL.STATUS]) === 'planned' &&
+    cell(row[COL.TYPE]) === incoming.type &&
+    cell(row[COL.DATE]) === incoming.date &&
+    cell(row[COL.SOURCE]) === '' &&
+    cell(row[COL.SOURCE_ACTIVITY_ID]) === '';
+}
+
+/**
+ * Write a new activity onto its one planned row (#403), which from then on is
+ * an ordinary synced row, found by `(source, source_activity_id)`.
+ *
+ * The activity fills every merged field but `name`, and the row is finished
+ * (`status` ''). The plan's name is the user's, so it is kept and recorded as
+ * edited, and later runs never overwrite it; a plan with no name takes the
+ * activity's. Notes, effort, template_id and estimated_seconds are not merged
+ * fields, so they stay as planned.
+ */
+function claimPlan(sheet, plan, incoming, owned) {
+  // Row-index drift (sync plan §10): confirm the row is still that plan.
+  var range = sheet.getRange(plan.rowNum, 1, 1, WORKOUT_COLUMN_COUNT);
+  var row = range.getDisplayValues()[0];
+  if (cell(row[COL.ID]) !== plan.id || !isClaimablePlan(row, incoming)) {
+    throw new Error(
+      'Workouts row ' + plan.rowNum + ' was expected to hold planned workout ' + plan.id +
+      '. The sheet changed during the write; nothing was written. Re-run the sync.'
+    );
+  }
+  var current = rowToWorkout(row, plan.rowNum);
+  var edited = [];
+  for (var m = 0; m < SYNC_MERGED_FIELDS.length; m++) {
+    var f = SYNC_MERGED_FIELDS[m];
+    if (f === 'name' && current.name !== '') {
+      edited.push('name');
+      continue;
+    }
+    current[f] = incoming[f];
+  }
+  for (var w in owned) {
+    if (Object.prototype.hasOwnProperty.call(owned, w)) current[w] = owned[w];
+  }
+  current.status = '';
+
+  range.setValues([asText(workoutToRow(current))]);
+  return {
+    status: 'claimed', id: current.id, sheetRow: plan.rowNum,
+    written: pickSynced(current, edited),
+    kept: current.name !== incoming.name ? ['name'] : [],
+  };
+}
+
 function pickSynced(workout, edited) {
   var out = {};
   for (var i = 0; i < SYNC_MERGED_FIELDS.length; i++) {

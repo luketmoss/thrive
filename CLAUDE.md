@@ -161,6 +161,12 @@ whole minutes. `frontend/src/api/duration.ts` is the only conversion boundary.
 no code path may default them to `0`. `Workouts!R-Z` are the sync provenance
 columns, nullable for the same reason; a blank `source` positively means
 "logged by hand", so nothing may default it to a vendor name.
+A new synced activity completes the day's one matching plan instead of
+appending beside it (#403): `upsertSyncedWorkout` claims the single
+`status = planned` row of the activity's `type` and `date` with `source` and
+`source_activity_id` blank, keeps its name, notes, template, estimate and
+effort, and finishes it. Two or more such plans claim nothing, and the run's
+SyncLog notes name them.
 `Workouts!AA` `estimated_seconds` (#145) is how long a *planned* session is
 meant to take, typed per plan in whole minutes and stored in seconds through
 the same `duration.ts` boundary. It is not time taken: starting a plan never
