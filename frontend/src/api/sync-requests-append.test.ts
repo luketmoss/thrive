@@ -5,10 +5,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const sheetsGet = vi.fn();
 const sheetsAppend = vi.fn();
 let demo = false;
+/** Set to make withReauth behave as after a 401: the first try fails, the retry gets this token. */
+let reauthTo: string | null = null;
 vi.mock('./sheets', () => ({
   sheetsGet: (...a: unknown[]) => sheetsGet(...a),
   sheetsAppend: (...a: unknown[]) => sheetsAppend(...a),
-  withReauth: (token: string, fn: (t: string) => unknown) => fn(token),
+  withReauth: async (token: string, fn: (t: string) => unknown) => {
+    if (reauthTo === null) return fn(token);
+    try { return await fn(token); } catch { return fn(reauthTo); }
+  },
 }));
 vi.mock('./demo-data', async () => {
   const actual = await vi.importActual<typeof import('./demo-data')>('./demo-data');
@@ -19,6 +24,7 @@ import { appendSyncRequests, fetchSyncRequests, newSyncRequestId } from './sync-
 
 beforeEach(() => {
   demo = false;
+  reauthTo = null;
   sheetsGet.mockReset();
   sheetsAppend.mockReset();
   sheetsAppend.mockResolvedValue(undefined);
@@ -45,6 +51,20 @@ describe('appendSyncRequests', () => {
     demo = true;
     await appendSyncRequests(['coros'], 'a', 't');
     expect(sheetsAppend).not.toHaveBeenCalled();
+  });
+
+  it('returns the rows and the token the append succeeded with', async () => {
+    const out = await appendSyncRequests(['coros'], 'a', 'tok');
+    expect(out.token).toBe('tok');
+    expect(out.rows).toEqual(sheetsAppend.mock.calls[0][1]);
+  });
+
+  it('after a re-auth, returns the new token, not the spent one (#410 review)', async () => {
+    reauthTo = 'fresh';
+    sheetsAppend.mockRejectedValueOnce(new Error('401')).mockResolvedValueOnce(undefined);
+    const out = await appendSyncRequests(['coros'], 'a', 'spent');
+    expect(sheetsAppend.mock.calls.map((c) => c[2])).toEqual(['spent', 'fresh']);
+    expect(out.token).toBe('fresh');
   });
 
   it('a failing append rejects', async () => {

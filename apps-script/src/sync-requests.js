@@ -12,9 +12,13 @@
 // no `inputs` key (so force_refresh, backfill and max_deletions keep their
 // defaults), and the row's vendor only selects a key in SYNC_VENDOR_CONFIG.
 //
-// None of this is reachable from the web app: main.js has no `case` for any
-// function here, so doGet answers "Unknown action" for them. The trigger runs
-// the project's latest PUSHED code, not a deployment.
+// The tick is not reachable from the web app: main.js has no `case` for
+// pollSyncRequests or the trigger setup functions, so doGet answers "Unknown
+// action" for them. The trigger runs the project's latest PUSHED code, not a
+// deployment. The one web-app entry here is requestSync (#410): after the SPA
+// appends its rows, it asks for them to be dispatched at once. It runs the
+// tick's own per-vendor step, under the same lock, for the vendors of the rows
+// it names, and nothing else. The deployed web app runs it, not HEAD.
 //
 // The GitHub token lives only in the script property named below, is read only
 // here, and goes only into the Authorization header. No sheet cell, log line or
@@ -310,16 +314,11 @@ function syncPollLocked(tokenRef) {
     Logger.log('pollSyncRequests: no SyncRequests tab; nothing to poll.');
     return;
   }
-  var lastRow = sheet.getLastRow();
-  var raw = lastRow < 2 ? [] : sheet.getRange(2, 1, lastRow - 1, SYNC_REQUEST_COLUMN_COUNT).getDisplayValues();
-
-  var all = [];
+  var all = syncReadRequests(sheet);
   var open = 0;
-  for (var i = 0; i < raw.length; i++) {
-    var req = rowToSyncRequest(raw[i], i + 2);
-    all.push(req);
+  all.forEach(function (req) {
     if (req.status === 'requested' || req.status === 'started') open++;
-  }
+  });
 
   var nowMs = new Date().getTime();
   if (syncScheduledSyncDue(all, nowMs)) {
@@ -328,19 +327,6 @@ function syncPollLocked(tokenRef) {
   }
   if (open === 0) return;
 
-  var token = function () {
-    if (!tokenRef.read) {
-      tokenRef.read = true;
-      var value = PropertiesService.getScriptProperties().getProperty(SYNC_DISPATCH_TOKEN_PROPERTY);
-      tokenRef.value = value === null || value === undefined ? '' : String(value).trim();
-    }
-    return tokenRef.value;
-  };
-  var logs = {};
-  var logFor = function (vendor) {
-    if (!logs[vendor]) logs[vendor] = syncReadLog(SYNC_VENDOR_CONFIG[vendor].logTab);
-    return logs[vendor];
-  };
   var counts = { started: 0, closed: 0 };
 
   // Requests that cannot be read are failed first, with no fetch.
@@ -354,10 +340,7 @@ function syncPollLocked(tokenRef) {
         return;
       }
       if (req.status !== 'requested') return;
-      var invalid = !req.request_id ? SYNC_DETAIL.blankId
-        : SYNC_REQUEST_VENDORS.indexOf(req.vendor) === -1 ? syncDetailUnknownVendor(req.vendor)
-        : isNaN(syncParseInstant(req.requested_at)) ? SYNC_DETAIL.badTime
-        : '';
+      var invalid = syncInvalidRequest(req);
       if (invalid) {
         if (syncWriteRequest(sheet, req, syncFinal('failed', invalid))) counts.closed++;
         return;
@@ -366,12 +349,52 @@ function syncPollLocked(tokenRef) {
     });
   });
 
+  syncRunVendors(sheet, all, requested, started, nowMs, tokenRef, counts);
+
+  Logger.log('pollSyncRequests: ' + counts.started + ' started, ' + counts.closed + ' closed.');
+}
+
+/** Every SyncRequests row, in sheet order, as row objects with sheetRow. */
+function syncReadRequests(sheet) {
+  var lastRow = sheet.getLastRow();
+  var raw = lastRow < 2 ? [] : sheet.getRange(2, 1, lastRow - 1, SYNC_REQUEST_COLUMN_COUNT).getDisplayValues();
+  var all = [];
+  for (var i = 0; i < raw.length; i++) all.push(rowToSyncRequest(raw[i], i + 2));
+  return all;
+}
+
+/** Why a `requested` row cannot be acted on, in words; '' when it can. */
+function syncInvalidRequest(req) {
+  return !req.request_id ? SYNC_DETAIL.blankId
+    : SYNC_REQUEST_VENDORS.indexOf(req.vendor) === -1 ? syncDetailUnknownVendor(req.vendor)
+    : isNaN(syncParseInstant(req.requested_at)) ? SYNC_DETAIL.badTime
+    : '';
+}
+
+/**
+ * The per-vendor step, shared by the tick and requestSync (#410): for each
+ * vendor with a row in `requested` or `started`, close what it started and
+ * decide what to start. The token is read at most once, and only when a
+ * fetch needs it; each log tab is read at most once.
+ */
+function syncRunVendors(sheet, all, requested, started, nowMs, tokenRef, counts) {
+  var token = function () {
+    if (!tokenRef.read) {
+      tokenRef.read = true;
+      var value = PropertiesService.getScriptProperties().getProperty(SYNC_DISPATCH_TOKEN_PROPERTY);
+      tokenRef.value = value === null || value === undefined ? '' : String(value).trim();
+    }
+    return tokenRef.value;
+  };
+  var logs = {};
+  var logFor = function (vendor) {
+    if (!logs[vendor]) logs[vendor] = syncReadLog(SYNC_VENDOR_CONFIG[vendor].logTab);
+    return logs[vendor];
+  };
   SYNC_REQUEST_VENDORS.forEach(function (vendor) {
     if (!requested[vendor].length && !started[vendor].length) return;
     syncPollVendor(sheet, vendor, all, requested[vendor], started[vendor], nowMs, token, logFor, tokenRef, counts);
   });
-
-  Logger.log('pollSyncRequests: ' + counts.started + ' started, ' + counts.closed + ' closed.');
 }
 
 /** Minutes after local midnight of an instant, in TIMEZONE. */
@@ -548,6 +571,133 @@ function syncCloseStarted(sheet, req, nowMs, log, token, counts) {
     return true;
   }
   return false;
+}
+
+// --- requestSync (#410): Sync now, dispatched in the same request ----------
+
+var SYNC_REQUEST_ID_PATTERN = /^sr_[0-9a-f]{8}$/;
+
+/** Fixed text: it never quotes what was sent. */
+var SYNC_REQUEST_BAD_REQUEST =
+  'payload.request_ids must be an array of one or two distinct request ids (sr_ and 8 hex digits).';
+var SYNC_REQUEST_UNEXPECTED =
+  'requestSync hit an unexpected error. The request stays open for the poller.';
+
+/** Whether `ids` is an array of 1-2 distinct strings, each sr_ + 8 hex. */
+function syncValidRequestIds(ids) {
+  if (!Array.isArray(ids) || ids.length < 1 || ids.length > 2) return false;
+  for (var i = 0; i < ids.length; i++) {
+    if (typeof ids[i] !== 'string' || !SYNC_REQUEST_ID_PATTERN.test(ids[i])) return false;
+  }
+  return ids.length === 1 || ids[0] !== ids[1];
+}
+
+/**
+ * The web-app action (#410). Runs the tick's per-vendor step, under the
+ * tick's lock, for the vendors of the named rows only. It appends nothing,
+ * runs no schedule-slot check, and reads only `payload.request_ids`: the
+ * workflow, ref and body stay the constants above, whatever else is sent.
+ *
+ * Answers `{ success: true, data: { requests: [{ request_id, status }] } }`
+ * once the rows are read, whatever was decided: `started`, `skipped`,
+ * `failed`, `expired`, a status an earlier tick or call already wrote, or
+ * `not_found`. A busy lock writes nothing and answers the rows as they stand
+ * (still `requested`), for the next tick to take. No detail, run id or URL
+ * goes back: the sheet is where the SPA reads the rest.
+ */
+function requestSync(payload) {
+  var ids = payload && payload.request_ids;
+  if (!syncValidRequestIds(ids)) return fail(SYNC_REQUEST_BAD_REQUEST, 'bad_request');
+
+  var lock = LockService.getScriptLock();
+  var tokenRef = { read: false, value: '' };
+  if (!lock.tryLock(SYNC_LOCK_WAIT_MS)) {
+    Logger.log('requestSync: the script lock is busy; left for the poller.');
+    try {
+      return syncRequestAnswer(ids, syncReadNamedRequests());
+    } catch (err) {
+      throw syncRequestUnexpected(err, tokenRef);
+    }
+  }
+  try {
+    return syncRequestAnswer(ids, syncRequestLocked(ids, tokenRef));
+  } catch (err) {
+    throw syncRequestUnexpected(err, tokenRef);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** The SyncRequests rows, or [] with no tab. */
+function syncReadNamedRequests() {
+  var sheet = getSpreadsheet().getSheetByName(SYNC_REQUESTS_SHEET);
+  return sheet ? syncReadRequests(sheet) : [];
+}
+
+/** Holding the lock: re-read, then run the per-vendor step for the named rows' vendors. */
+function syncRequestLocked(ids, tokenRef) {
+  var sheet = getSpreadsheet().getSheetByName(SYNC_REQUESTS_SHEET);
+  if (!sheet) return [];
+  var all = syncReadRequests(sheet);
+
+  // Only a named row still `requested`, of a known vendor and readable, makes
+  // its vendor eligible. Anything else is answered as it stands: the poller,
+  // or whatever closed it, has it.
+  var vendors = {};
+  ids.forEach(function (id) {
+    var req = syncFindRequest(all, id);
+    if (req && req.status === 'requested' && !syncInvalidRequest(req)) vendors[req.vendor] = true;
+  });
+
+  var requested = { coros: [], withings: [] };
+  var started = { coros: [], withings: [] };
+  all.forEach(function (req) {
+    if (!vendors[req.vendor]) return;
+    if (req.status === 'started') started[req.vendor].push(req);
+    // An unreadable row of the same vendor is left for the tick to fail.
+    else if (req.status === 'requested' && !syncInvalidRequest(req)) requested[req.vendor].push(req);
+  });
+
+  var counts = { started: 0, closed: 0 };
+  syncRunVendors(sheet, all, requested, started, new Date().getTime(), tokenRef, counts);
+  Logger.log('requestSync: ' + counts.started + ' started, ' + counts.closed + ' closed.');
+  return all;
+}
+
+/** The first row with this request_id, or null. */
+function syncFindRequest(all, id) {
+  for (var i = 0; i < all.length; i++) if (all[i].request_id === id) return all[i];
+  return null;
+}
+
+/** request_id and status per named id, in the order asked, and nothing else. */
+function syncRequestAnswer(ids, all) {
+  return {
+    success: true,
+    data: {
+      requests: ids.map(function (id) {
+        var req = syncFindRequest(all, id);
+        var status = !req ? 'not_found'
+          : SYNC_REQUEST_STATUSES.indexOf(req.status) !== -1 ? req.status
+          : 'unknown';
+        return { request_id: id, status: status };
+      }),
+    },
+  };
+}
+
+/** An unexpected error: logged without the GitHub token, answered as fixed text. */
+function syncRequestUnexpected(err, tokenRef) {
+  var token = tokenRef.value;
+  if (!tokenRef.read) {
+    try {
+      token = PropertiesService.getScriptProperties().getProperty(SYNC_DISPATCH_TOKEN_PROPERTY) || '';
+    } catch (ignored) {
+      token = '';
+    }
+  }
+  Logger.log('requestSync: unexpected error: ' + syncScrub((err && err.message) || err, String(token).trim()));
+  return new Error(SYNC_REQUEST_UNEXPECTED);
 }
 
 // --- Setup: the owner runs these once from the editor, as luketmossbot -----
