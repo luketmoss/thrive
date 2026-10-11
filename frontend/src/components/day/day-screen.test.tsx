@@ -10,6 +10,13 @@ vi.mock('../../state/actions', () => ({
   journalRefresh: { run: (t: string) => journalRun(t), markStarted: vi.fn() },
   loadJournal: vi.fn(async () => {}),
   loadHealth: vi.fn(async () => {}),
+  // #409: the sync line's reads and refreshes.
+  syncLogsRefresh: { run: vi.fn(async () => {}), invalidate: vi.fn() },
+  workoutsRefresh: { run: vi.fn(async () => {}), invalidate: vi.fn() },
+  loadSyncLog: vi.fn(async () => {}),
+  loadWithingsSyncLog: vi.fn(async () => {}),
+  loadSyncRequests: vi.fn(async () => {}),
+  requestSyncNow: vi.fn(async () => {}),
 }));
 
 const { DayScreen } = await import('./day-screen');

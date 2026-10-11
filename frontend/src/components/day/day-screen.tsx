@@ -11,7 +11,8 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { useAuth } from '../../auth/auth-context';
 import { currentRoute, navigate, replaceRoute } from '../../router/router';
 import { workouts } from '../../state/store';
-import { healthRefresh, journalRefresh } from '../../state/actions';
+import { healthRefresh, journalRefresh, syncLogsRefresh, workoutsRefresh } from '../../state/actions';
+import { refreshHeld, workoutsRefreshPending } from '../../state/refresh-hold';
 import { onPageVisible } from '../../state/page-visible';
 import { addDays, dayHref, dayStateOf } from '../../day/dates';
 import { moveAnnouncement } from '../../day/format';
@@ -20,6 +21,8 @@ import { DayHeader } from './day-header';
 import { WeekStrip } from './week-strip';
 import { SLOTS, slotsFor } from './slots';
 import { useSwipe } from './use-swipe';
+import { useSyncNow } from '../settings/sync-now';
+import { DaySyncLine } from './day-sync-line';
 
 /** True when a key press belongs to a text field, not the screen. */
 function inTextEntry(target: EventTarget | null): boolean {
@@ -28,7 +31,7 @@ function inTextEntry(target: EventTarget | null): boolean {
 }
 
 export function DayScreen() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const today = todaySignal.value;
   const date = currentRoute.value.params.date ?? today;
   const state = dayStateOf(date, today);
@@ -54,6 +57,28 @@ export function DayScreen() {
     void journalRefresh.run(token);
     return onPageVisible(() => void journalRefresh.run(token));
   }, [token]);
+
+  // Sync logs (#409): the same triggers and guard, for the "Synced <age>" line.
+  useEffect(() => {
+    if (!token) return;
+    void syncLogsRefresh.run(token);
+    return onPageVisible(() => void syncLogsRefresh.run(token));
+  }, [token]);
+
+  // Sync now (#315, #409): the same hook Settings uses. When a request closes,
+  // re-read what the sync wrote: health and the sync logs now, Workouts/Sets
+  // under the hold app.tsx applies on the page becoming visible (an edit route,
+  // or a non-empty offline save queue): held, it is flagged, and app.tsx's own
+  // effect runs it once when the hold lifts.
+  const sync = useSyncNow(token, user?.email ?? '', () => {
+    if (!token) return;
+    void healthRefresh.run(token);
+    syncLogsRefresh.invalidate();
+    void syncLogsRefresh.run(token);
+    workoutsRefresh.invalidate();
+    if (refreshHeld()) workoutsRefreshPending.value = true;
+    else void workoutsRefresh.run(token);
+  });
 
   // Announce each move the user made, but not the first load or a midnight
   // rollover (today changing under `#/`, where the date follows it).
@@ -103,7 +128,7 @@ export function DayScreen() {
   }, []);
 
   const swipe = useSwipe({
-    ignore: '.week-strip',
+    ignore: '.week-strip, .day-sync',
     onSwipe: (dir) => moveTo(addDays(date, dir === 'left' ? 1 : -1)),
   });
 
@@ -117,7 +142,9 @@ export function DayScreen() {
         onToday={() => moveTo(today)}
         headingRef={headingRef}
         todayButtonRef={todayButtonRef}
-      />
+      >
+        <DaySyncLine sync={sync} />
+      </DayHeader>
       <WeekStrip date={date} today={today} workouts={workouts.value} onSelect={moveTo} />
       <div class="day-panels">
         {slotsFor(state).map((name) => {

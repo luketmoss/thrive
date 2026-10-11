@@ -1,6 +1,6 @@
 // #237 AC2 — the Day screen's header: weekday, date, relative pill, sun line.
 
-import type { Ref } from 'preact';
+import type { ComponentChildren, Ref } from 'preact';
 import { relativeLabel } from '../../day/dates';
 import { fullDate, weekdayName } from '../../day/format';
 import { sunLine } from '../../day/sun';
@@ -15,6 +15,8 @@ interface DayHeaderProps {
   onToday: () => void;
   headingRef: Ref<HTMLHeadingElement>;
   todayButtonRef: Ref<HTMLButtonElement>;
+  /** Rendered last in the header block, under the sun line (the sync line, #409). */
+  children?: ComponentChildren;
 }
 
 /** A month page: drawn in currentColor, so it takes the button's own colour. */
@@ -27,7 +29,7 @@ function CalendarIcon() {
   );
 }
 
-export function DayHeader({ date, today, onPrevious, onNext, onToday, headingRef, todayButtonRef }: DayHeaderProps) {
+export function DayHeader({ date, today, onPrevious, onNext, onToday, headingRef, todayButtonRef, children }: DayHeaderProps) {
   const isToday = date === today;
   const sun = sunLine(date);
   const full = fullDate(date);
@@ -75,6 +77,7 @@ export function DayHeader({ date, today, onPrevious, onNext, onToday, headingRef
           {sun.daylight} of daylight {sun.change}
         </span>
       </p>
+      {children}
     </header>
   );
 }

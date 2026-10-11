@@ -4662,3 +4662,65 @@ a.training-card {
     outline-offset: 1px;
   }
 }
+
+/* ===== Day sync line (#409) =====
+   "Synced <age>" left, Sync now right; request messages below, growing down only.
+   Tokens only, both themes. Warning/danger tones reuse .sync-tone-* (words, never colour alone). */
+.day-sync {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.day-sync-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  min-height: 44px;
+}
+
+.day-sync-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Same place and width idle or busy ("Syncing…" is the longer label), so nothing reflows. */
+.day-sync-btn {
+  flex: none;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  min-width: 124px;
+  min-height: 44px;
+  padding: 0 var(--space-md);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.day-sync-btn[aria-disabled='true'] {
+  cursor: default;
+  color: var(--color-text-secondary);
+}
+
+.day-sync-busy .day-sync-icon {
+  animation: spin 1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .day-sync-busy .day-sync-icon {
+    animation: none;
+  }
+}
+
+.day-sync-request {
+  overflow-wrap: anywhere;
+}

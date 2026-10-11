@@ -1496,6 +1496,16 @@ export async function loadWithingsSyncLog(token: string): Promise<void> {
   }
 }
 
+/**
+ * Both sync logs for the Day view's "Synced <age>" line (#409): on show and on
+ * the page becoming visible, never in flight twice or within 60 s of the last
+ * start (the guard `healthRefresh` uses). Two Sheets reads each time.
+ */
+export const syncLogsRefresh = throttled(
+  async (token: string) => { await Promise.all([loadSyncLog(token), loadWithingsSyncLog(token)]); },
+  { minIntervalMs: 60_000 },
+);
+
 // ── Sync now (#315) ──────────────────────────────────────────────────
 
 /** Re-read the request rows. A failed read keeps what is on screen: the next poll tries again. */
