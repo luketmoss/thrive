@@ -108,8 +108,11 @@ says:
 - **deferred work goes through `/idea`** and onto the board, and is listed in
   the report — never dropped, and never left for the orchestrator to notice
 - during refinement, no repo files are written or committed. Screenshots come
-  from `.thrive/look.mjs`, which writes them outside the repo; never stop the
-  shared dev server (`pkill -f vite`) other agents are using
+  from the Browser pane (`preview_start`, then the `mcp__Claude_Browser__*`
+  tools) when the session has it, and from `.thrive/look.mjs` only in a cloud
+  session without one (it needs a Playwright the desktop machine does not
+  have, so do not try it there first). Either way they land outside the repo;
+  never stop the shared dev server (`pkill -f vite`) other agents are using
 - in a cloud session there is no `gh`: every `gh` step means the same
   operation through the GitHub MCP tools, and board writes still go
   through `board.mjs`
