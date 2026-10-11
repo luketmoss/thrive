@@ -370,6 +370,24 @@ describe('AC4: the new-plan planner behaves the same', () => {
     expect(saved()[1]).toMatchObject({ sets: 3, planned_reps: '8', planned_reps_by_set: ['8', '8', '8'] });
   });
 
+  it('#376 AC4: a template row with Reps 4-6 holds 4-6 in every row, read-only, and Save writes it to every set', async () => {
+    templates.value = [{
+      ...PUSH,
+      exercises: PUSH.exercises.map((r) => (r.exercise_id === 'ex_1' ? { ...r, reps: '4-6' } : r)),
+    }];
+    render(<WorkoutFlow planDate="2099-12-31" />);
+    await tap('Upper Push A');
+    fireEvent.click(cards()[1]);
+    expect(rowValues()).toEqual(['', '', '']);
+    const held = Array.from(document.querySelectorAll('.planner-set-row .reps-field-held')).map(
+      (el) => el.firstChild!.nextSibling!.textContent,
+    );
+    expect(held).toEqual(['4-6', '4-6', '4-6']);
+    expect(visual(1)).toBe('3 × 4-6');
+    await tap('Save Workout');
+    expect(saved()[1]).toMatchObject({ sets: 3, planned_reps: '4-6', planned_reps_by_set: ['4-6', '4-6', '4-6'] });
+  });
+
   it('an exercise added in the planner starts with Sets 1 and one blank Set 1 row', async () => {
     exercises.value = [{ id: 'ex_new', name: 'Dips', tags: '', notes: '', created: '', sheetRow: 2 }];
     render(<WorkoutFlow planDate="2099-12-31" />);
@@ -417,17 +435,18 @@ describe('AC5: accessibility', () => {
 
   it('the Varies hint is described only when the held values differ', () => {
     openEditor(ENTRY.bench);
-    const hintId = allInput().getAttribute('aria-describedby')!;
-    expect(document.getElementById(hintId)!.textContent).toBe('Sets differ. A value here replaces every set.');
+    const desc = () => document.getElementById(allInput().getAttribute('aria-describedby')!)!.textContent;
+    // #376 appends "Whole number only." to every Reps input's description.
+    expect(desc()).toBe('Sets differ. A value here replaces every set. Whole number only.');
     type(allInput(), '9');
-    expect(allInput().hasAttribute('aria-describedby')).toBe(false);
-    expect(document.getElementById(hintId)).toBeNull();
+    expect(desc()).toBe('Whole number only.');
   });
 
   it('judged on the stored text: three sets of 4-6 are not "varied"', () => {
     openEditor(ENTRY.squat);
     expect(allInput().placeholder).not.toBe('Varies');
-    expect(allInput().hasAttribute('aria-describedby')).toBe(false);
+    const desc = document.getElementById(allInput().getAttribute('aria-describedby')!)!.textContent!;
+    expect(desc).not.toContain('Sets differ');
   });
 
   it('the expanded card reports aria-expanded', () => {

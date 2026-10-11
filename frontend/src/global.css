@@ -1386,7 +1386,7 @@ input, select, textarea {
 
 .template-exercise-config .form-input,
 .template-exercise-config .form-select {
-  min-height: 40px;
+  min-height: 44px;
   padding: var(--space-sm) var(--space-md);
   font-size: var(--text-sm);
 }
@@ -1397,8 +1397,8 @@ input, select, textarea {
 }
 
 /* The planner's expanded entry (#375): every input a 44px touch target, and
-   one compact line per set (label left, a narrow input right). Scoped to the
-   planner: the template editor keeps its 40px panel. */
+   one compact line per set (label left, a narrow input right). The template
+   editor's panel is 44px too since #376. */
 .planner-exercise-config .form-input {
   min-height: 44px;
 }
@@ -1422,6 +1422,54 @@ input, select, textarea {
 .planner-set-row .form-input {
   flex: 0 0 6rem;
   width: 6rem;
+}
+
+/* A planned-Reps field (#376): held text (a stored range such as 4-6) is
+   real text beneath the input, or beside it on a per-set row, with a Clear.
+   Long held text wraps; it never truncates or widens the card. */
+.reps-field-held-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-sm);
+  margin-top: var(--space-xs);
+}
+
+.reps-field-held {
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.reps-field-held-line .reps-field-held {
+  flex: 1 1 auto;
+}
+
+.reps-field-inline {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.reps-field-inline .reps-field-held {
+  flex: 0 1 auto;
+}
+
+.reps-field-clear {
+  flex: none;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 var(--space-sm);
+}
+
+/* A row with long held text grows taller; its "Set n" label never wraps. */
+.planner-set-row > .form-label {
+  flex: none;
+  white-space: nowrap;
 }
 
 .section-select {

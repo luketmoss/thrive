@@ -63,7 +63,7 @@ export const DEMO_TEMPLATE_ROWS: TemplateRowWithRow[] = [
   // Upper Push A
   { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 1, exercise_id: 'ex_demo_pushup', exercise_name: 'Push Ups', section: 'warmup', sets: '', reps: '', sheetRow: 2 },
   { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 2, exercise_id: 'ex_demo001', exercise_name: 'Bench Press BB', section: 'warmup', sets: '', reps: '', sheetRow: 3 },
-  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 3, exercise_id: 'ex_demo001', exercise_name: 'Bench Press BB', section: 'primary', sets: '5', reps: '6', sheetRow: 4 },
+  { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 3, exercise_id: 'ex_demo001', exercise_name: 'Bench Press BB', section: 'primary', sets: '5', reps: '4-6', sheetRow: 4 },
   { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 4, exercise_id: 'ex_demo002', exercise_name: 'Incline Press DB', section: 'SS1', sets: '3', reps: '12', sheetRow: 5 },
   { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 5, exercise_id: 'ex_demo003', exercise_name: 'Cable Fly FT', section: 'SS1', sets: '3', reps: '15', sheetRow: 6 },
   { template_id: 'tpl_demo001', template_name: 'Upper Push A', order: 6, exercise_id: 'ex_demo009', exercise_name: 'Lateral Raise DB', section: 'SS2', sets: '3', reps: '15', sheetRow: 7 },
@@ -233,11 +233,11 @@ export const DEMO_SETS: SetWithRow[] = [
   { workout_id: 'w_demo004', exercise_id: 'ex_demo002', exercise_name: 'Incline Press DB', section: 'SS1', exercise_order: 4, set_number: 3, planned_reps: '10-12', weight: '50', reps: '10', effort: 'Medium', sheetRow: 27 },
 
   // ── Planned workout (w_demo005 — Upper Pull A) — prepopulated set structure ──
-  { workout_id: 'w_demo005', exercise_id: 'ex_demo008', exercise_name: 'Row BB', section: 'primary', exercise_order: 2, set_number: 1, planned_reps: '6', weight: '', reps: '', effort: '', sheetRow: 28 },
-  { workout_id: 'w_demo005', exercise_id: 'ex_demo008', exercise_name: 'Row BB', section: 'primary', exercise_order: 2, set_number: 2, planned_reps: '6', weight: '', reps: '', effort: '', sheetRow: 29 },
-  { workout_id: 'w_demo005', exercise_id: 'ex_demo008', exercise_name: 'Row BB', section: 'primary', exercise_order: 2, set_number: 3, planned_reps: '6', weight: '', reps: '', effort: '', sheetRow: 30 },
-  { workout_id: 'w_demo005', exercise_id: 'ex_demo008', exercise_name: 'Row BB', section: 'primary', exercise_order: 2, set_number: 4, planned_reps: '6', weight: '', reps: '', effort: '', sheetRow: 31 },
-  { workout_id: 'w_demo005', exercise_id: 'ex_demo008', exercise_name: 'Row BB', section: 'primary', exercise_order: 2, set_number: 5, planned_reps: '6', weight: '', reps: '', effort: '', sheetRow: 32 },
+  { workout_id: 'w_demo005', exercise_id: 'ex_demo008', exercise_name: 'Row BB', section: 'primary', exercise_order: 2, set_number: 1, planned_reps: '4-6', weight: '', reps: '', effort: '', sheetRow: 28 },
+  { workout_id: 'w_demo005', exercise_id: 'ex_demo008', exercise_name: 'Row BB', section: 'primary', exercise_order: 2, set_number: 2, planned_reps: '4-6', weight: '', reps: '', effort: '', sheetRow: 29 },
+  { workout_id: 'w_demo005', exercise_id: 'ex_demo008', exercise_name: 'Row BB', section: 'primary', exercise_order: 2, set_number: 3, planned_reps: '4-6', weight: '', reps: '', effort: '', sheetRow: 30 },
+  { workout_id: 'w_demo005', exercise_id: 'ex_demo008', exercise_name: 'Row BB', section: 'primary', exercise_order: 2, set_number: 4, planned_reps: '4-6', weight: '', reps: '', effort: '', sheetRow: 31 },
+  { workout_id: 'w_demo005', exercise_id: 'ex_demo008', exercise_name: 'Row BB', section: 'primary', exercise_order: 2, set_number: 5, planned_reps: '4-6', weight: '', reps: '', effort: '', sheetRow: 32 },
   { workout_id: 'w_demo005', exercise_id: 'ex_demo007', exercise_name: 'Pullups', section: 'SS1', exercise_order: 3, set_number: 1, planned_reps: '10', weight: '', reps: '', effort: '', sheetRow: 33 },
   { workout_id: 'w_demo005', exercise_id: 'ex_demo007', exercise_name: 'Pullups', section: 'SS1', exercise_order: 3, set_number: 2, planned_reps: '10', weight: '', reps: '', effort: '', sheetRow: 34 },
   { workout_id: 'w_demo005', exercise_id: 'ex_demo007', exercise_name: 'Pullups', section: 'SS1', exercise_order: 3, set_number: 3, planned_reps: '10', weight: '', reps: '', effort: '', sheetRow: 35 },
