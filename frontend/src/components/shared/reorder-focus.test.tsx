@@ -42,7 +42,7 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 const plannerExercises = (): PlannerExercise[] =>
-  LIST.map(([exercise_id, exercise_name, section]) => ({ exercise_id, exercise_name, section, sets: '3', reps: '8' }));
+  LIST.map(([exercise_id, exercise_name, section]) => ({ exercise_id, exercise_name, section, sets: '3', reps_by_set: ['8', '8', '8'] }));
 
 const onSave = vi.fn(async (..._args: unknown[]) => undefined);
 
@@ -151,6 +151,6 @@ describe('saved order is the displayed order, with no row key in it', () => {
     await vi.waitFor(() => expect(onSave).toHaveBeenCalled());
     const saved = onSave.mock.calls[0][1] as Record<string, unknown>[];
     expect(saved.map((x) => x.section)).toEqual(['warmup', 'SS1', 'primary', 'burnout']);
-    for (const x of saved) expect(Object.keys(x).sort()).toEqual(['exercise_id', 'exercise_name', 'reps', 'section', 'sets']);
+    for (const x of saved) expect(Object.keys(x).sort()).toEqual(['exercise_id', 'exercise_name', 'reps_by_set', 'section', 'sets']);
   });
 });

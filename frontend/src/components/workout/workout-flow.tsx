@@ -11,8 +11,9 @@ import { WorkoutTracker } from './workout-tracker';
 import { SimpleWorkout } from './simple-workout';
 import { WorkoutPlanner } from './workout-planner';
 import { validPlanDate } from './plan-date';
-import type { WorkoutType, BuilderExercise } from '../../api/types';
+import type { WorkoutType } from '../../api/types';
 import type { PlannerExercise } from './workout-planner';
+import { plannedSetCount, plannerToBuilderExercises } from './planned-reps';
 
 type FlowStep = 'type' | 'intent' | 'template' | 'planner' | 'tracker' | 'simple';
 type Intent = 'track' | 'plan';
@@ -134,7 +135,8 @@ export function WorkoutFlow({ workoutId, planDate }: Props) {
           exercise_name: ex.exercise_name,
           section: ex.section as string,
           sets: ex.section === 'warmup' ? '' : (ex.sets || '1'),
-          reps: ex.reps,
+          // Every set starts at the template's one Reps value (#375).
+          reps_by_set: ex.section === 'warmup' ? [] : Array(plannedSetCount(ex.sets || '1')).fill(ex.reps),
         })),
       );
       setStep('planner');
@@ -172,13 +174,8 @@ export function WorkoutFlow({ workoutId, planDate }: Props) {
     if (!token) return;
     setSaving(true);
     try {
-      const builderExercises: BuilderExercise[] = exercises.map((ex) => ({
-        exercise_id: ex.exercise_id,
-        exercise_name: ex.exercise_name,
-        section: ex.section,
-        sets: Number(ex.sets) || 1,
-        planned_reps: ex.reps,
-      }));
+      // Each set as its row holds it (#375), as the planned-workout editor saves.
+      const builderExercises = plannerToBuilderExercises(exercises);
       await saveWorkoutForLater({ type: 'weight', name, exercises: builderExercises, date, estimated_seconds: estimatedSeconds }, token);
       navigate('/activities');
     } catch {

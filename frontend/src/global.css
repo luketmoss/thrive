@@ -1396,6 +1396,34 @@ input, select, textarea {
   gap: var(--space-sm);
 }
 
+/* The planner's expanded entry (#375): every input a 44px touch target, and
+   one compact line per set (label left, a narrow input right). Scoped to the
+   planner: the template editor keeps its 40px panel. */
+.planner-exercise-config .form-input {
+  min-height: 44px;
+}
+
+.planner-reps-per-set {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+}
+
+.planner-set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.planner-set-row + .planner-set-row {
+  margin-top: var(--space-xs);
+}
+
+.planner-set-row .form-input {
+  flex: 0 0 6rem;
+  width: 6rem;
+}
+
 .section-select {
   text-transform: capitalize;
 }
@@ -1472,6 +1500,13 @@ input, select, textarea {
   margin-top: 2px;
   font-size: var(--text-xs);
   color: var(--color-text-muted);
+}
+
+/* A long per-set summary (`20 × 10/8/…`, #375) wraps, never truncates:
+   a run of digits and slashes offers the browser no break of its own. */
+.compact-card-meta > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .compact-card-remove {

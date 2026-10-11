@@ -7,7 +7,7 @@ import { WorkoutTracker } from '../workout/workout-tracker';
 import { EditWorkoutForm } from './edit-workout-form';
 import { WorkoutPlanner } from '../workout/workout-planner';
 import type { PlannerExercise } from '../workout/workout-planner';
-import type { BuilderExercise } from '../../api/types';
+import { plannerToBuilderExercises } from '../workout/planned-reps';
 import { estimateMinutesToSeconds, secondsToMinutesInput } from '../../api/duration';
 
 interface Props {
@@ -59,29 +59,9 @@ export function WorkoutEdit({ workoutId }: Props) {
   return <WorkoutTracker workoutId={workoutId} workoutName={workout.name} />;
 }
 
-/**
- * The planned-workout editor's entries as the builder's (#350). An entry
- * whose Reps still equals its pre-fill keeps each set's stored
- * `planned_reps` (a set added beyond them gets the Reps value); a changed
- * Reps value applies to every set, as it always has. An entry's
- * `source_order` (#380) is passed on so its stored values follow it.
- */
-export function plannerToBuilderExercises(exercises: PlannerExercise[]): BuilderExercise[] {
-  return exercises.map((ex) => {
-    const out: BuilderExercise = {
-      exercise_id: ex.exercise_id,
-      exercise_name: ex.exercise_name,
-      section: ex.section,
-      sets: Number(ex.sets) || 1,
-      planned_reps: ex.reps,
-    };
-    if (ex.stored_planned_reps && ex.reps === ex.initial_reps) {
-      out.planned_reps_by_set = ex.stored_planned_reps;
-    }
-    if (ex.source_order !== undefined) out.source_order = ex.source_order;
-    return out;
-  });
-}
+// One conversion for both planner callers (#375); re-exported here, where
+// #350's and #380's tests import it.
+export { plannerToBuilderExercises };
 
 /** Editor for planned workouts - uses the planner UI. */
 function PlannedWorkoutEditor({ workoutId }: { workoutId: string }) {
@@ -112,7 +92,7 @@ function PlannedWorkoutEditor({ workoutId }: { workoutId: string }) {
         exercise_name: s.exercise_name,
         section: 'warmup',
         sets: '',
-        reps: '',
+        reps_by_set: [],
         source_order: s.exercise_order,
       });
       continue;
@@ -122,15 +102,13 @@ function PlannedWorkoutEditor({ workoutId }: { workoutId: string }) {
     const own = workoutSets.filter(
       (ws) => ws.exercise_id === s.exercise_id && ws.exercise_order === s.exercise_order,
     );
-    const reps = s.planned_reps || '';
+    // Each set's stored text, verbatim (#375): a row left alone saves it back.
     initialExercises.push({
       exercise_id: s.exercise_id,
       exercise_name: s.exercise_name,
       section: s.section || 'primary',
       sets: String(own.length),
-      reps,
-      initial_reps: reps,
-      stored_planned_reps: own.map((ws) => ws.planned_reps),
+      reps_by_set: own.map((ws) => ws.planned_reps),
       source_order: s.exercise_order,
     });
   }
