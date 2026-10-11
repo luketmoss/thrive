@@ -546,35 +546,46 @@ export async function replaceWorkoutSets(
   });
 }
 
-/** One `Sets` row's new `exercise_order` (column E), by the row the client holds. */
+/**
+ * What a `Sets` row's position-in-the-workout columns should now hold, by the
+ * row the client holds: `exercise_order` (column E, #392) and/or `section`
+ * (column D, #395). A field left out is not written.
+ */
 export interface SetOrderWrite {
   sheetRow: number;
-  exercise_order: number;
+  exercise_order?: number;
+  section?: string;
 }
 
 /**
- * The order writes as `batchUpdate` requests (#392): one `updateCells` per
- * row, on column E only (`columnIndex: 4`), as a number, as `setToCells`
- * writes it. No other column is named, so no other cell is touched.
+ * The order and section writes as `batchUpdate` requests (#392, #395): one
+ * `updateCells` per cell to change, on column D (`columnIndex: 3`, text) or E
+ * (`columnIndex: 4`, a number), as `setToCells` writes them. No other column
+ * is named, so no other cell is touched.
  */
 export function setOrderRequests(rows: SetOrderWrite[], sheetId: number): object[] {
-  return rows.map((r) => ({
+  const cell = (sheetRow: number, columnIndex: number, userEnteredValue: object) => ({
     updateCells: {
-      rows: [{ values: [{ userEnteredValue: { numberValue: r.exercise_order } }] }],
+      rows: [{ values: [{ userEnteredValue }] }],
       fields: 'userEnteredValue',
-      start: { sheetId, rowIndex: r.sheetRow - 1, columnIndex: 4 },
+      start: { sheetId, rowIndex: sheetRow - 1, columnIndex },
     },
-  }));
+  });
+  return rows.flatMap((r) => [
+    ...(r.section !== undefined ? [cell(r.sheetRow, 3, { stringValue: r.section })] : []),
+    ...(r.exercise_order !== undefined ? [cell(r.sheetRow, 4, { numberValue: r.exercise_order })] : []),
+  ]);
 }
 
 /**
- * Writes `exercise_order` to the given `Sets` rows in one `batchUpdate`
- * (#392): all of them, or none if it fails, as `replaceWorkoutSets` does. No
- * row is read, appended or deleted. Nothing to write makes no request; demo
- * mode writes nothing (the caller updates memory).
+ * Writes `exercise_order` and/or `section` to the given `Sets` rows in one
+ * `batchUpdate` (#392, #395): all of them, or none if it fails, as
+ * `replaceWorkoutSets` does. No row is read, appended or deleted. Nothing to
+ * write makes no request; demo mode writes nothing (the caller updates
+ * memory).
  */
 export async function updateSetOrders(rows: SetOrderWrite[], token: string): Promise<void> {
-  if (isDemo() || rows.length === 0) return;
+  if (isDemo() || !rows.some((r) => r.exercise_order !== undefined || r.section !== undefined)) return;
 
   await withReauth(token, async (t) => {
     const sheetId = await getSheetId('Sets', t);

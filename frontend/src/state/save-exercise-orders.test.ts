@@ -58,6 +58,19 @@ describe('setOrderRequests', () => {
   });
 });
 
+describe('setOrderRequests with a section (#395)', () => {
+  it('a section is one updateCells on column D as text, an order on column E as a number, per cell that changes', () => {
+    expect(setOrderRequests([
+      { sheetRow: 4, section: 'SS1' },
+      { sheetRow: 3, exercise_order: 2, section: 'SS2' },
+    ], 77)).toEqual([
+      { updateCells: { rows: [{ values: [{ userEnteredValue: { stringValue: 'SS1' } }] }], fields: 'userEnteredValue', start: { sheetId: 77, rowIndex: 3, columnIndex: 3 } } },
+      { updateCells: { rows: [{ values: [{ userEnteredValue: { stringValue: 'SS2' } }] }], fields: 'userEnteredValue', start: { sheetId: 77, rowIndex: 2, columnIndex: 3 } } },
+      { updateCells: { rows: [{ values: [{ userEnteredValue: { numberValue: 2 } }] }], fields: 'userEnteredValue', start: { sheetId: 77, rowIndex: 2, columnIndex: 4 } } },
+    ]);
+  });
+});
+
 describe('updateSetOrders', () => {
   it('sends one batchUpdate, with the Sets sheet id; nothing read, appended or deleted', async () => {
     await updateSetOrders([{ sheetRow: 4, exercise_order: 1 }, { sheetRow: 3, exercise_order: 2 }], 'tok');
@@ -101,5 +114,26 @@ describe('saveExerciseOrders', () => {
   it('nothing to write: no request', async () => {
     await saveExerciseOrders('w1', [], 'tok');
     expect(calls).toEqual([]);
+  });
+
+  it('a section (#395): written to column D, and carried into memory by row for this workout only', async () => {
+    const sections = (list: SetWithRow[]) => list.map((s) => [s.sheetRow, s.section, s.exercise_order]);
+    await saveExerciseOrders('w1', [{ sheetRow: 4, section: 'SS1' }, { sheetRow: 3, exercise_order: 2, section: 'SS2' }, { sheetRow: 2, section: 'SS3' }], 'tok');
+    expect(calls).toEqual(['sheetId', 'batch']);
+    expect(sections(sets.value)).toEqual([[2, 'primary', 1], [3, 'SS2', 2], [4, 'SS1', 2], [5, 'primary', 3]]);
+    expect(sections(activeWorkoutSets.value)).toEqual([[3, 'SS2', 2], [4, 'SS1', 2], [5, 'primary', 3]]);
+  });
+
+  it('a section in demo mode: no request, memory updated', async () => {
+    demo = true;
+    await saveExerciseOrders('w1', [{ sheetRow: 4, section: 'SS1' }], 'tok');
+    expect(calls).toEqual([]);
+    expect(activeWorkoutSets.value.map((s) => [s.sheetRow, s.section])).toEqual([[3, 'primary'], [4, 'SS1'], [5, 'primary']]);
+  });
+
+  it('a failed section write changes nothing in memory', async () => {
+    failure = new TypeError('Failed to fetch');
+    await expect(saveExerciseOrders('w1', [{ sheetRow: 4, section: 'SS1' }], 'tok')).rejects.toThrow('Failed to fetch');
+    expect(activeWorkoutSets.value.map((s) => s.section)).toEqual(['primary', 'primary', 'primary']);
   });
 });

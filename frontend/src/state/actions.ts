@@ -759,12 +759,12 @@ export async function removeSet(
 }
 
 /**
- * Write a live workout's exercise order to its saved `Sets` rows (#392): one
- * all-or-nothing write of column E, then `sets` and `activeWorkoutSets` carry
- * the new orders, by row, so a resume shows them (live and demo). Only rows
- * of `workoutId` are changed in memory. No toast: the tracker decides what a
- * failure means (a move swallows it, Finish reports it). Rejects having
- * changed nothing in memory.
+ * Write a live workout's exercise order and section to its saved `Sets` rows
+ * (#392, #395): one all-or-nothing write of columns E and D, then `sets` and
+ * `activeWorkoutSets` carry the new values, by row, so a resume shows them
+ * (live and demo). Only rows of `workoutId` are changed in memory. No toast:
+ * the tracker decides what a failure means (a move or a section change
+ * swallows it, Finish reports it). Rejects having changed nothing in memory.
  */
 export async function saveExerciseOrders(
   workoutId: string,
@@ -773,11 +773,14 @@ export async function saveExerciseOrders(
 ): Promise<void> {
   if (rows.length === 0) return;
   await updateSetOrders(rows, token);
-  const orderOf = new Map(rows.map((r) => [r.sheetRow, r.exercise_order]));
+  const writeOf = new Map(rows.map((r) => [r.sheetRow, r]));
   const apply = <T extends SetWithRow>(list: T[]): T[] =>
     list.map((s) => {
-      const order = s.workout_id === workoutId ? orderOf.get(s.sheetRow) : undefined;
-      return order === undefined || order === s.exercise_order ? s : { ...s, exercise_order: order };
+      const write = s.workout_id === workoutId ? writeOf.get(s.sheetRow) : undefined;
+      if (!write) return s;
+      const exercise_order = write.exercise_order ?? s.exercise_order;
+      const section = write.section ?? s.section;
+      return exercise_order === s.exercise_order && section === s.section ? s : { ...s, exercise_order, section };
     });
   batch(() => {
     sets.value = apply(sets.value);
