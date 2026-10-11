@@ -71,12 +71,14 @@ export function earliestDate(pointSets: readonly (readonly TrendPoint[])[]): str
 /**
  * The trailing n-day mean for each of `dates`: the day plus the n − 1 before
  * it, the window free to reach before the range. A day gets a point only when
- * it has a value itself and at least ⌈n/2⌉ of its window does.
+ * it has a value itself and at least min(⌈n/2⌉, 2) of its window does: two
+ * readings are enough for a metric read every few days (#407), where half a
+ * window would leave a weight average almost never drawn.
  */
 export function rolling(values: ReadonlyMap<string, number>, dates: readonly string[], n: number): Map<string, number> {
   const out = new Map<string, number>();
   if (n <= 0 || dates.length === 0) return out;
-  const need = Math.ceil(n / 2);
+  const need = Math.min(Math.ceil(n / 2), 2);
   // Day numbers, once per date and once per value: the window loop below then
   // reads a dense array and creates no Date and no string (#270). The array
   // spans only the days a window can reach: n − 1 before the earliest date.
@@ -112,15 +114,18 @@ export function rolling(values: ReadonlyMap<string, number>, dates: readonly str
 }
 
 /**
- * Runs of consecutive days, for drawing a line that breaks at every gap.
- * Input is by date; nothing is interpolated.
+ * Runs of days, for drawing a line that breaks at a gap. `maxGap` is the most
+ * days one point may sit after the last (1 = consecutive days, the default); a
+ * rolling-average line passes its window, so it joins readings a few days
+ * apart but not across a long silence (#407). Input is by date; nothing is
+ * interpolated into the data, the line only joins what is there.
  */
-export function segments<T extends { date: string }>(points: readonly T[]): T[][] {
+export function segments<T extends { date: string }>(points: readonly T[], maxGap = 1): T[][] {
   const sorted = [...points].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   const out: T[][] = [];
   let run: T[] = [];
   for (const p of sorted) {
-    if (run.length && dayNumber(p.date) !== dayNumber(run[run.length - 1].date) + 1) {
+    if (run.length && dayNumber(p.date) - dayNumber(run[run.length - 1].date) > maxGap) {
       out.push(run);
       run = [];
     }

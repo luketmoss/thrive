@@ -21,7 +21,7 @@ const oldAddDays = (ymd: string, days: number) => new Date((oldDayNumber(ymd) + 
 function refRolling(values: ReadonlyMap<string, number>, dates: readonly string[], n: number): Map<string, number> {
   const out = new Map<string, number>();
   if (n <= 0) return out;
-  const need = Math.ceil(n / 2);
+  const need = Math.min(Math.ceil(n / 2), 2);
   for (const d of dates) {
     if (!values.has(d)) continue;
     let sum = 0;

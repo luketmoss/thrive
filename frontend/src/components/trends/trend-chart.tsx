@@ -1,5 +1,5 @@
 // The Trends chart primitive (#242 AC2, AC3): one card per metric, each day a
-// dot, the rolling average a line that breaks at every gap, and "your range"
+// dot, the rolling average a line that breaks at a gap longer than its window, and "your range"
 // a flat band behind both. Hand-rolled inline SVG, no chart library: every
 // mark stays in the DOM, and `var(--chart-*)` follows the theme with no
 // redraw. A change of range or average is a swap, never an animation.
@@ -75,6 +75,8 @@ interface PlotProps {
   width: number;
   label: string;
   describedBy: string;
+  /** The average's window in days: the longest gap its line joins (#407). */
+  avgDays?: number;
   /** The day the group has selected (#247), if any. */
   selectedDate?: string | null;
   /** A pointer chose a day. The screen decides what that means. */
@@ -82,7 +84,7 @@ interface PlotProps {
 }
 
 /** The SVG itself. Exported for tests; cards use it through TrendCard. */
-export function TrendPlot({ metric, series, width, label, describedBy, selectedDate, onSelect }: PlotProps) {
+export function TrendPlot({ metric, series, width, label, describedBy, avgDays = 1, selectedDate, onSelect }: PlotProps) {
   const values = series.points.map((p) => p.value);
   for (const v of series.average.values()) values.push(v);
   const dom = yDomain(values, series.band, metric.zeroBased);
@@ -158,7 +160,7 @@ export function TrendPlot({ metric, series, width, label, describedBy, selectedD
       </g>
       {avgPoints.length > 0 && (
         <g class="trend-average">
-          {segments(avgPoints).map((seg) => (
+          {segments(avgPoints, avgDays).map((seg) => (
             <path key={seg[0].date} class="trend-line" fill="none" stroke="var(--chart-line)" stroke-width={2}
               stroke-linejoin="round" stroke-linecap="round"
               d={seg.map((p, i) => `${i ? 'L' : 'M'}${x(p.date).toFixed(2)} ${y(p.value).toFixed(2)}`).join(' ')
@@ -221,7 +223,7 @@ export function TrendCard({ metric, series, recorded, range, avgDays, today, sel
           )}
         </div>
         <div class="trend-plot-wrap" ref={measure}>
-          <TrendPlot metric={metric} series={series} width={width}
+          <TrendPlot metric={metric} series={series} width={width} avgDays={avgDays}
             label={`${metric.label}, ${RANGE_PHRASE[range]}`} describedBy={describedBy}
             selectedDate={selectedDate} onSelect={onSelect} />
         </div>
