@@ -1,4 +1,4 @@
-// Tests for board.mjs's `add` command (#216) and its choice between running
+// Tests for board.mjs's `add` command (#216, #416) and its choice between running
 // `gh` and dispatching to board.yml (#405). Stubs `gh` (and, for the
 // remote-dispatch cases, `curl`) as fake executables on PATH so these run with
 // no network and no real `gh`. Run with: node --test .thrive/board.test.mjs
@@ -182,54 +182,87 @@ function readLog(logFile) {
 
 const PROBE_OK = JSON.stringify({ data: { node: { number: 4 } } });
 
-test('add: new issue is added to the board (AC1)', () => {
+// What the real `gh project item-add --format json` prints: no `status` (#416).
+const ITEM_ADDED = JSON.stringify({
+  id: 'PVTI_new', title: 'Test issue', body: '', type: 'Issue', url: 'https://github.com/luketmoss/thrive/issues/216',
+});
+
+// `add` looks the issue up first (#416); these are what that lookup answers.
+const NOT_ON_BOARD = () => graphqlResponse({ number: 216, nodes: [] });
+const ON_BOARD = (status, id = 'PVTI_existing') => graphqlResponse({
+  number: 216,
+  nodes: [{ id, project: { number: 4 }, fieldValueByName: status ? { name: status } : null }],
+});
+const is = (call, what) => call.some((a) => String(a).includes(what));
+
+test('add: a new issue is looked up, then added (#416 AC2)', () => {
   const { stdout, log } = run(['add', '216'], {
-    GH_ITEM_ADD_JSON: JSON.stringify({ id: 'PVTI_new' }),
+    GH_GRAPHQL_JSON: NOT_ON_BOARD(), GH_ITEM_ADD_JSON: ITEM_ADDED,
   });
   assert.equal(stdout.trim(), '#216: added to the board');
-  assert.equal(log.length, 1);
-  assert.deepEqual(log[0], [
+  assert.equal(log.length, 2);
+  assert.equal(log[0][1], 'graphql'); // the lookup
+  assert.deepEqual(log[1], [
     'project', 'item-add', '4', '--owner', 'luketmoss',
     '--url', 'https://github.com/luketmoss/thrive/issues/216', '--format', 'json',
   ]);
 });
 
-test('add: an already-added issue is reported, not re-added (AC1)', () => {
-  const { stdout, log } = run(['add', '216'], {
-    GH_ITEM_ADD_JSON: JSON.stringify({ id: 'PVTI_existing', status: 'Refined' }),
-  });
+test('add: an issue already on the board is reported, with no item-add and no write (#416 AC1)', () => {
+  const { stdout, log } = run(['add', '216'], { GH_GRAPHQL_JSON: ON_BOARD('Refined'), GH_ITEM_ADD_JSON: ITEM_ADDED });
   assert.equal(stdout.trim(), '#216: already on the board');
-  // Only the idempotent item-add call — never an item-list.
-  assert.equal(log.length, 1);
-  assert.equal(log[0][1], 'item-add');
+  assert.equal(log.length, 1); // the lookup only
+  assert.equal(log[0][1], 'graphql');
+  assert.ok(!log.some((call) => is(call, 'item-add') || is(call, 'mutation')));
 });
 
-test('add --status leaves an issue already on the board in its column', () => {
+test('add --status leaves an issue already in a column where it is, even from Done (#416 AC1)', () => {
   const { stdout, log } = run(['add', '216', '--status', 'To Do'], {
-    GH_ITEM_ADD_JSON: JSON.stringify({ id: 'PVTI_existing', status: 'PM Refining' }),
+    GH_GRAPHQL_JSON: ON_BOARD('Done'), GH_ITEM_ADD_JSON: ITEM_ADDED,
   });
-  assert.equal(stdout.trim(), '#216: already on the board (PM Refining), left there — use set to move it');
-  // item-add only: no status mutation, so a late add cannot undo a move.
+  assert.equal(stdout.trim(), '#216: already on the board (Done), left there — use set to move it');
+  // The lookup only: no item-add, no status mutation, so a late add cannot undo a move.
   assert.equal(log.length, 1);
-  assert.equal(log[0][1], 'item-add');
+  assert.ok(!log.some((call) => is(call, 'item-add') || is(call, 'mutation')));
 });
 
-test('add --status sets the column on the item-add id, with no item-list call (AC2)', () => {
+test('add --status naming the column the card is already in just reports it (#416 AC1)', () => {
+  const { stdout, log } = run(['add', '216', '--status', 'Done'], { GH_GRAPHQL_JSON: ON_BOARD('Done') });
+  assert.equal(stdout.trim(), '#216: already on the board');
+  assert.equal(log.length, 1);
+});
+
+test('add --status sets the column on the item-add id, with no item-list call (#416 AC2)', () => {
   const { stdout, log } = run(['add', '216', '--status', 'To Do'], {
-    GH_ITEM_ADD_JSON: JSON.stringify({ id: 'PVTI_new' }),
+    GH_GRAPHQL_JSON: NOT_ON_BOARD(), GH_ITEM_ADD_JSON: ITEM_ADDED,
   });
   assert.equal(stdout.trim(), '#216: added (To Do)');
-  assert.equal(log.length, 2);
-  assert.deepEqual(log[0], [
-    'project', 'item-add', '4', '--owner', 'luketmoss',
-    '--url', 'https://github.com/luketmoss/thrive/issues/216', '--format', 'json',
-  ]);
-  assert.equal(log[1][0], 'api');
-  assert.equal(log[1][1], 'graphql');
-  assert.equal(log[1][2], '-f');
-  assert.match(log[1][3], /itemId: "PVTI_new"/);
-  assert.match(log[1][3], /singleSelectOptionId: "2ed3c08e"/); // "To Do" from board.json
+  assert.equal(log.length, 3); // lookup, item-add, the one mutation
+  assert.equal(log[0][1], 'graphql');
+  assert.deepEqual(log[1].slice(0, 2), ['project', 'item-add']);
+  assert.equal(log[2][0], 'api');
+  assert.equal(log[2][1], 'graphql');
+  assert.equal(log[2][2], '-f');
+  assert.match(log[2][3], /itemId: "PVTI_new"/);
+  assert.match(log[2][3], /singleSelectOptionId: "2ed3c08e"/); // "To Do" from board.json
   assert.ok(!log.some((call) => call[1] === 'item-list'));
+});
+
+test('add --status on a card with no column sets it from the lookup, with no item-add (#416 AC3)', () => {
+  const { stdout, log } = run(['add', '216', '--status', 'To Do'], {
+    GH_GRAPHQL_JSON: ON_BOARD(null, 'PVTI_nocolumn'), GH_ITEM_ADD_JSON: ITEM_ADDED,
+  });
+  assert.equal(stdout.trim(), '#216: already on the board, set to To Do');
+  assert.equal(log.length, 2); // lookup, the mutation
+  assert.match(log[1][3], /itemId: "PVTI_nocolumn"/);
+  assert.match(log[1][3], /singleSelectOptionId: "2ed3c08e"/);
+  assert.ok(!log.some((call) => is(call, 'item-add')));
+});
+
+test('add with no --status on a card with no column writes nothing (#416 AC3)', () => {
+  const { stdout, log } = run(['add', '216'], { GH_GRAPHQL_JSON: ON_BOARD(null) });
+  assert.equal(stdout.trim(), '#216: already on the board');
+  assert.equal(log.length, 1);
 });
 
 test('add --status refuses an unknown column before adding anything (AC2)', () => {
@@ -253,9 +286,19 @@ test('add refuses a non-numeric issue (AC3)', () => {
   assert.equal(log.length, 0);
 });
 
+test('add reports an issue that does not exist as not found (#416 AC4)', () => {
+  const { stderr, status, log, dispatched } = run(['add', '999999'], { GH_GRAPHQL_JSON: notFoundResponse() });
+  assert.equal(status, 1);
+  assert.equal(stderr.trim(), 'Issue #999999 not found in luketmoss/thrive.');
+  assert.equal(log.length, 1); // the lookup; nothing was added
+  assert.equal(dispatched, null);
+});
+
 test('add rewrites the gh error for an issue that does not exist (AC3)', () => {
   // The project probe succeeds (#405), so the failure is the issue's own.
-  const { stderr, status, dispatched } = run(['add', '999999'], { GH_ITEM_ADD_FAIL: '1', GH_PROBE_JSON: PROBE_OK });
+  const { stderr, status, dispatched } = run(['add', '999999'], {
+    GH_GRAPHQL_FAIL: '1', GH_FAIL_STDERR: 'gh: Could not resolve to an Issue with the number of 999999.\n', GH_PROBE_JSON: PROBE_OK,
+  });
   assert.equal(status, 1);
   assert.equal(stderr.trim(), 'Issue #999999 not found in luketmoss/thrive.');
   assert.equal(dispatched, null);
@@ -450,13 +493,14 @@ process.exit(1);
 
 test('a gh that cannot reach the project sends add to board.yml (#405 AC1)', () => {
   const { stdout, log, dispatched } = run(['add', '216', '--status', 'To Do'], {
-    GH_ITEM_ADD_FAIL: '1', GH_FAIL_STDERR: 'HTTP 401: Bad credentials\n', GH_PROBE_FAIL: '1', GH_TOKEN: 'fake-token',
+    GH_GRAPHQL_FAIL: '1', GH_FAIL_STDERR: 'HTTP 401: Bad credentials\n', GH_PROBE_FAIL: '1', GH_TOKEN: 'fake-token',
   }, { curl: '#216: added (To Do)' });
   assert.equal(stdout.trim(), '#216: added (To Do)');
   assert.deepEqual(dispatched, ['add', '216', '--status', 'To Do']);
-  // The one failed call and the probe: nothing was written before the dispatch.
+  // The one failed call (the lookup, #416) and the probe: nothing was written before the dispatch.
   assert.equal(log.length, 2);
-  assert.deepEqual(log[0].slice(0, 2), ['project', 'item-add']);
+  assert.equal(log[0][1], 'graphql');
+  assert.ok(!log.some((call) => is(call, 'item-add') || is(call, 'mutation')));
   assert.ok(log[1].some((a) => String(a).includes('node(id: $id)')), 'the second call is the project probe');
 });
 
@@ -500,17 +544,27 @@ test('a working gh makes no probe call and no extra read (#405 AC2)', () => {
 
 test('a real add failure on a gh that reaches the project says what gh said, and is not dispatched (#405 AC3)', () => {
   const { stderr, status, log, dispatched } = run(['add', '216'], {
-    GH_ITEM_ADD_FAIL: '1', GH_FAIL_STDERR: 'HTTP 502: Bad Gateway\n', GH_PROBE_JSON: PROBE_OK, GH_TOKEN: 'fake-token',
+    GH_GRAPHQL_FAIL: '1', GH_FAIL_STDERR: 'HTTP 502: Bad Gateway\n', GH_PROBE_JSON: PROBE_OK, GH_TOKEN: 'fake-token',
   }, { curl: 'must not run' });
   assert.equal(status, 1);
   assert.equal(stderr.trim(), 'Issue #216: HTTP 502: Bad Gateway');
   assert.equal(dispatched, null);
-  assert.equal(log.length, 2); // item-add, then the probe
+  assert.equal(log.length, 2); // the lookup, then the probe
+});
+
+test('add: item-add failing after the lookup says what gh said, with no probe and no dispatch (#416 AC4)', () => {
+  const { stderr, status, log, dispatched } = run(['add', '216', '--status', 'To Do'], {
+    GH_GRAPHQL_JSON: NOT_ON_BOARD(), GH_ITEM_ADD_FAIL: '1', GH_FAIL_STDERR: 'HTTP 502: Bad Gateway\n', GH_TOKEN: 'fake-token',
+  }, { curl: 'must not run' });
+  assert.equal(status, 1);
+  assert.equal(stderr.trim(), 'Issue #216: HTTP 502: Bad Gateway');
+  assert.equal(log.length, 2); // the lookup, item-add: only a first-call failure is ever probed
+  assert.equal(dispatched, null);
 });
 
 test('add keeps "not found" for the wording the real gh uses for an issue URL that is not one (#405 AC3)', () => {
   const { stderr, status, dispatched } = run(['add', '99999999'], {
-    GH_ITEM_ADD_FAIL: '1', GH_FAIL_STDERR: 'resource not found, please check the URL\n', GH_PROBE_JSON: PROBE_OK, GH_TOKEN: 'fake-token',
+    GH_GRAPHQL_FAIL: '1', GH_FAIL_STDERR: 'resource not found, please check the URL\n', GH_PROBE_JSON: PROBE_OK, GH_TOKEN: 'fake-token',
   }, { curl: 'must not run' });
   assert.equal(status, 1);
   assert.equal(stderr.trim(), 'Issue #99999999 not found in luketmoss/thrive.');

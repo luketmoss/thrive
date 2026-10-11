@@ -2,7 +2,7 @@
 // Thrive board helper. All project board writes go through this script.
 //
 //   node .thrive/board.mjs show <issue>
-//   node .thrive/board.mjs add <issue> [--status "<column>"]   (status only for a new item)
+//   node .thrive/board.mjs add <issue> [--status "<column>"]   (status only for a card with no column yet)
 //   node .thrive/board.mjs set <issue> --status "In Development"
 //   node .thrive/board.mjs list --status Refined
 //   node .thrive/board.mjs sync          # refresh status option IDs from the API
@@ -117,7 +117,10 @@ const FIND_ITEM_QUERY = `query($owner: String!, $repo: String!, $number: Int!) {
   }
 }`;
 
-function findItem(issue) {
+// The issue and its item on project #4 (`node`, null when it is not on the
+// board), from one query. `other` words a `gh` failure that is not "no such
+// issue" (#416: `add` looks here before it adds anything).
+function lookupIssue(issue, other = (said) => `gh failed: ${said}`) {
   const raw = gh([
     'api', 'graphql',
     '-f', `query=${FIND_ITEM_QUERY}`,
@@ -126,10 +129,15 @@ function findItem(issue) {
     '-F', `number=${issue}`,
   ], (said) => (ISSUE_NOT_FOUND.test(said)
     ? `Issue #${issue} not found in ${config.repo}.`
-    : `gh failed: ${said}`));
+    : other(said)));
   const issueData = JSON.parse(raw).data?.repository?.issue;
   if (!issueData) die(`Issue #${issue} not found in ${config.repo}.`);
-  const node = issueData.projectItems.nodes.find((n) => n.project.number === config.projectNumber);
+  const node = issueData.projectItems.nodes.find((n) => n.project.number === config.projectNumber) ?? null;
+  return { issueData, node };
+}
+
+function findItem(issue) {
+  const { issueData, node } = lookupIssue(issue);
   if (!node) {
     die(
       `Issue #${issue} is not on project #${config.projectNumber}. ` +
@@ -288,32 +296,35 @@ switch (command) {
     const status = flag(argv, 'status');
     if (status) optionId(status); // refuse an unknown column before adding anything
 
-    // Only a `gh` that could resolve nothing means the issue is not there; any
-    // other failure is shown as `gh` said it (#405).
+    // Look first (#416): `item-add` never says whether the issue was already
+    // on the board, and adding it again for `--status` would move its card. An
+    // issue already in a column is left alone; one on the board with no column
+    // takes the one asked for; only an issue that is not on the board is added.
+    const said = (what) => `Issue #${issue}: ${what}`;
+    const { node } = lookupIssue(issue, said);
+    const current = node?.fieldValueByName?.name ?? null;
+
+    if (node && current !== null) {
+      console.log(status && status !== current
+        ? `#${issue}: already on the board (${current}), left there — use set to move it`
+        : `#${issue}: already on the board`);
+      break;
+    }
+    if (node) {
+      if (status) setItemStatus(node.id, status);
+      console.log(status
+        ? `#${issue}: already on the board, set to ${status}`
+        : `#${issue}: already on the board`);
+      break;
+    }
+
     const raw = gh([
       'project', 'item-add', String(config.projectNumber),
       '--owner', config.owner,
       '--url', `https://github.com/${config.repo}/issues/${issue}`,
       '--format', 'json',
-    ], (said) => (ISSUE_NOT_FOUND.test(said)
-      ? `Issue #${issue} not found in ${config.repo}.`
-      : `Issue #${issue}: ${said}`));
+    ], said);
     const item = JSON.parse(raw);
-
-    // item-add is idempotent: a re-run returns the same item. An item that was
-    // already on the board carries whatever status it already had; a brand
-    // new one has none yet. No item-list call either way.
-    const existed = item.status != null;
-
-    // --status only places a *new* item. An issue already on the board keeps
-    // its column: a late `add --status "To Do"` must never undo a move a
-    // refinement agent made in the meantime. Moving a card is `set`'s job.
-    if (existed) {
-      console.log(status && status !== item.status
-        ? `#${issue}: already on the board (${item.status}), left there — use set to move it`
-        : `#${issue}: already on the board`);
-      break;
-    }
 
     if (status) setItemStatus(item.id, status);
     console.log(status ? `#${issue}: added (${status})` : `#${issue}: added to the board`);
