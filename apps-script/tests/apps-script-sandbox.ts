@@ -539,7 +539,7 @@ export interface ApiResponse<T = ApiWorkout[]> {
   data: T;
   error?: string;
   /** Present only on the failures that carry one (#144). */
-  code?: 'token_invalid' | 'token_forbidden' | 'token_unavailable' | 'read_only';
+  code?: 'token_invalid' | 'token_forbidden' | 'token_unavailable' | 'read_only' | 'bad_request';
 }
 
 /** Call the sandbox's `doGet` with `params` and return the parsed body. */

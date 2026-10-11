@@ -7,6 +7,7 @@ import { fetchJournal } from '../api/journal-api';
 import { isNoteLocked } from '../panels/journal/drafts';
 import { fetchSyncRequests, appendSyncRequests, type SyncRequestVendor } from '../api/sync-requests-api';
 import { demoSyncNowScenario } from '../api/sync-now-demo';
+import { requestSync } from '../api/thrive-api';
 import { fetchSyncLog, fetchWithingsSyncLog } from '../api/sync-log-api';
 import { fetchDailyHealth, fetchBodyMeasurements, fetchDailySummary } from '../api/health-api';
 import { SyncLogNotSetUpError } from '../api/sync-log-errors';
@@ -1512,6 +1513,12 @@ export async function loadSyncRequests(token: string): Promise<void> {
  * Ask for a sync for `vendors` (the ones with no open request). Demo mode
  * starts the simulated request and writes nothing. A failed append is shown
  * in words (`syncAsk: 'failed'`), never as a toast.
+ *
+ * Once the rows are appended (#410), the API is asked to dispatch them now
+ * rather than in up to 5 minutes. The rows are already recorded, so a call
+ * that fails for any reason changes nothing on screen: the poller takes them,
+ * and one `console.warn` names the failure. The rows are re-read straight
+ * after the append, as before, and once more when the call settles.
  */
 export async function requestSyncNow(
   token: string,
@@ -1526,8 +1533,9 @@ export async function requestSyncNow(
     return;
   }
   syncAsk.value = 'asking';
+  let appended: string[][];
   try {
-    await appendSyncRequests(vendors, email, token);
+    appended = await appendSyncRequests(vendors, email, token);
   } catch (err) {
     if (isReauthFailure(err)) { syncAsk.value = 'idle'; return; }
     console.error('Failed to append SyncRequests:', err);
@@ -1535,6 +1543,13 @@ export async function requestSyncNow(
     return;
   }
   syncAsk.value = 'idle';
+  const dispatching = requestSync(appended.map((row) => row[0]), token);
+  await loadSyncRequests(token);
+  const outcome = await dispatching;
+  if (!outcome.ok) {
+    console.warn(`Sync now: not dispatched at once (${outcome.kind}); the poller will pick it up.`);
+    if (outcome.kind === 'no_api_url') return; // no call was made, so nothing has changed
+  }
   await loadSyncRequests(token);
 }
 

@@ -1,5 +1,6 @@
-// #144 — almanac calls with a Google access token instead of the key, and may
-// only read.
+// #144 — a browser caller (almanac then, the SPA since #410) calls with a Google
+// access token instead of the key, and may only read, plus the one write in
+// TOKEN_WRITE_ACTIONS (requestSync, covered in request-sync.test.ts).
 
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -441,13 +442,20 @@ describe('AC4: token callers run only the named reads', () => {
     expect(res.code).toBe('token_invalid');
   });
 
-  it('classifies every action in the dispatcher as a read or key-only', () => {
+  it('names exactly one token write, requestSync (#410)', () => {
+    const { sandbox } = load();
+    expect([...sandbox.TOKEN_WRITE_ACTIONS]).toEqual(['requestSync']);
+  });
+
+  it('classifies every action in the dispatcher as a read, a token write or key-only', () => {
     const main = readFileSync(path.join(SRC, 'main.js'), 'utf8');
     const cases = [...main.matchAll(/^\s*case '(\w+)':/gm)].map((m) => m[1]).sort();
     const { sandbox } = load();
     const reads: string[] = [...sandbox.TOKEN_READ_ACTIONS];
+    const writes: string[] = [...sandbox.TOKEN_WRITE_ACTIONS];
     expect(reads.filter((a) => KEY_ONLY_ACTIONS.includes(a))).toEqual([]);
-    expect(cases).toEqual([...reads, ...KEY_ONLY_ACTIONS].sort());
+    expect(writes.filter((a) => KEY_ONLY_ACTIONS.includes(a) || reads.includes(a))).toEqual([]);
+    expect(cases).toEqual([...reads, ...writes, ...KEY_ONLY_ACTIONS].sort());
   });
 });
 

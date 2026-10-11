@@ -10,13 +10,16 @@
 // their data as a URL-encoded `payload` query parameter, which is why that
 // parameter has a length ceiling — see MAX_PAYLOAD_CHARS in types.js.
 //
-// almanac, a browser app, POSTs form-encoded with `access_token` instead of
-// `key`, so a live token never sits in a URL. `fetch` follows the 302 as a
-// GET, and both hops carry `Access-Control-Allow-Origin: *`. A token caller
-// may run only the reads in TOKEN_READ_ACTIONS — see auth.js.
+// The SPA (#410; almanac, retired, before it), a browser app, POSTs
+// form-encoded with `access_token` instead of `key`, so a live token never
+// sits in a URL. `fetch` follows the 302 as a GET, and both hops carry
+// `Access-Control-Allow-Origin: *`. A token caller may run only the reads in
+// TOKEN_READ_ACTIONS and the one write in TOKEN_WRITE_ACTIONS — see auth.js.
 //
 // Token examples (POST body, or a query string from a terminal):
 //   action=getWorkouts&access_token=...&from=2026-09-21&to=2026-09-27
+//   action=requestSync&access_token=...&payload={"request_ids":["sr_1a2b3c4d"]}
+//     — dispatch the named SyncRequests rows now, under the poller's rules (#410)
 //
 // Read examples:
 //   ?action=getWorkouts&key=...
@@ -87,7 +90,8 @@ function envelope(result) {
 
 /**
  * A failure. `code` is optional and additive (#144): `token_invalid`,
- * `token_forbidden`, `token_unavailable` or `read_only`, so a caller can tell
+ * `token_forbidden`, `token_unavailable`, `read_only`, or `bad_request`
+ * (requestSync's malformed `request_ids`, #410), so a caller can tell
  * the cases apart without matching English. Without one, the envelope is
  * exactly what it was before #144.
  */
@@ -138,8 +142,8 @@ function doPost(e) {
  * Authenticate, authorize, dispatch — for GET and POST alike.
  *
  * The caller is resolved before anything else, so an unknown action still
- * needs a credential. A token caller is checked against the read allow-list
- * before dispatch, so a refused action never runs.
+ * needs a credential. A token caller is checked against the read and write
+ * allow-lists before dispatch, so a refused action never runs.
  */
 function handleRequest(e) {
   var params = (e && e.parameter) || {};
@@ -150,7 +154,7 @@ function handleRequest(e) {
     var caller = resolveCaller(params);
     if (caller.refusal) return envelope(caller.refusal);
 
-    if (caller.mode === 'token' && !isTokenReadAction(action)) {
+    if (caller.mode === 'token' && !isTokenReadAction(action) && !isTokenWriteAction(action)) {
       return envelope(fail(
         'Read-only caller: action "' + (action || '') + '" is not permitted', 'read_only'));
     }
@@ -168,7 +172,14 @@ function handleRequest(e) {
 /** Run one action for an authenticated, authorized caller. */
 function dispatch(action, params) {
   var result;
-  var payload = parsePayload(params.payload);
+  var payload;
+  try {
+    payload = parsePayload(params.payload);
+  } catch (err) {
+    // requestSync's refusals are fixed text that never quotes the input (#410).
+    if (action === 'requestSync') return fail(SYNC_REQUEST_BAD_REQUEST, 'bad_request');
+    throw err;
+  }
 
   switch (action) {
     // --- Reads ---
@@ -540,6 +551,14 @@ function dispatch(action, params) {
     // `log=withings` reads WithingsSyncLog (#200); absent, SyncLog.
     case 'getSyncLog':
       result = { success: true, data: getSyncLog({ limit: params.limit, log: params.log }) };
+      break;
+
+    // --- SyncRequests (#410) ---
+    // Sync now: dispatch the named rows at once, under the poller's lock and
+    // rules. The one write a token caller may run (TOKEN_WRITE_ACTIONS). It
+    // takes its own lock, so not withScriptLock: a busy lock is an answer here.
+    case 'requestSync':
+      result = requestSync(payload);
       break;
 
     default:

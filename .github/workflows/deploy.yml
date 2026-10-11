@@ -34,6 +34,9 @@ jobs:
         env:
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
           VITE_SPREADSHEET_ID: ${{ secrets.VITE_SPREADSHEET_ID }}
+          # The Apps Script /exec URL (#410), not a secret: a repo variable.
+          # Unset, Sync now falls back to the poller.
+          VITE_THRIVE_API_URL: ${{ vars.VITE_THRIVE_API_URL }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: frontend/dist

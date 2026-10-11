@@ -5,10 +5,14 @@
 // - A **key caller** sends `key`: the MCP server and the COROS sync. Full
 //   access, exactly as before #144. `key` may be `API_KEY` or, for the remote
 //   MCP Worker only, `MCP_API_KEY` (#364).
-// - A **token caller** sends `access_token`, a Google access token from
-//   almanac's own sign-in. almanac is a browser app on GitHub Pages, so it
-//   cannot hold the key — a key in a public bundle is not a secret. A token
-//   caller may run only the reads named in TOKEN_READ_ACTIONS.
+// - A **token caller** sends `access_token`, a Google access token from the
+//   SPA's own sign-in (#410; almanac's, retired, before it). The SPA is a
+//   browser app on GitHub Pages, so it cannot hold the key — a key in a public
+//   bundle is not a secret. A token caller may run only the reads named in
+//   TOKEN_READ_ACTIONS and the one write in TOKEN_WRITE_ACTIONS.
+//   `TOKEN_CLIENT_ID` is the SPA's OAuth client ID and `TOKEN_ALLOWED_EMAIL`
+//   the owner's address: who is calling comes from those two alone, never from
+//   anything the caller sends.
 //
 // `access_token` present makes a token caller whatever else is sent, `key`
 // included: privilege must never rise by adding a parameter.
@@ -44,7 +48,17 @@ var TOKEN_READ_ACTIONS = [
   'getBodyMeasurements',
 ];
 
-var TOKENINFO_URL = 'https://oauth2.googleapis.com/tokeninfo';
+/**
+ * The writes a token caller may run (#410), kept apart from the reads so a
+ * write is never added by accident. `requestSync` asks for the caller's own
+ * just-appended SyncRequests rows to be dispatched now, under the poller's
+ * rules; what reaches GitHub is fixed in sync-requests.js. `token-auth.test.ts`
+ * asserts this list is exactly ['requestSync'], so the next one needs a
+ * deliberate test change.
+ */
+var TOKEN_WRITE_ACTIONS = ['requestSync'];
+
+var TOKENINFO_URL ='https://oauth2.googleapis.com/tokeninfo';
 
 /** Namespace for cached verdicts, so they cannot collide with anything else. */
 var TOKEN_CACHE_PREFIX = 'thrive_tok:';
@@ -115,6 +129,10 @@ function resolveCaller(params) {
 
 function isTokenReadAction(action) {
   return TOKEN_READ_ACTIONS.indexOf(action) !== -1;
+}
+
+function isTokenWriteAction(action) {
+  return TOKEN_WRITE_ACTIONS.indexOf(action) !== -1;
 }
 
 function trimmedProperty(props, name) {

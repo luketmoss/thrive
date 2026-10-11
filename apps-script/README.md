@@ -50,8 +50,8 @@ their data as a URL-encoded `payload` query parameter.
 
 **`doPost` exists too (#144), and behaves identically.** Both entry points run
 one handler over `e.parameter`, which Apps Script fills from a form-encoded
-body exactly as from a query string. almanac, a browser app, POSTs so a live
-Google token never sits in a URL. A browser `fetch` follows the 302 as a `GET`,
+body exactly as from a query string. The SPA (#410; almanac, retired, before
+it), a browser app, POSTs so a live Google token never sits in a URL. A browser `fetch` follows the 302 as a `GET`,
 and both hops carry `Access-Control-Allow-Origin: *`, so it works provided the
 request stays CORS-simple: a `URLSearchParams` body, no headers set by hand.
 There is no `doOptions`, so a request that needs a preflight fails before it
@@ -95,13 +95,16 @@ existed.
 
 ### Token callers (#144)
 
-almanac cannot hold the key: a key in a public bundle is not a secret. It
-sends `access_token`, a Google access token from its own sign-in, instead.
+A browser app cannot hold the key: a key in a public bundle is not a secret.
+It sends `access_token`, a Google access token from its own sign-in, instead.
+Since #410 that caller is the SPA (almanac, the first, is retired):
+`TOKEN_CLIENT_ID` is the SPA's OAuth client ID, the value of
+`VITE_GOOGLE_CLIENT_ID`.
 
 | Sent | Caller | May run |
 |---|---|---|
 | `key` only | key caller | everything, as before |
-| `access_token`, with or without `key` | token caller | the reads below, only |
+| `access_token`, with or without `key` | token caller | the reads below, and `requestSync` |
 | neither | refused | nothing |
 
 `access_token` present makes a token caller whatever else is sent: privilege
@@ -127,12 +130,18 @@ test fails until every `case` in `main.js` is classified. `previewSetUpdates`
 is deliberately off it: it writes nothing, but it is the dry run of a write
 and takes a write payload.
 
-| `code` | Meaning | almanac does |
+**One write, on its own list (#410).** `TOKEN_WRITE_ACTIONS` is exactly
+`['requestSync']` (see [Sync now](#sync-now-requestsync-410)), kept apart from
+the reads so a write is never added by accident; a test pins the list. Every
+other write still answers a token caller `read_only`, before dispatch.
+
+| `code` | Meaning | The SPA does |
 |---|---|---|
-| `token_invalid` | Google rejected the token: expired, revoked or bogus alike | asks for a reconnect |
-| `token_forbidden` | wrong OAuth client or account, the two properties unset, or the script not yet re-authorized for `UrlFetchApp` | shows an error; reconnecting cannot fix it |
-| `token_unavailable` | tokeninfo unreachable or erroring; not a verdict, never cached | shows an error |
-| `read_only` | a token caller asked for anything off the list; it did not run | shows an error |
+| `token_invalid` | Google rejected the token: expired, revoked or bogus alike | nothing on screen: the poller takes the request |
+| `token_forbidden` | wrong OAuth client or account, the two properties unset, or the script not yet re-authorized for `UrlFetchApp` | the same |
+| `token_unavailable` | tokeninfo unreachable or erroring; not a verdict, never cached | the same |
+| `read_only` | a token caller asked for anything off both lists; it did not run | the same |
+| `bad_request` | `requestSync`'s `request_ids` malformed; fixed text, never quoting the input | the same |
 
 ```
 POST <exec url>        body: action=getWorkouts&access_token=...&from=2026-09-21&to=2026-09-27
@@ -284,7 +293,7 @@ cell as `''` and never `0`, and no `sheetRow`. `from`/`to` filter on the local
 parsed as an instant, not sheet order, which a backfill scrambles. A `kind`
 other than `scale`/`bp` is refused, naming the valid values. With no
 `BodyMeasurements` tab it answers `[]`. It is a read, and is on
-`TOKEN_READ_ACTIONS`, so almanac's token can call it.
+`TOKEN_READ_ACTIONS`, so a token caller can call it.
 
 One row per Withings measure group, A:T (`BODY_MEASUREMENT_FIELDS` in
 `src/types.js`), SI units. Called by the Withings sync alone, **key only**: it is
@@ -344,8 +353,8 @@ One free-text note per local date, A:D (`JOURNAL_FIELDS` in `src/types.js`).
 `getJournal` returns `{date, note, created, updated}` per day, no `sheetRow`,
 and `[]` for a missing tab. `from`/`to` are validated as `getDailyHealth`'s are.
 **Both are key-only**: `getJournal` is a read but is deliberately *not* on
-`TOKEN_READ_ACTIONS` (journal text is personal, and the one token caller, almanac,
-is retired); adding it later is one line plus an entry in `token-auth.test.ts`.
+`TOKEN_READ_ACTIONS` (journal text is personal, and the token caller, now the
+SPA, reads the Journal from Sheets directly); adding it later is one line plus an entry in `token-auth.test.ts`.
 
 `upsertJournal` mirrors the SPA's write path, under the script lock: no row for
 the date appends one (`created` = `updated` = now); a row is rewritten in place,
@@ -491,7 +500,8 @@ writes Sheets directly and is not covered.
 
 `pollSyncRequests` (#314) takes the same lock with `tryLock(5000)` instead,
 and skips its tick when the lock is busy. It holds it for at most a GitHub call
-or two per vendor, well inside a writer's 30 s.
+or two per vendor, well inside a writer's 30 s. `requestSync` (#410) takes it
+the same way; busy, it writes nothing and leaves the rows for the next tick.
 
 ## The shaping principle
 
@@ -536,11 +546,13 @@ It then closes every row it started: from the run's own
 GitHub's run status, else after 20 minutes as `not_reported`. Each final
 status gets its own sentence in column I.
 
-**It is not a web-app action.** `main.js` has no `case` for
+**The tick is not a web-app action.** `main.js` has no `case` for
 `pollSyncRequests`, `installSyncRequestTrigger` or `removeSyncRequestTrigger`:
 a key caller gets `Unknown action`, a token caller `read_only`. **A trigger runs
 the project's latest pushed code, not a deployment.** `clasp push` changes what
-the trigger runs at once; `@2` matters only to the web app.
+the trigger runs at once; `@2` matters only to the web app — and so to
+`requestSync`, below. Push and deploy together: the tick and `requestSync`
+share one per-vendor step.
 
 What reaches GitHub is fixed in `sync-requests.js`: owner `luketmoss`, repo
 `thrive`, the workflow file per vendor, and a body of exactly `{"ref":"main"}`
@@ -551,6 +563,37 @@ tick, none while that vendor has a request open or ran in the last 10 minutes
 runs included), and **no retries**: a refused dispatch is recorded `failed`, in
 words, and the user asks again. The whole tick runs under the script lock,
 taken with `tryLock(5000)`; when the lock is busy the tick does nothing.
+
+### Sync now: requestSync (#410)
+
+The poller alone makes a press wait up to 5 minutes before anything starts. So
+after the SPA appends its rows (unchanged: A–E, `requested`), it POSTs
+
+```
+action=requestSync&access_token=...&payload={"request_ids":["sr_1a2b3c4d","sr_5e6f7a8b"]}
+```
+
+and the API dispatches them in the same request. It is **a tick for those
+vendors, not a second dispatcher**: under the same script lock
+(`tryLock(5000)`), it re-reads `SyncRequests` and runs the tick's own
+per-vendor step (`syncRunVendors` → `syncPollVendor`) for the vendors of the
+named rows. Same cooldown, same "already under way", same fixed body and
+detail sentences, same E–I writes; it closes that vendor's finished `started`
+rows as the step always does. It never appends a row, never runs the
+schedule-slot check, and never touches the other vendor.
+
+- `payload.request_ids`: 1–2 distinct strings matching `^sr_[0-9a-f]{8}$`,
+  else `bad_request` before the lock, the sheet or any fetch. Nothing else in
+  the payload is read: `ref`, `inputs`, `workflow`, `vendor` change nothing.
+- Answers `{success: true, data: {requests: [{request_id, status}]}}` whatever
+  was decided: `started`, `skipped`, `failed`, `expired`, the status an
+  earlier tick already wrote, or `not_found`. No detail, run id or URL.
+- A busy lock writes nothing and answers the rows as they stand (`requested`).
+- Only the SPA's owner can call it: the token check above, never a client-sent
+  email or row content. A key caller may call it too.
+
+The SPA ignores the answer beyond "re-read now", so every failure of the call
+leaves today's behaviour: the row is already there, and the next tick takes it.
 
 ### The token, and everything it can do
 
@@ -633,9 +676,10 @@ under ~2 s, by changing the constant, pushing, and running
      syncs, watchdogs and scripts). Leaving it unset changes nothing; it never
      replaces `API_KEY`, which stays required.
    - `SPREADSHEET_ID` — the Groundwork sheet id
-   - `TOKEN_CLIENT_ID` — almanac's OAuth client ID (#144)
+   - `TOKEN_CLIENT_ID` — the SPA's OAuth client ID, the value of
+     `VITE_GOOGLE_CLIENT_ID` (#410; almanac's, retired, before it, #144)
    - `TOKEN_ALLOWED_EMAIL` — the one Google account allowed to call with a
-     token (#144)
+     token: the owner's (#144)
 
    Leaving either `TOKEN_*` property unset refuses every token call and
    leaves key callers untouched.
@@ -668,7 +712,10 @@ under ~2 s, by changing the constant, pushing, and running
    grant, only calls that need the new scope fail, each with a message saying
    so. #179 confirmed this on a temporary deployment before updating `@2`.
 4. The deployment URL and key become `THRIVE_API_URL` / `THRIVE_API_KEY` for
-   consumers, and GitHub Actions secrets for the sync.
+   consumers, and GitHub Actions secrets for the sync. The URL alone (not a
+   secret) is also the repo **variable** `VITE_THRIVE_API_URL`, which
+   `deploy.yml` builds into the SPA for Sync now (#410). Deploy the Apps
+   Script before the SPA; with the variable unset, the SPA makes no call.
 
 Re-deploy after every `clasp push` — Apps Script serves the last *deployed*
 version, not the last pushed one.

@@ -4,7 +4,7 @@
 Personal workout tracker: Preact SPA → Google Sheets REST API.
 - **frontend/**: Preact SPA (built with Vite) — deployed to GitHub Pages
 - **MCP server**: lives in Keel, not here: `luketmoss/keel` → `mcp/` (a Cloudflare Worker serving `/thrive/mcp` and `/hive/mcp` behind one GitHub sign-in, added once as a claude.ai connector so it works from the phone and the desktop). It is a thin client of the Apps Script API (#132) with its own MCP-only key (`MCP_API_KEY`, #364), and it holds **no row mapping**. The old local stdio `mcp-server/` was retired in luketmoss/keel#372 (git history is the fallback). **A change to `apps-script/` that alters a response shape also needs a matching change in `keel/mcp/src/thrive/`**, or the tools break silently.
-- **apps-script/**: the server-side API over the sheet (#130, #134). Row mapping in `apps-script/src/types.js` mirrors `frontend/src/api/*.ts` — **change both together**. Those are the only two copies, and every consumer arriving later (the COROS sync, the Journal) calls the API rather than adding a third. The SPA still reads Sheets directly, as Hive's does.
+- **apps-script/**: the server-side API over the sheet (#130, #134). Row mapping in `apps-script/src/types.js` mirrors `frontend/src/api/*.ts` — **change both together**. Those are the only two copies, and every consumer arriving later (the COROS sync, the Journal) calls the API rather than adding a third. The SPA still reads and writes Sheets directly, as Hive's does, with one exception: after a Sync now press it asks the API's `requestSync` to dispatch the rows it just appended (#410, `frontend/src/api/thrive-api.ts`, built only when `VITE_THRIVE_API_URL` is set).
 - **sync/**: the COROS → Thrive sync (epic #163), run by `.github/workflows/coros-sync.yml`. Reaches Drive as the bot account (luketmossbot@gmail.com, `drive.file`), **not** the service account — a service account has no Drive storage quota. Keeps COROS's rotating refresh token in a Drive file it owns. Setup and failure modes: `sync/README.md`.
 - **scripts/**: one-time migrations and admin tools. They use the Google service account (`scripts/thrive-sa.json`, gitignored) directly, with their own `google-auth-library`, because schema changes — new columns, new tabs — need Sheets access the API deliberately does not offer.
 
@@ -142,6 +142,13 @@ Google Sheet "Groundwork" with these tabs:
   deletes or writes A–D of a row it did not add. It dispatches the existing
   `coros-sync.yml`/`withings-sync.yml` with a fixed `{"ref":"main"}` and the
   `GITHUB_DISPATCH_TOKEN` script property, and closes each row it started.
+  Sync now does not wait for the next tick (#410): once its rows are appended,
+  the SPA POSTs `requestSync` (`request_ids` = the ids it just appended) with
+  its Google access token, and the API runs the tick's own per-vendor step for
+  those rows' vendors, under the same lock and rules, appending nothing. The
+  token must come from the SPA's OAuth client (`TOKEN_CLIENT_ID` =
+  `VITE_GOOGLE_CLIENT_ID`) and the owner's account (`TOKEN_ALLOWED_EMAIL`).
+  Any failure of that call is silent: the row is there, the poller takes it.
   Statuses: `requested` → `started` → `done`|`cancelled`|`failed`|`not_reported`,
   or `requested` → `skipped`|`failed`|`expired`; all but `requested`/`started`
   are final and never touched again. `detail` is words, never the token or
