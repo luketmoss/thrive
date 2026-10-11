@@ -543,7 +543,7 @@ const cards = () => Array.from(document.querySelectorAll<HTMLElement>('.compact-
 /** Expands entry `i` and returns its [sets, reps] inputs. */
 function open(i: number): [HTMLInputElement, HTMLInputElement] {
   fireEvent.click(cards()[i]);
-  const inputs = document.querySelectorAll<HTMLInputElement>('.template-exercise-config input[type="number"]');
+  const inputs = document.querySelectorAll<HTMLInputElement>('.template-exercise-config .config-row input');
   return [inputs[0], inputs[1]];
 }
 const setValue = (el: HTMLInputElement, value: string) => fireEvent.input(el, { target: { value } });
@@ -638,7 +638,13 @@ describe('#350 / #375 AC2: each set is saved as its row holds it', () => {
   });
 
   it('a cleared "Reps, all sets" value blanks every set', async () => {
-    await saveFromEditor(() => setValue(open(1)[1], ''));
+    // Varies shows blank, so clearing it means typing a value and deleting
+    // it (#376: an input event that changes nothing changes nothing).
+    await saveFromEditor(() => {
+      const reps = open(1)[1];
+      setValue(reps, '9');
+      setValue(reps, '');
+    });
     expect(benchReps('2')).toEqual(['', '', '']);
   });
 
