@@ -6,9 +6,10 @@ import { LoginScreen } from './auth/login-screen';
 import { BottomNav } from './components/shared/bottom-nav';
 import { Toast } from './components/shared/toast';
 import { loadInitialData, workoutsRefresh, libraryRefresh } from './state/actions';
-import { loading, pendingSyncCount, isSyncing } from './state/store';
+import { loading } from './state/store';
 import { onPageVisible } from './state/page-visible';
 import { currentRoute } from './router/router';
+import { EDIT_ROUTES, queueBusy, refreshHeld, workoutsRefreshPending } from './state/refresh-hold';
 import { RouteFocus } from './router/route-focus';
 import { ActivitiesScreen } from './components/activities/activities-screen';
 import { TemplatesScreen } from './components/templates/templates-screen';
@@ -58,18 +59,8 @@ function Router() {
   }
 }
 
-const EDIT_ROUTES = new Set(['workout-new', 'workout-active', 'workout-edit']);
 // #252: TemplatesScreen renders TemplateEditor full-screen on these two.
 const LIBRARY_EDIT_ROUTES = new Set([...EDIT_ROUTES, 'template-new', 'template-edit']);
-
-function queueBusy(): boolean {
-  return pendingSyncCount.value > 0 || isSyncing.value;
-}
-
-/** True while a refresh of workouts/sets could overwrite something in progress (#249 AC3). */
-function refreshHeld(): boolean {
-  return EDIT_ROUTES.has(currentRoute.value.name) || queueBusy();
-}
 
 /** The same for exercises/templates/labels (#252 AC3): also the template editor routes. */
 function libraryRefreshHeld(): boolean {
@@ -83,20 +74,21 @@ function libraryRefreshHeld(): boolean {
 function useRefreshOnVisible(token: string | null) {
   useEffect(() => {
     if (!token) return;
+    // Workouts' pending flag is shared: the Day screen sets it when a Sync now lands under a hold (#409).
     const loaders = [
-      { run: (t: string) => workoutsRefresh.run(t), held: refreshHeld, pending: false },
-      { run: (t: string) => libraryRefresh.run(t), held: libraryRefreshHeld, pending: false },
+      { run: (t: string) => workoutsRefresh.run(t), held: refreshHeld, flag: workoutsRefreshPending },
+      { run: (t: string) => libraryRefresh.run(t), held: libraryRefreshHeld, flag: { value: false } },
     ];
     const unsubscribe = onPageVisible(() => {
       for (const l of loaders) {
-        if (l.held()) l.pending = true;
+        if (l.held()) l.flag.value = true;
         else void l.run(token);
       }
     });
     const stop = effect(() => {
       for (const l of loaders) {
-        if (l.held() || !l.pending) continue;
-        l.pending = false;
+        if (l.held() || !l.flag.value) continue;
+        l.flag.value = false;
         void l.run(token);
       }
     });
