@@ -1199,7 +1199,7 @@ Coverage, 2017-05-30 to 2026-09-19:
 |---|---|---|
 | steps, calories, resting HR, floors | `DI-Connect-Aggregator/UDSFile_*.json` | ~3,200 days — essentially complete from mid-2017 |
 | average stress | same | ~2,270 days |
-| sleep window (start / end) | `DI-Connect-Wellness/*_sleepData.json` | ~3,280 nights |
+| sleep window (start / end) | `DI-Connect-Wellness/*_sleepData.json` | ~3,280 nights, GMT only; 100 `UNCONFIRMED` ones are a default schedule, not measured (#160 skips them) |
 | sleep stages | same | **~320 nights**, mostly 2018 and 2020; almost none since 2021 |
 | sleep score | — | **none** |
 | HRV | — | **none** |
@@ -1215,6 +1215,12 @@ Two traps for the importer:
   window and `deepSleepSeconds: 0, lightSleepSeconds: 0` has no stage data,
   not zero sleep. Import those as blank — the same nullable rule as
   `Workouts!L–Q`.
+- **Zero is not a reading for steps either.** A day with no steps and no
+  resting HR is an unworn watch (about 57 days): steps, calories and resting HR
+  stay blank. Stress is nested at `allDayStress.aggregatorList[TOTAL]` and a
+  negative value means no reading. REM is an absent key on all but 49 staged
+  nights. The UDS has one stray `2006-01-01` row. Resting HR is
+  `restingHeartRate`, not `currentDayRestingHeartRate` (#160).
 - **20 and 21 Sept 2026 are in neither source.** The export ends on the 19th
   and COROS's first, partial, day is the 22nd. Those two days stay blank.
 
