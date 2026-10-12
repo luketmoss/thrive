@@ -367,7 +367,7 @@ function upsertSyncedWorkout(payload) {
       return { status: 'deleted', source: source, source_activity_id: activityId };
     }
     var plans = [];
-    for (var pr = 0; pr < rows.length; pr++) {
+    for (var pr = 0; pr < rows.length && SYNC_NO_CLAIM_SOURCES.indexOf(source) === -1; pr++) {
       if (isClaimablePlan(rows[pr], incoming)) {
         plans.push({ rowNum: pr + 2, id: cell(rows[pr][COL.ID]) });
       }

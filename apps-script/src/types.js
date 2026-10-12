@@ -87,6 +87,12 @@ var SYNC_MERGED_FIELDS = [
   'avg_hr', 'calories', 'started_at_utc',
 ];
 
+/**
+ * Sources whose activities never complete a plan (#159): a history import
+ * is the past, so it must not finish a session planned for that day (#403).
+ */
+var SYNC_NO_CLAIM_SOURCES = ['garmin_import'];
+
 var SYNC_OWNED_FIELDS = ['source', 'source_activity_id', 'raw_ref', 'synced_at'];
 
 /**
