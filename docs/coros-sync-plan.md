@@ -1031,11 +1031,19 @@ One-time, separate from the nightly job. Both halves feed the same
 **The Connect account data export has arrived** (23 Sept 2026, 2017-05-30 to
 2026-09-19). Activities come twice: as FIT files zipped under
 `DI-Connect-Uploaded-Files/`, and as structured JSON in
-`DI-Connect-Fitness/*_summarizedActivities.json`. Write an importer targeting
-`source = 'garmin_import'`, reusing the same normalization and the same Drive
-storage layout. Garmin-sourced rows are `synced` for badge purposes but are
-never re-fetched — there is nothing to re-fetch from. The export also carries
-daily wellness data; see §15.
+`DI-Connect-Fitness/*_summarizedActivities.json`. **Decided (#159): the JSON
+summaries are the source and FIT is not imported.** The JSON holds 1,565
+activities with every `Workouts` field the import writes; the 31,289 FIT files
+are mostly wellness files, none named by an `activityId`, so tying a track to
+an activity would mean timestamp-matching them all for no sheet column.
+`fit_ref` stays blank. Write an importer targeting `source = 'garmin_import'`
+through `upsertSyncedWorkout`, with a small Garmin mapper emitting the same
+field set as `normalizeActivity` (that function itself parses COROS text) and
+the same Drive layout for the raw JSON. Strength activities enrich a matching
+hand-logged row by the §7 rule, else become Sets-less history rows; history
+never claims a plan (#403). Garmin-sourced rows are `synced` for badge
+purposes but are never re-fetched. The export also carries daily wellness
+data; see §15.
 
 ### COROS history
 
