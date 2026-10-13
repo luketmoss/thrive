@@ -2,7 +2,7 @@
 /**
  * backfill-131-daily-summary.mjs — One-time historical backfill for #131.
  *
- * Rebuilds `DailySummary` across all existing `Workouts` history by calling
+ * Rebuilds `DailySummary` across all existing `Workouts` and `DailyHealth` history by calling
  * the Apps Script API's `rebuildDailySummary` action in **chunks**.
  *
  * Why chunks rather than one call: Apps Script has an execution-time ceiling
