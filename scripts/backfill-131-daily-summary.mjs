@@ -2,7 +2,7 @@
 /**
  * backfill-131-daily-summary.mjs — One-time historical backfill for #131.
  *
- * Rebuilds `DailySummary` across all existing `Workouts` history by calling
+ * Rebuilds `DailySummary` across all existing `Workouts` and `DailyHealth` history by calling
  * the Apps Script API's `rebuildDailySummary` action in **chunks**.
  *
  * Why chunks rather than one call: Apps Script has an execution-time ceiling
@@ -26,6 +26,7 @@
  */
 
 import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'node:fs';
+import { widenSpan } from './history-span.mjs';
 
 const args = process.argv.slice(2);
 const has = (flag) => args.includes(flag);
@@ -85,14 +86,26 @@ let from = value('--from', null);
 let to = value('--to', null);
 
 if (!from || !to) {
-  const span = await api('getHistoryDateRange');
+  const workoutsSpan = await api('getHistoryDateRange');
+  // The workouts span misses days that have DailyHealth but no workout beyond
+  // it (#162). A failed health read falls back to the workouts span.
+  let healthRows = [];
+  try {
+    healthRows = await api('getDailyHealth');
+  } catch (err) {
+    console.log(`Could not read DailyHealth to widen the span (${err.message}); using workouts only`);
+  }
+  const span = widenSpan(workoutsSpan, healthRows);
   if (!span.from) {
-    console.log('No workout history to summarize. Nothing to do.');
+    console.log('No workout or health history to summarize. Nothing to do.');
     process.exit(0);
   }
   from = from || span.from;
   to = to || span.to;
-  console.log(`History spans ${span.from} to ${span.to}`);
+  console.log(
+    `History spans ${span.from} to ${span.to}` +
+    (span.widened ? ` (workouts alone: ${workoutsSpan.from || 'none'} to ${workoutsSpan.to || 'none'}; widened by DailyHealth)` : '')
+  );
 }
 
 for (const [label, d] of [['--from', from], ['--to', to]]) {
