@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'frontend/**'
+      - 'redirect/**'
       - '.github/workflows/deploy.yml'
 
 permissions:
@@ -22,24 +22,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: npm ci
-        working-directory: frontend
-      - run: npm run build
-        working-directory: frontend
-        env:
-          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
-          VITE_SPREADSHEET_ID: ${{ secrets.VITE_SPREADSHEET_ID }}
-          # The Apps Script /exec URL (#410), not a secret: a repo variable.
-          # Unset, Sync now falls back to the poller.
-          VITE_THRIVE_API_URL: ${{ vars.VITE_THRIVE_API_URL }}
+      # Thrive moved to luketmoss/keel (luketmoss/keel#385, #399). This site now
+      # publishes only a redirect page: index.html for /thrive/ and 404.html
+      # for every other path, both mapping onto /keel/thrive/ with the query
+      # and hash kept.
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: frontend/dist
+          path: redirect
 
   deploy:
     needs: build
